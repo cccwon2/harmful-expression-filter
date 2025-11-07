@@ -2,6 +2,7 @@ import { app, Menu, Tray, BrowserWindow, nativeImage } from 'electron';
 import type { NativeImage } from 'electron';
 import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
+import { IPC_CHANNELS } from './ipc/channels';
 
 let tray: Tray | null = null;
 
@@ -86,6 +87,34 @@ export function createTray(overlayWindow: BrowserWindow): Tray {
     const isOverlayVisible = overlayWindow.isVisible();
     const isEditMode = getEditModeState();
     const contextMenu = Menu.buildFromTemplate([
+      {
+        label: '영역 지정 (Enter Setup Mode)',
+        type: 'normal',
+        click: () => {
+          console.log('[Tray] Entering setup mode');
+          // 오버레이 창 표시
+          overlayWindow.show();
+          overlayWindow.setSkipTaskbar(false);
+          // 클릭-스루 비활성화 (마우스 입력 가능)
+          overlayWindow.setIgnoreMouseEvents(false);
+          // Edit Mode 활성화
+          setEditModeState(true);
+          // IPC로 모드 변경 알림
+          overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+          console.log('[Tray] Setup mode entered - overlay shown, click-through disabled');
+          // 키보드 포커스 설정
+          overlayWindow.focus();
+          // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
+          setTimeout(() => {
+            if (overlayWindow && overlayWindow.isVisible()) {
+              overlayWindow.focus();
+              overlayWindow.setIgnoreMouseEvents(false);
+              console.log('[Tray] Overlay focus and mouse events re-enabled after timeout');
+            }
+          }, 100);
+          updateContextMenu();
+        },
+      },
       {
         label: isOverlayVisible ? 'Hide Overlay' : 'Show Overlay',
         type: 'normal',

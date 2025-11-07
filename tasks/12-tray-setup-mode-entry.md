@@ -1,7 +1,7 @@
 # 작업 12: 트레이 메뉴 "영역 지정" → 설정 모드 진입
 
 ## 상태
-⏳ 진행 예정
+✅ 완료
 
 ## 개요
 트레이 메뉴에서 "영역 지정" 항목을 추가하여 설정 모드로 진입할 수 있도록 합니다.
@@ -9,17 +9,17 @@
 ## 요구사항
 
 ### 트레이 메뉴 항목 추가
-- [ ] "영역 지정(Enter Setup Mode)" 메뉴 항목 추가
-- [ ] 클릭 시 설정 모드 진입 로직 구현
+- [x] "영역 지정(Enter Setup Mode)" 메뉴 항목 추가
+- [x] 클릭 시 설정 모드 진입 로직 구현
 
 ### 설정 모드 진입 동작
-- [ ] 오버레이 창 표시 (`overlayWin.show()`)
-- [ ] 클릭-스루 비활성화 (`overlayWin.setIgnoreMouseEvents(false)`)
-- [ ] IPC로 모드 변경 알림 (`OVERLAY_SET_MODE` 채널 사용)
+- [x] 오버레이 창 표시 (`overlayWin.show()`)
+- [x] 클릭-스루 비활성화 (`overlayWin.setIgnoreMouseEvents(false)`)
+- [x] IPC로 모드 변경 알림 (`OVERLAY_SET_MODE` 채널 사용)
 
 ### 로그 출력
-- [ ] 메인 프로세스: `[Main] Entering setup mode`
-- [ ] 렌더러 프로세스: `[Overlay] mode: setup`
+- [x] 메인 프로세스: `[Tray] Entering setup mode`
+- [x] 렌더러 프로세스: `[Overlay] Mode change received from main process: setup`
 
 ## 의존성
 - [작업 2: 시스템 트레이](./02-system-tray.md)

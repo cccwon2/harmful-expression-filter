@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from './ipc/channels';
 import type { ROIRect } from './ipc/roi';
 
+// OverlayMode 타입 정의 (preload에서 직접 정의)
+type OverlayMode = 'setup' | 'detect' | 'alert';
+
 // preload 스크립트 로드 확인 (메인 프로세스 콘솔에 출력)
 console.log('[Preload] Preload script loaded');
 
@@ -57,11 +60,32 @@ try {
       setClickThrough: (enabled: boolean) => {
         console.log('[Preload] overlay.setClickThrough() called with:', enabled);
         try {
-          ipcRenderer.invoke(IPC_CHANNELS.SET_CLICK_THROUGH, enabled);
-          console.log('[Preload] SET_CLICK_THROUGH IPC sent');
+          return ipcRenderer.invoke(IPC_CHANNELS.SET_CLICK_THROUGH, enabled);
         } catch (error) {
           console.error('[Preload] Error sending SET_CLICK_THROUGH:', error);
+          return Promise.reject(error);
         }
+      },
+      sendROI: (roi: ROIRect) => {
+        console.log('[Preload] overlay.sendROI() called with:', roi);
+        try {
+          ipcRenderer.send(IPC_CHANNELS.ROI_SELECTED, roi);
+          console.log('[Preload] ROI_SELECTED IPC sent');
+        } catch (error) {
+          console.error('[Preload] Error sending ROI_SELECTED:', error);
+        }
+      },
+      onModeChange: (callback: (mode: OverlayMode) => void) => {
+        console.log('[Preload] overlay.onModeChange() listener registered');
+        const listener = (_event: unknown, mode: OverlayMode) => {
+          console.log('[Preload] Mode change received:', mode);
+          callback(mode);
+        };
+        ipcRenderer.on(IPC_CHANNELS.OVERLAY_SET_MODE, listener);
+        return () => {
+          console.log('[Preload] overlay.onModeChange() listener removed');
+          ipcRenderer.removeListener(IPC_CHANNELS.OVERLAY_SET_MODE, listener);
+        };
       },
     },
   });
@@ -89,6 +113,8 @@ declare global {
       overlay: {
         hide: () => void;
         setClickThrough: (enabled: boolean) => Promise<void>;
+        sendROI: (roi: ROIRect) => void;
+        onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
       };
     };
   }

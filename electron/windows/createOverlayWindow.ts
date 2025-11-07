@@ -41,19 +41,31 @@ export function createOverlayWindow(): BrowserWindow {
 
   console.log('[Overlay] Overlay window created');
 
+  // 로드 실패 감지 (개발 단계에서 서버 미기동 등 문제 추적)
+  overlayWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('[Overlay] did-fail-load:', { errorCode, errorDescription, validatedURL });
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      console.log('[Overlay] Retrying overlay load after failure...');
+      setTimeout(() => {
+        overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
+          console.error('[Overlay] Retry loadURL failed:', err);
+        });
+      }, 500);
+    }
+  });
+
+  overlayWindow.webContents.on('did-fail-provisional-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('[Overlay] did-fail-provisional-load:', { errorCode, errorDescription, validatedURL });
+  });
+
   // 기본 상태: 클릭-스루 활성화 (마우스 이벤트가 아래 앱으로 전달됨)
   // Edit Mode에서만 클릭-스루가 해제되어 ROI 선택 가능
   overlayWindow.setIgnoreMouseEvents(true, { forward: true });
   console.log('[Overlay] Click-through enabled by default');
 
-  // 오버레이 창이 로드 완료되면 표시
+  // 오버레이 창이 로드 완료되면 설정 (main.ts에서 did-finish-load 처리하므로 여기서는 alwaysOnTop만 설정)
   overlayWindow.webContents.once('did-finish-load', () => {
-    console.log('[Overlay] Overlay window loaded, showing...');
-    
-    // 오버레이 창은 기본적으로 숨김 상태로 시작 (트레이에서 Show Overlay로 표시)
-    // 초기에는 표시하지 않음 (헤드리스 모드)
-    // overlayWindow.show();
-    console.log('[Overlay] Overlay window ready (hidden by default)');
+    console.log('[Overlay] Overlay window loaded in createOverlayWindow');
     
     // Windows에서 더 강한 alwaysOnTop 설정
     if (process.platform === 'win32') {

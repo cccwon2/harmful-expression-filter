@@ -22,8 +22,8 @@
 9. **[키보드 단축키](./09-keyboard-shortcuts.md)** ✅ 완료
 10. **[Preload API](./10-preload-api.md)** ✅ 완료
 11. **[상태 모델 정의](./11-state-model-definition.md)** ✅ 완료 (기본 구현, 개선 필요)
-12. **[트레이 메뉴 "영역 지정" → 설정 모드 진입](./12-tray-setup-mode-entry.md)** ⏳ 진행 예정
-13. **[설정 모드 ROI 선택 및 감지 모드 전환](./13-setup-mode-roi-selection.md)** ⏳ 진행 예정
+12. **[트레이 메뉴 "영역 지정" → 설정 모드 진입](./12-tray-setup-mode-entry.md)** ✅ 완료
+13. **[설정 모드 ROI 선택 및 감지 모드 전환](./13-setup-mode-roi-selection.md)** ✅ 완료
 14. **[감지 모드 HUD 표시](./14-detect-mode-hud.md)** ⏳ 진행 예정
 15. **[OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md)** ⏳ 진행 예정
 16. **[서버 알림 수신 및 블라인드 표시](./16-server-alert-blind.md)** ⏳ 진행 예정
@@ -76,8 +76,8 @@
 | 키보드 단축키 | ✅ 완료 | 100% | Medium |
 | Preload API | ✅ 완료 | 100% | High |
 | 상태 모델 정의 | ✅ 완료 | 80% | High |
-| 트레이 메뉴 "영역 지정" | ⏳ 진행 예정 | 0% | High |
-| 설정 모드 ROI 선택 | ⏳ 진행 예정 | 0% | High |
+| 트레이 메뉴 "영역 지정" | ✅ 완료 | 100% | High |
+| 설정 모드 ROI 선택 | ✅ 완료 | 100% | High |
 | 감지 모드 HUD | ⏳ 진행 예정 | 0% | High |
 | OCR/STT 파이프라인 스텁 | ⏳ 진행 예정 | 0% | Medium |
 | 서버 알림 및 블라인드 | ⏳ 진행 예정 | 0% | High |

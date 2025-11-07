@@ -5,6 +5,8 @@ interface ROIRect {
   height: number;
 }
 
+type OverlayMode = 'setup' | 'detect' | 'alert';
+
 declare global {
   interface Window {
     api: {
@@ -22,6 +24,8 @@ declare global {
       overlay: {
         hide: () => void;
         setClickThrough: (enabled: boolean) => Promise<void>;
+        sendROI: (roi: ROIRect) => void;
+        onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
       };
     };
   }

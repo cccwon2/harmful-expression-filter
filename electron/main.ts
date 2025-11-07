@@ -268,9 +268,9 @@ app.whenReady().then(() => {
     const { setOverlayTrayUpdateCallback } = require('./windows/createOverlayWindow');
     setOverlayTrayUpdateCallback(trayUpdateFn);
     
-    // 오버레이 창이 로드 완료되면 자동으로 표시하고 Edit Mode 활성화
+    // 오버레이 창이 로드 완료되면 자동으로 표시하고 설정 모드 진입
     overlayWindow.webContents.once('did-finish-load', () => {
-      console.log('[Main] Overlay window loaded, showing and enabling Edit Mode...');
+      console.log('[Main] Overlay window loaded, showing and entering setup mode...');
       if (overlayWindow) {
         // 오버레이 창 표시
         overlayWindow.show();
@@ -279,6 +279,9 @@ app.whenReady().then(() => {
         setEditModeState(true);
         // 마우스 이벤트 활성화
         overlayWindow.setIgnoreMouseEvents(false);
+        // 설정 모드로 진입 (IPC 전송)
+        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+        console.log('[Main] Sent OVERLAY_SET_MODE: setup to renderer');
         // 키보드 포커스 설정
         overlayWindow.focus();
         // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
@@ -293,7 +296,7 @@ app.whenReady().then(() => {
             }
           }
         }, 100);
-        console.log('[Main] Edit Mode enabled by default on app start');
+        console.log('[Main] Setup mode enabled by default on app start');
       }
     });
   }

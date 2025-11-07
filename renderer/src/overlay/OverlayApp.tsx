@@ -103,6 +103,26 @@ export const OverlayApp: React.FC = () => {
     setMode(newMode);
   }, []);
 
+  // IPC로 모드 변경 수신 (메인 프로세스에서 전송)
+  useEffect(() => {
+    if (!window.api?.overlay?.onModeChange) {
+      console.warn('[Overlay] window.api.overlay.onModeChange is not available');
+      return;
+    }
+
+    console.log('[Overlay] Registering mode change listener');
+    const unsubscribe = window.api.overlay.onModeChange((mode: OverlayMode) => {
+      console.log('[Overlay] Mode change received from main process:', mode);
+      setMode(mode);
+      applyModeEffects(mode);
+    });
+
+    return () => {
+      console.log('[Overlay] Unregistering mode change listener');
+      unsubscribe();
+    };
+  }, [applyModeEffects]);
+
   // 키보드 단축키 처리
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -174,8 +194,14 @@ export const OverlayApp: React.FC = () => {
         hasRoi: !!roi,
         timestamp: new Date().toISOString(),
       });
+      
+      // setup 모드가 아니면 마우스 이벤트 무시
+      if (mode !== 'setup') {
+        console.log('[Overlay] Not in setup mode, ignoring mouse down. Current mode:', mode);
+        return;
+      }
+      
       // 선택 완료 후에는 마우스 이벤트 무시 (클릭-스루)
-      // Edit Mode가 아닐 때는 마우스 이벤트가 전달되지 않음
       if (isSelectionComplete) {
         console.log('[Overlay] Selection already complete, ignoring mouse down');
         return;
@@ -258,19 +284,21 @@ export const OverlayApp: React.FC = () => {
       }
       console.log('[Overlay] ROI selected and sent:', roiRect);
       
-      // ROI 저장 및 모드 전환 (setup → detect)
-      console.log('[Overlay] Saving ROI and changing mode to detect');
+      // ROI 저장 (로컬 상태에 저장)
       setRoi(rect);
-      handleModeChange('detect');
-      console.log('[Overlay] ROI saved:', rect);
-      console.log('[Overlay] Mode changed to detect');
+      console.log('[Overlay] ROI saved to local state:', rect);
+      
+      // 메인 프로세스에서 ROI 저장 및 감지 모드 전환 IPC를 보냄
+      // 메인 프로세스가 OVERLAY_SET_MODE: 'detect'를 보내면
+      // onModeChange 리스너가 자동으로 모드를 변경하고 applyModeEffects를 호출함
+      // 따라서 여기서는 모드를 직접 변경하지 않음 (메인 프로세스의 응답을 기다림)
       
       // 선택 완료 상태 설정 (ESC 키로 다시 선택 가능하도록)
       // 중요: setIsSelectionComplete(true)를 먼저 호출하여 상태를 확실히 설정
       setIsSelectionComplete(true);
       // selectionState는 null로 설정 (선택 완료 후에는 드래그 영역이 없음)
       setSelectionState(null);
-      console.log('[Overlay] ROI selection complete - isSelectionComplete set to true');
+      console.log('[Overlay] ROI selection complete - waiting for detect mode from main process');
     };
 
     window.addEventListener('mousedown', handleMouseDown);
