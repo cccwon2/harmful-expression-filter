@@ -1,0 +1,42 @@
+{
+  "name": "harmful-expression-filter",
+  "version": "1.0.0",
+  "description": "라이브 플랫폼 유해 표현 필터링, 마스킹, 비프음, 볼륨 조절",
+  "main": "./dist-electron/main.js",
+  "scripts": {
+    "build:main": "tsc -p electron/tsconfig.json",
+    "dev:main": "tsc -w -p electron/tsconfig.json",
+    "dev:renderer": "vite",
+    "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
+    "typecheck": "tsc --noEmit",
+    "start": "electron ."
+  },
+  "keywords": [
+    "electron",
+    "react",
+    "typescript",
+    "overlay",
+    "roi"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "rimraf": "^5.0.5",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.5"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+
