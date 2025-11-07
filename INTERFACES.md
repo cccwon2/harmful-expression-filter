@@ -193,9 +193,43 @@ export function isROISelectingState(): boolean;
 
 ---
 
+### 9. 저장소 (electron-store) - 향후 추가
+**파일**: `electron/store.ts` (새로 생성 예정)
+
+ROI와 모드 상태를 영속화하는 저장소입니다.
+
+**사용 예시**:
+- ROI 저장: `store.set('roi', roi)`
+- ROI 읽기: `store.get('roi')`
+- 모드 저장: `store.set('mode', mode)`
+
+---
+
+### 10. OCR Worker - 향후 추가
+**파일**: `electron/ocrWorker.ts` (새로 생성 예정)
+
+OCR/STT 파이프라인을 관리하는 모듈입니다.
+
+**사용 예시**:
+- OCR 시작: `ipcMain.on(OCR_START, ...)`
+- OCR 중지: `ipcMain.on(OCR_STOP, ...)`
+
+---
+
+### 11. 서버 클라이언트 - 향후 추가
+**파일**: `electron/serverClient.ts` (새로 생성 예정)
+
+서버 연결 및 알림을 처리하는 모듈입니다.
+
+**사용 예시**:
+- 서버 연결: WebSocket 또는 HTTP 폴링
+- 알림 전송: `overlayWindow.webContents.send(ALERT_FROM_SERVER, ...)`
+
+---
+
 ## 새로운 작업 시작 시 체크리스트
 
-새로운 작업(예: T11: OCR 서비스)을 시작할 때:
+새로운 작업(예: T12: 트레이 메뉴 "영역 지정")을 시작할 때:
 
 1. ✅ **마스터 플랜 확인**: `PROJECT_SPEC.md`에서 작업 요구사항 확인
 2. ✅ **IPC 채널 확인**: `electron/ipc/channels.ts`에서 사용 가능한 채널 확인
@@ -203,18 +237,35 @@ export function isROISelectingState(): boolean;
 4. ✅ **API 확인**: `renderer/src/global.d.ts`와 `electron/preload.ts`에서 사용 가능한 API 확인
 5. ✅ **연결부 파일 확인**: 위의 핵심 파일들을 모두 참조하여 작업 시작
 
-## 예시: T11 (OCR 서비스) 작업 시작
+## 예시: T12 (트레이 메뉴 "영역 지정") 작업 시작
 
 ```
 작업 지시:
-1. PROJECT_SPEC.md에서 T11 요구사항 확인
+1. PROJECT_SPEC.md에서 T12 요구사항 확인
+2. 다음 파일들을 반드시 참조:
+   - @electron/ipc/channels.ts (OVERLAY_SET_MODE 채널 확인)
+   - @electron/tray.ts (트레이 메뉴 구조 확인)
+   - @electron/windows/createOverlayWindow.ts (오버레이 창 참조)
+   - @renderer/src/overlay/roiTypes.ts (OverlayMode 타입 확인)
+   - @renderer/src/overlay/OverlayApp.tsx (모드 변경 리스너 확인)
+3. electron/tray.ts에 "영역 지정" 메뉴 항목 추가
+4. 클릭 시 설정 모드 진입 로직 구현
+```
+
+## 예시: T15 (OCR/STT 파이프라인 스텁) 작업 시작
+
+```
+작업 지시:
+1. PROJECT_SPEC.md에서 T15 요구사항 확인
 2. 다음 파일들을 반드시 참조:
    - @electron/ipc/channels.ts (OCR_START, OCR_STOP 채널 확인)
    - @renderer/src/overlay/roiTypes.ts (ROI 타입 확인)
    - @electron/windows/createOverlayWindow.ts (오버레이 창 참조)
    - @renderer/src/overlay/OverlayApp.tsx (상태 머신 확인)
-3. electron/modules/ocrService.ts 파일 생성
-4. ROI 영역 이미지 캡처 → OCR 텍스트 추출 → IPC 전송 로직 구현
+   - @electron/ipc/roi.ts (ROI 핸들러 구조 확인)
+3. electron/ocrWorker.ts 파일 생성 (또는 electron/main.ts에 추가)
+4. OCR_START/OCR_STOP IPC 핸들러 구현
+5. 주기적 타이머로 스텁 로그 출력 (1-2초 주기)
 ```
 
 ## 업데이트 규칙

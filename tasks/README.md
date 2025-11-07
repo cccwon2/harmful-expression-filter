@@ -20,8 +20,16 @@
 7. [상태 관리](./06-state-management.md) - 상태 머신 패턴
 8. [IPC 통신](./07-ipc-communication.md) - 프로세스 간 통신
 9. [개발자 도구 통합](./08-devtools-integration.md) - 디버깅 지원
-10. [키보드 단축키](./09-keyboard-shortcuts.md) - 키보드 제어
-11. [Preload API](./10-preload-api.md) - 안전한 API 노출
+10. [Preload API](./10-preload-api.md) - 안전한 API 노출
+11. [상태 모델 정의](./11-state-model-definition.md) - 상태 모델 정의 (기본 구현 완료)
+12. [트레이 메뉴 "영역 지정"](./12-tray-setup-mode-entry.md) - 설정 모드 진입
+13. [설정 모드 ROI 선택](./13-setup-mode-roi-selection.md) - ROI 선택 및 감지 모드 전환
+14. [감지 모드 HUD](./14-detect-mode-hud.md) - HUD 표시
+15. [OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md) - OCR/STT 스텁 구현
+16. [서버 알림 및 블라인드](./16-server-alert-blind.md) - 블라인드 표시
+17. [ESC/트레이 재진입](./17-escape-tray-resetup.md) - 설정 모드 재진입
+18. [ROI/모드 영속화](./18-persistence-boot-restore.md) - 부팅 시 복원
+19. [Preload API 확장](./19-preload-api-extension.md) - API 확장
 
 ## 작업 문서 사용법
 

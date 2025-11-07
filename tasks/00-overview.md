@@ -21,6 +21,15 @@
 8. **[개발자 도구 통합](./08-devtools-integration.md)** ✅ 완료
 9. **[키보드 단축키](./09-keyboard-shortcuts.md)** ✅ 완료
 10. **[Preload API](./10-preload-api.md)** ✅ 완료
+11. **[상태 모델 정의](./11-state-model-definition.md)** ✅ 완료 (기본 구현, 개선 필요)
+12. **[트레이 메뉴 "영역 지정" → 설정 모드 진입](./12-tray-setup-mode-entry.md)** ⏳ 진행 예정
+13. **[설정 모드 ROI 선택 및 감지 모드 전환](./13-setup-mode-roi-selection.md)** ⏳ 진행 예정
+14. **[감지 모드 HUD 표시](./14-detect-mode-hud.md)** ⏳ 진행 예정
+15. **[OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md)** ⏳ 진행 예정
+16. **[서버 알림 수신 및 블라인드 표시](./16-server-alert-blind.md)** ⏳ 진행 예정
+17. **[ESC/트레이로 설정 모드 재진입](./17-escape-tray-resetup.md)** ⏳ 진행 예정
+18. **[ROI/모드 영속화 및 부팅 시 복원](./18-persistence-boot-restore.md)** ⏳ 진행 예정
+19. **[Preload API 확장](./19-preload-api-extension.md)** ⏳ 진행 예정
 
 ## 작업 의존성 그래프
 
@@ -39,8 +48,17 @@
     ├─ 09-keyboard-shortcuts
     │   ├─ 03-overlay-window
     │   └─ 05-edit-mode
-    └─ 10-preload-api
-        └─ 07-ipc-communication
+    ├─ 10-preload-api
+    │   └─ 07-ipc-communication
+    └─ 11-state-model-definition
+        ├─ 12-tray-setup-mode-entry
+        ├─ 13-setup-mode-roi-selection
+        │   ├─ 14-detect-mode-hud
+        │   └─ 15-ocr-stt-stub
+        ├─ 16-server-alert-blind
+        ├─ 17-escape-tray-resetup
+        ├─ 18-persistence-boot-restore
+        └─ 19-preload-api-extension
 ```
 
 ## 작업 상태
@@ -57,6 +75,15 @@
 | 개발자 도구 통합 | ✅ 완료 | 100% | Medium |
 | 키보드 단축키 | ✅ 완료 | 100% | Medium |
 | Preload API | ✅ 완료 | 100% | High |
+| 상태 모델 정의 | ✅ 완료 | 80% | High |
+| 트레이 메뉴 "영역 지정" | ⏳ 진행 예정 | 0% | High |
+| 설정 모드 ROI 선택 | ⏳ 진행 예정 | 0% | High |
+| 감지 모드 HUD | ⏳ 진행 예정 | 0% | High |
+| OCR/STT 파이프라인 스텁 | ⏳ 진행 예정 | 0% | Medium |
+| 서버 알림 및 블라인드 | ⏳ 진행 예정 | 0% | High |
+| ESC/트레이 재진입 | ⏳ 진행 예정 | 0% | Medium |
+| ROI/모드 영속화 | ⏳ 진행 예정 | 0% | Medium |
+| Preload API 확장 | ⏳ 진행 예정 | 0% | High |
 
 ## 다음 단계
 

@@ -1,6 +1,6 @@
 # Harmful Expression Filter
 
-라이브 플랫폼 유해 표현 필터링, 마스킹, 비프음, 볼륨 조절 Electron 애플리케이션
+라이브 플랫폼 유해 표현 필터링, 블라인드, 비프음, 볼륨 조절 Electron 애플리케이션
 
 ## 📚 시작하기
 
