@@ -1,6 +1,7 @@
 import { app, Menu, Tray, BrowserWindow, nativeImage } from 'electron';
 import type { NativeImage } from 'electron';
 import * as path from 'path';
+import { getEditModeState, setEditModeState } from './state/editMode';
 
 let tray: Tray | null = null;
 
@@ -71,7 +72,7 @@ function createTrayIcon(): NativeImage {
   return icon;
 }
 
-export function createTray(mainWindow: BrowserWindow): Tray {
+export function createTray(overlayWindow: BrowserWindow): Tray {
   // 트레이 아이콘 생성
   const icon = createTrayIcon();
   
@@ -82,20 +83,138 @@ export function createTray(mainWindow: BrowserWindow): Tray {
 
   // 컨텍스트 메뉴 생성
   const updateContextMenu = () => {
-    const isVisible = mainWindow.isVisible();
+    const isOverlayVisible = overlayWindow.isVisible();
+    const isEditMode = getEditModeState();
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: isVisible ? 'Hide Main Window' : 'Show Main Window',
+        label: isOverlayVisible ? 'Hide Overlay' : 'Show Overlay',
         type: 'normal',
         click: () => {
-          if (mainWindow.isVisible()) {
-            mainWindow.hide();
+          if (overlayWindow.isVisible()) {
+            overlayWindow.hide();
+            // 숨길 때 작업표시줄에서도 제거
+            overlayWindow.setSkipTaskbar(true);
+            // 오버레이 숨길 때 Edit Mode도 비활성화
+            setEditModeState(false);
           } else {
-            mainWindow.show();
-            mainWindow.focus();
+            overlayWindow.show();
+            overlayWindow.setSkipTaskbar(false); // 표시할 때만 작업표시줄에 표시
+            // 오버레이 표시할 때 자동으로 Edit Mode 활성화
+            setEditModeState(true);
+            // 마우스 이벤트 활성화 확인 (setEditModeState에서 이미 처리되지만 명시적으로 확인)
+            overlayWindow.setIgnoreMouseEvents(false);
+            console.log('[Tray] Overlay shown, Edit Mode enabled, mouse events enabled');
+            // 키보드 포커스를 명시적으로 설정
+            overlayWindow.focus();
+            // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
+            setTimeout(() => {
+              if (overlayWindow && overlayWindow.isVisible()) {
+                overlayWindow.focus();
+                // 마우스 이벤트가 제대로 활성화되었는지 확인
+                overlayWindow.setIgnoreMouseEvents(false);
+                console.log('[Tray] Overlay focus and mouse events re-enabled after timeout');
+              }
+            }, 100);
           }
-          // 메뉴 업데이트 (다음에 열 때 올바른 라벨 표시)
           updateContextMenu();
+        },
+      },
+      {
+        label: isEditMode ? 'Exit Edit Mode' : 'Edit Mode',
+        type: 'normal',
+        click: () => {
+          // Edit Mode 토글
+          if (isEditMode) {
+            // Edit Mode 종료 시 오버레이도 숨김 (다른 창을 방해하지 않도록)
+            setEditModeState(false);
+            overlayWindow.hide();
+            overlayWindow.setSkipTaskbar(true);
+          } else {
+            // Edit Mode 활성화 시 오버레이 표시
+            overlayWindow.show();
+            overlayWindow.setSkipTaskbar(false);
+            setEditModeState(true);
+            overlayWindow.setIgnoreMouseEvents(false);
+            overlayWindow.focus();
+          }
+          updateContextMenu();
+        },
+      },
+      {
+        type: 'separator',
+      },
+      {
+        label: 'Toggle DevTools',
+        type: 'normal',
+        click: () => {
+          if (overlayWindow.isVisible()) {
+            if (overlayWindow.webContents.isDevToolsOpened()) {
+              overlayWindow.webContents.closeDevTools();
+              // 개발자 도구가 닫히면 Edit Mode 상태에 따라 마우스 이벤트 설정
+              setTimeout(() => {
+                const { getEditModeState } = require('./state/editMode');
+                const isEditMode = getEditModeState();
+                if (isEditMode) {
+                  overlayWindow.setIgnoreMouseEvents(false);
+                  console.log('[Tray] Mouse events re-enabled after DevTools closed (Edit Mode active)');
+                }
+              }, 100);
+            } else {
+              // detach 모드로 열어서 완전히 독립된 창으로 표시 (이동 가능)
+              overlayWindow.webContents.openDevTools({ mode: 'detach' });
+              console.log('[Tray] DevTools opened in detach mode - window should be movable');
+              
+              // 개발자 도구가 열릴 때 오버레이 창의 키보드 포커스 해제
+              // 개발자 도구가 키보드 입력을 받을 수 있도록
+              overlayWindow.blur();
+              
+              // 개발자 도구가 열릴 때 renderer에 테스트 로그 출력 요청 (콘솔 확인용)
+              setTimeout(() => {
+                if (overlayWindow && overlayWindow.webContents.isDevToolsOpened()) {
+                  overlayWindow.webContents.executeJavaScript(`
+                    (function() {
+                      console.log('%c[DevTools] DevTools opened successfully!', 'color: green; font-weight: bold; font-size: 16px;');
+                      console.log('[DevTools] Console logging is working properly');
+                      console.log('[DevTools] Overlay state available at window.__overlayState');
+                      console.log('[DevTools] You can now type commands in the console');
+                      if (window.__overlayState) {
+                        console.log('[DevTools] Current overlay state:', window.__overlayState);
+                      }
+                      console.log('[DevTools] Test: 1 + 1 =', 1 + 1);
+                    })();
+                  `).catch((err) => {
+                    console.error('[Tray] Error executing JavaScript in DevTools:', err);
+                  });
+                }
+              }, 500);
+              
+              // 개발자 도구가 열려 있을 때도 Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
+              // (ROI 선택을 시작할 수 있도록)
+              const { getEditModeState } = require('./state/editMode');
+              const isEditMode = getEditModeState();
+              if (isEditMode) {
+                // Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
+                // 개발자 도구 창은 detach 모드로 열려 있어서 독립적으로 이동 가능
+                overlayWindow.setIgnoreMouseEvents(false);
+                console.log('[Tray] Mouse events kept enabled while DevTools is open (Edit Mode active)');
+              } else {
+                // Edit Mode가 비활성화되어 있으면 클릭-스루 활성화
+                overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+                console.log('[Tray] Click-through enabled while DevTools is open (Edit Mode inactive)');
+              }
+              // 개발자 도구 창이 닫히면 다시 마우스 이벤트 활성화
+              overlayWindow.webContents.once('devtools-closed', () => {
+                if (overlayWindow && overlayWindow.isVisible()) {
+                  const { getEditModeState } = require('./state/editMode');
+                  const isEditMode = getEditModeState();
+                  if (isEditMode) {
+                    overlayWindow.setIgnoreMouseEvents(false);
+                    console.log('[Tray] Mouse events re-enabled after DevTools closed (Edit Mode active)');
+                  }
+                }
+              });
+            }
+          }
         },
       },
       {
@@ -118,26 +237,47 @@ export function createTray(mainWindow: BrowserWindow): Tray {
 
   tray.setToolTip('Harmful Expression Filter');
 
-  // 트레이 아이콘 클릭 시 메인 윈도우 토글
-  tray.on('click', () => {
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
+  // 트레이 아이콘 더블클릭 시 오버레이 창 표시/숨김
+  tray.on('double-click', () => {
+    if (overlayWindow.isVisible()) {
+      overlayWindow.hide();
+      overlayWindow.setSkipTaskbar(true);
+      // 오버레이 숨길 때 Edit Mode도 비활성화
+      setEditModeState(false);
     } else {
-      mainWindow.show();
-      mainWindow.focus();
+      overlayWindow.show();
+      overlayWindow.setSkipTaskbar(false);
+      // 오버레이 표시할 때 자동으로 Edit Mode 활성화
+      setEditModeState(true);
+      // 마우스 이벤트 활성화 확인 (setEditModeState에서 이미 처리되지만 명시적으로 확인)
+      overlayWindow.setIgnoreMouseEvents(false);
+      console.log('[Tray] Overlay shown (double-click), Edit Mode enabled, mouse events enabled');
+      // 키보드 포커스를 명시적으로 설정
+      overlayWindow.focus();
+      // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
+      setTimeout(() => {
+        if (overlayWindow && overlayWindow.isVisible()) {
+          overlayWindow.focus();
+          // 마우스 이벤트가 제대로 활성화되었는지 확인
+          overlayWindow.setIgnoreMouseEvents(false);
+          console.log('[Tray] Overlay focus and mouse events re-enabled after timeout (double-click)');
+        }
+      }, 100);
     }
-    // 메뉴 업데이트
     updateContextMenu();
   });
 
   // 윈도우 표시/숨김 상태 변경 감지하여 메뉴 업데이트
-  mainWindow.on('show', () => {
+  overlayWindow.on('show', () => {
     updateContextMenu();
   });
 
-  mainWindow.on('hide', () => {
+  overlayWindow.on('hide', () => {
     updateContextMenu();
   });
+
+  // updateContextMenu를 외부에서 호출할 수 있도록 export
+  (trayInstance as any).updateContextMenu = updateContextMenu;
 
   return tray;
 }

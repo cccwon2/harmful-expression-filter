@@ -8,30 +8,110 @@ export interface ROIRect {
   height: number;
 }
 
-export function setupROIHandlers(mainWindow: BrowserWindow, overlayWindow: BrowserWindow) {
+// ROI 선택 상태 추적
+let isROISelectionComplete = false;
+let isROISelecting = false; // ROI 선택 중인지 여부
+
+export function isROISelectionCompleteState(): boolean {
+  return isROISelectionComplete;
+}
+
+export function isROISelectingState(): boolean {
+  return isROISelecting;
+}
+
+export function setupROIHandlers(overlayWindow: BrowserWindow) {
   ipcMain.on(IPC_CHANNELS.ROI_SELECTED, (_event, rect: ROIRect) => {
-    console.log('ROI selected:', rect);
+    console.log('[ROI] ROI selected:', rect);
     
-    // ROI 선택 완료 후 오버레이 창에 클릭-스루 활성화
-    // forward: true 옵션으로 클릭 이벤트를 하위 창으로 전달
-    overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+    // ROI 선택 완료 상태로 설정
+    isROISelectionComplete = true;
+    // ROI 선택 중 상태 해제
+    isROISelecting = false;
+    console.log('[ROI] State updated - isROISelectionComplete:', isROISelectionComplete, 'isROISelecting:', isROISelecting);
     
-    // 메인 윈도우에 ROI 좌표 전달
-    if (mainWindow) {
-      mainWindow.webContents.send(IPC_CHANNELS.ROI_SELECTED, rect);
+    // ROI 선택 완료 후 개발자 도구 상태 확인
+    const isDevToolsOpen = overlayWindow.webContents.isDevToolsOpened();
+    console.log('[ROI] DevTools open state after ROI selection:', isDevToolsOpen);
+    
+    // 개발자 도구가 열려 있으면 클릭-스루 활성화 (개발자 도구 창 상호작용을 위해)
+    // 개발자 도구가 닫혀 있으면 Edit Mode 상태에 따라 결정
+    if (isDevToolsOpen) {
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+      console.log('[ROI] Click-through enabled after ROI selection (DevTools open)');
+    } else {
+      // 개발자 도구가 닫혀 있으면 Edit Mode 상태 확인
+      const { getEditModeState } = require('../state/editMode');
+      const isEditMode = getEditModeState();
+      if (isEditMode) {
+        // Edit Mode가 활성화되어 있으면 마우스 이벤트 유지 (추가 ROI 선택 가능)
+        overlayWindow.setIgnoreMouseEvents(false);
+        console.log('[ROI] Mouse events kept enabled after ROI selection (Edit Mode active, DevTools closed)');
+      } else {
+        // Edit Mode가 비활성화되어 있으면 클릭-스루 활성화
+        overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+        console.log('[ROI] Click-through enabled after ROI selection (Edit Mode inactive)');
+      }
     }
   });
 
   ipcMain.on(IPC_CHANNELS.ROI_START_SELECTION, () => {
-    console.log('ROI selection started');
-    // ROI 선택 시작 시 클릭-스루 비활성화
-    overlayWindow.setIgnoreMouseEvents(false);
+    console.log('[ROI] ROI selection started');
+    // ROI 선택 완료 상태 해제
+    isROISelectionComplete = false;
+    // ROI 선택 중 상태 설정
+    isROISelecting = true;
+    console.log('[ROI] State updated - isROISelectionComplete:', isROISelectionComplete, 'isROISelecting:', isROISelecting);
+    
+    // 개발자 도구 상태 확인
+    const isDevToolsOpen = overlayWindow.webContents.isDevToolsOpened();
+    console.log('[ROI] DevTools open state:', isDevToolsOpen);
+    
+    // Edit Mode 상태 확인
+    const { getEditModeState } = require('../state/editMode');
+    const isEditMode = getEditModeState();
+    console.log('[ROI] Edit Mode state:', isEditMode);
+    
+    // ROI 선택 시작 시 항상 마우스 이벤트 활성화 (Edit Mode에서만 가능)
+    // 개발자 도구가 열려 있어도 ROI 선택을 위해서는 마우스 이벤트가 필요
+    if (isEditMode) {
+      overlayWindow.setIgnoreMouseEvents(false);
+      console.log('[ROI] Mouse events enabled for ROI selection (Edit Mode active, DevTools:', isDevToolsOpen, ')');
+    } else {
+      // Edit Mode가 비활성화되어 있으면 클릭-스루 유지
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+      console.log('[ROI] Click-through maintained (Edit Mode inactive)');
+    }
   });
 
   ipcMain.on(IPC_CHANNELS.ROI_CANCEL_SELECTION, () => {
-    console.log('ROI selection cancelled');
-    // ROI 선택 취소 시에도 클릭-스루 비활성화 (다시 선택 가능하게)
-    overlayWindow.setIgnoreMouseEvents(false);
+    console.log('[ROI] ROI selection cancelled');
+    // ROI 선택 완료 상태 해제
+    isROISelectionComplete = false;
+    // ROI 선택 중 상태 해제
+    isROISelecting = false;
+    console.log('[ROI] State updated - isROISelectionComplete:', isROISelectionComplete, 'isROISelecting:', isROISelecting);
+    
+    // 개발자 도구 상태 확인
+    const isDevToolsOpen = overlayWindow.webContents.isDevToolsOpened();
+    console.log('[ROI] DevTools open state after cancellation:', isDevToolsOpen);
+    
+    // ROI 선택 취소 후 개발자 도구 상태에 따라 마우스 이벤트 설정
+    const { getEditModeState } = require('../state/editMode');
+    const isEditMode = getEditModeState();
+    
+    if (isDevToolsOpen) {
+      // 개발자 도구가 열려 있으면 클릭-스루 활성화 (개발자 도구 창 상호작용을 위해)
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+      console.log('[ROI] Click-through enabled after cancellation (DevTools open)');
+    } else if (!isEditMode) {
+      // Edit Mode가 비활성화되어 있으면 클릭-스루 활성화
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+      console.log('[ROI] Click-through enabled after cancellation (Edit Mode inactive)');
+    } else {
+      // Edit Mode가 활성화되어 있고 개발자 도구가 닫혀 있으면 마우스 이벤트 유지 (추가 ROI 선택 가능)
+      overlayWindow.setIgnoreMouseEvents(false);
+      console.log('[ROI] Mouse events kept enabled after cancellation (Edit Mode active, DevTools closed)');
+    }
   });
 }
-

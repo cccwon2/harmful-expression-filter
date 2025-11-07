@@ -18,6 +18,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // /overlay 라우트를 overlay.html로 매핑
+    fs: {
+      strict: false,
+    },
   },
   resolve: {
     alias: {
