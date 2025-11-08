@@ -312,11 +312,14 @@ export const OverlayApp: React.FC = () => {
       // ROI 저장 (로컬 상태에 저장)
       setRoi(rect);
       console.log('[Overlay] ROI saved to local state:', rect);
+
+      // 즉시 감지 모드로 전환 시도 (메인 프로세스 확인까지 대기)
+      setMode('detect');
+      console.log('[Overlay] Mode locally set to detect (awaiting main process confirmation)');
+      applyModeEffects('detect');
       
-      // 메인 프로세스에서 ROI 저장 및 감지 모드 전환 IPC를 보냄
-      // 메인 프로세스가 OVERLAY_SET_MODE: 'detect'를 보내면
-      // onModeChange 리스너가 자동으로 모드를 변경하고 applyModeEffects를 호출함
-      // 따라서 여기서는 모드를 직접 변경하지 않음 (메인 프로세스의 응답을 기다림)
+      // 메인 프로세스에서도 ROI 저장 후 OVERLAY_SET_MODE/STATE_PUSH를 재전송하므로
+      // 위의 로컬 모드 전환은 Fail-safe 용도이며, 최종 상태는 메인 프로세스 브로드캐스트에 맞춰진다.
       
       // 선택 완료 상태 설정 (ESC 키로 다시 선택 가능하도록)
       // 중요: setIsSelectionComplete(true)를 먼저 호출하여 상태를 확실히 설정
