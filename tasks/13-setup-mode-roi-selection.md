@@ -42,83 +42,28 @@
 - `@electron/ipc/roi.ts` - ROI 핸들러 구조 확인
 - `@renderer/src/overlay/OverlayApp.tsx` - 기존 ROI 선택 로직 확인
 
-## 구현 계획
+## 구현 메모
 
-### 1. Preload API 확장
-```typescript
-// electron/preload.ts
-contextBridge.exposeInMainWorld('overlay', {
-  sendROI: (roi: ROI) => {
-    ipcRenderer.send(IPC_CHANNELS.ROI_SELECTED, roi);
-  },
-  // ...
-});
-```
+1. **ROI 선택 완료 → IPC 전송**
+   - `renderer/src/overlay/OverlayApp.tsx`에서 드래그가 최소 4px 이상이면 `window.api.roi.sendSelected(roi)` 호출.
+   - 선택 완료 후 로컬 상태는 `isSelectionComplete=true`로 유지하여 클릭-스루 효과를 UI에서도 반영.
 
-### 2. ROI 저장 (electron-store)
-```typescript
-// electron/store.ts (새로 생성)
-import Store from 'electron-store';
+2. **ROI 저장 및 감지 모드 전환**
+   - `electron/ipc/roi.ts`에서 `ROI_SELECTED` 수신 시 `setROI(roi)` / `setMode('detect')`로 JSON 스토어에 영구 저장.
+   - 저장 직후 `OVERLAY_SET_MODE('detect')`와 `OVERLAY_STATE_PUSH({ mode: 'detect', roi })`를 브로드캐스트.
+   - 동일 위치에서 `overlayWindow.setIgnoreMouseEvents(true, { forward: true })`를 호출해 클릭-스루를 즉시 재활성화.
 
-const store = new Store({
-  defaults: {
-    roi: null,
-    mode: 'setup',
-  },
-});
+3. **스토어 래퍼**
+   - `electron/store.ts`는 `getROI`, `setROI`, `getMode`, `setMode`, `getStoreSnapshot` API로 정리.
+   - 현재는 파일 기반(JSON) 구현이며, T18에서 electron-store 모듈로 교체 예정.
 
-export { store };
-```
-
-### 3. ROI 핸들러 업데이트
-```typescript
-// electron/ipc/roi.ts
-import { store } from '../store';
-
-ipcMain.on(IPC_CHANNELS.ROI_SELECTED, (_event, roi: ROIRect) => {
-  store.set('roi', roi);
-  console.log('[ROI] Saved:', roi);
-  // 감지 모드 전환을 위한 IPC 전송
-  overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'detect');
-});
-```
-
-### 4. OverlayApp에서 ROI 선택 완료 처리
-```typescript
-// renderer/src/overlay/OverlayApp.tsx
-const handleMouseUp = async () => {
-  // ROI 계산
-  const roi = calculateROI(selectionState);
-  
-  // 최소 크기 체크
-  if (roi.width < 4 || roi.height < 4) {
-    return;
-  }
-  
-  // ROI 전송
-  window.api.overlay.sendROI(roi);
-  
-  // 클릭-스루 활성화
-  await window.api.overlay.setClickThrough(true);
-  
-  // ROI 저장 및 모드 전환
-  setRoi(roi);
-  setMode('detect');
-  applyModeEffects('detect');
-};
-```
-
-## 의존성 추가
-
-### electron-store 설치
-```bash
-npm install electron-store
-npm install --save-dev @types/electron-store
-```
+4. **Preload / 타입 정의**
+   - `electron/preload.ts`와 `renderer/src/global.d.ts`는 `ROI` 타입 기준으로 `roi.sendSelected`와 `overlay.sendROI`를 노출.
+   - `INTERFACES.md`에 동일한 시그니처를 문서화하여 명칭을 `ROI`로 일원화.
 
 ## 산출물/수락 기준
 - ✅ 드래그-드롭 후 메인 프로세스 로그에 ROI 좌표 출력
-- ✅ ROI 저장 완료 (electron-store)
+- ✅ ROI 저장 완료 (`electron/store.ts` 스냅샷 반영)
 - ✅ 즉시 감지 모드로 전환 (`mode='detect'`)
 - ✅ 클릭-스루 활성화 (마우스 입력이 뒤 앱으로 전달)
 

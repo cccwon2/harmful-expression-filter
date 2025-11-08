@@ -49,8 +49,6 @@ export type ROI = {
   height: number;
 };
 
-export type ROIRect = ROI; // alias for preload/global definitions
-
 export type OverlayMode = 'setup' | 'detect' | 'alert';
 
 export type OverlayState = {
@@ -86,7 +84,7 @@ declare global {
       appVersion: string;
       getVersion: () => string;
       roi: {
-        sendSelected: (rect: ROIRect) => void;
+        sendSelected: (rect: ROI) => void;
         sendStartSelection: () => void;
         sendCancelSelection: () => void;
       };
@@ -97,7 +95,7 @@ declare global {
       overlay: {
         hide: () => void;
         setClickThrough: (enabled: boolean) => Promise<void>;
-        sendROI: (roi: ROIRect) => void;
+        sendROI: (roi: ROI) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
       };
@@ -153,7 +151,7 @@ Edit Mode 상태를 중앙에서 관리하는 모듈입니다.
 
 ```typescript
 export function getEditModeState(): boolean;
-export function setEditModeState(value: boolean): void;
+export function setEditModeState(value: boolean, options?: { hideOverlay?: boolean }): void;
 export function setOverlayWindow(window: BrowserWindow | null): void;
 export function setTrayUpdateCallback(callback: (() => void) | null): void;
 ```
@@ -198,15 +196,24 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 9. 저장소 (electron-store) - 향후 추가
-**파일**: `electron/store.ts` (새로 생성 예정)
+### 9. 저장소 (electron-store)
+**파일**: `electron/store.ts`
 
-ROI와 모드 상태를 영속화하는 저장소입니다.
+ROI와 모드 상태를 영속화하는 경량 래퍼입니다.
+
+```typescript
+export function getROI(): ROI | null;
+export function setROI(roi: ROI | null): void;
+export function getMode(): OverlayMode;
+export function setMode(mode: OverlayMode): void;
+export function getStoreSnapshot(): StoreData;
+```
 
 **사용 예시**:
-- ROI 저장: `store.set('roi', roi)`
-- ROI 읽기: `store.get('roi')`
-- 모드 저장: `store.set('mode', mode)`
+- ROI 저장: `setROI(roi)`
+- ROI 읽기: `const roi = getROI()`
+- 모드 저장: `setMode('detect')`
+- 저장소 전체 확인: `const state = getStoreSnapshot()`
 
 ---
 

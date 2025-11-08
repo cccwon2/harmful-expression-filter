@@ -1,12 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from './ipc/channels';
-import type { ROIRect } from './ipc/roi';
+import type { ROI } from './ipc/roi';
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
 type OverlayState = {
   mode: OverlayMode;
-  roi?: ROIRect;
+  roi?: ROI;
   harmful?: boolean;
 };
 
@@ -20,7 +20,7 @@ try {
     getVersion: () => '1.0.0',
     // ROI 관련 IPC API
     roi: {
-      sendSelected: (rect: ROIRect) => {
+      sendSelected: (rect: ROI) => {
         ipcRenderer.send(IPC_CHANNELS.ROI_SELECTED, rect);
       },
       sendStartSelection: () => {
@@ -71,7 +71,7 @@ try {
           return Promise.reject(error);
         }
       },
-      sendROI: (roi: ROIRect) => {
+      sendROI: (roi: ROI) => {
         console.log('[Preload] overlay.sendROI() called with:', roi);
         try {
           ipcRenderer.send(IPC_CHANNELS.ROI_SELECTED, roi);
@@ -119,7 +119,7 @@ declare global {
       appVersion: string;
       getVersion: () => string;
       roi: {
-        sendSelected: (rect: ROIRect) => void;
+        sendSelected: (rect: ROI) => void;
         sendStartSelection: () => void;
         sendCancelSelection: () => void;
       };
@@ -130,7 +130,7 @@ declare global {
       overlay: {
         hide: () => void;
         setClickThrough: (enabled: boolean) => Promise<void>;
-        sendROI: (roi: ROIRect) => void;
+        sendROI: (roi: ROI) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
       };

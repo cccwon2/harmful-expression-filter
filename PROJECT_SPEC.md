@@ -95,10 +95,10 @@
 - 트레이 메뉴에 "영역 지정" 항목 추가
 - 설정 모드 진입 로직 구현 (OVERLAY_SET_MODE, OVERLAY_STATE_PUSH 브로드캐스트 및 클릭-스루 해제)
 
-### T13: 설정 모드 ROI 선택 및 감지 모드 전환 ⏳
+### T13: 설정 모드 ROI 선택 및 감지 모드 전환 ✅
 - 드래그로 ROI 선택
-- ROI 저장 (electron-store)
-- 감지 모드 자동 전환
+- ROI 저장 (electron-store 스텁)
+- 감지 모드 자동 전환 (OVERLAY_SET_MODE, OVERLAY_STATE_PUSH, 클릭-스루 활성화)
 
 ### T14: 감지 모드 HUD 표시 ⏳
 - ROI 영역에 희미한 테두리 표시

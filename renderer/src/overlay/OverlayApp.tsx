@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ROI, ROIRect, SelectionState, OverlayMode, OverlayState } from './roiTypes';
+import { ROI, SelectionState, OverlayMode, OverlayState } from './roiTypes';
 
 export const OverlayApp: React.FC = () => {
   // 상태 머신: 모드, ROI, 유해함 상태
@@ -304,12 +304,10 @@ export const OverlayApp: React.FC = () => {
         return;
       }
 
-      // ROI 좌표 전송 (ROIRect 타입으로 전송)
-      const roiRect: ROIRect = rect;
       if (window.api?.roi) {
-        window.api.roi.sendSelected(roiRect);
+        window.api.roi.sendSelected(rect);
       }
-      console.log('[Overlay] ROI selected and sent:', roiRect);
+      console.log('[Overlay] ROI selected and sent:', rect);
       
       // ROI 저장 (로컬 상태에 저장)
       setRoi(rect);

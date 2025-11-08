@@ -5,9 +5,6 @@ export type ROI = {
   height: number;
 };
 
-// 기존 ROIRect도 유지 (하위 호환성)
-export type ROIRect = ROI;
-
 export interface SelectionState {
   isSelecting: boolean;
   startX: number;

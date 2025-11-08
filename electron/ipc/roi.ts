@@ -1,13 +1,16 @@
 import { BrowserWindow, ipcMain } from 'electron';
 import { IPC_CHANNELS } from './channels';
-import { store } from '../store';
+import { setROI, setMode, getStoreSnapshot } from '../store';
+import { setEditModeState } from '../state/editMode';
 
-export interface ROIRect {
+export interface ROI {
   x: number;
   y: number;
   width: number;
   height: number;
 }
+
+export type ROIRect = ROI;
 
 // ROI 선택 상태 추적
 let isROISelectionComplete = false;
@@ -22,38 +25,34 @@ export function isROISelectingState(): boolean {
 }
 
 export function setupROIHandlers(overlayWindow: BrowserWindow) {
-  ipcMain.on(IPC_CHANNELS.ROI_SELECTED, (_event, rect: ROIRect) => {
+  ipcMain.on(IPC_CHANNELS.ROI_SELECTED, (_event, rect: ROI) => {
     console.log('[ROI] ROI selected:', rect);
-    
-    // ROI 저장 (JSON 파일)
-    store.set('roi', rect);
-    store.set('mode', 'detect');
-    console.log('[ROI] Saved to store:', rect);
-    
-    // ROI 선택 완료 상태로 설정
-    isROISelectionComplete = true;
-    // ROI 선택 중 상태 해제
-    isROISelecting = false;
-    console.log('[ROI] State updated - isROISelectionComplete:', isROISelectionComplete, 'isROISelecting:', isROISelecting);
-    
-    // 감지 모드 전환을 위한 IPC 전송
-    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'detect');
-    console.log('[ROI] Sent OVERLAY_SET_MODE: detect to renderer');
-    
-    // ROI 선택 완료 후 개발자 도구 상태 확인
-    const isDevToolsOpen = overlayWindow.webContents.isDevToolsOpened();
-    console.log('[ROI] DevTools open state after ROI selection:', isDevToolsOpen);
-    
-    // 개발자 도구가 열려 있으면 클릭-스루 활성화 (개발자 도구 창 상호작용을 위해)
-    // 개발자 도구가 닫혀 있으면 감지 모드이므로 클릭-스루 활성화
-    if (isDevToolsOpen) {
-      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-      console.log('[ROI] Click-through enabled after ROI selection (DevTools open)');
-    } else {
-      // 감지 모드: 클릭-스루 활성화 (모니터링 중)
-      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-      console.log('[ROI] Click-through enabled after ROI selection (detect mode)');
+
+    if (rect.width < 4 || rect.height < 4) {
+      console.warn('[ROI] Ignoring ROI - size below minimum threshold (4px):', rect);
+      return;
     }
+
+    setROI(rect);
+    setMode('detect');
+    console.log('[ROI] Persisted ROI and mode=detect:', getStoreSnapshot());
+
+    setEditModeState(false, { hideOverlay: false });
+
+    isROISelectionComplete = true;
+    isROISelecting = false;
+    console.log('[ROI] State flags updated - isROISelectionComplete:', isROISelectionComplete, 'isROISelecting:', isROISelecting);
+
+    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'detect');
+    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
+      mode: 'detect',
+      roi: rect,
+      harmful: false,
+    });
+    console.log('[ROI] Broadcasted detect mode via OVERLAY_SET_MODE and OVERLAY_STATE_PUSH');
+
+    overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+    console.log('[ROI] Click-through enabled after ROI selection (detect mode active)');
   });
 
   ipcMain.on(IPC_CHANNELS.ROI_START_SELECTION, () => {

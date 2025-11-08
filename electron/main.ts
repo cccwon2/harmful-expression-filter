@@ -1,10 +1,10 @@
 import { app, BrowserWindow, Menu, ipcMain, globalShortcut } from 'electron';
 import { createOverlayWindow, setExitEditModeAndHideHandler } from './windows/createOverlayWindow';
 import { createTray } from './tray';
-import { setupROIHandlers, type ROIRect } from './ipc/roi';
+import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
-import { store } from './store';
+import { getROI } from './store';
 
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
@@ -13,7 +13,7 @@ type OverlayMode = 'setup' | 'detect' | 'alert';
 
 type OverlayStatePayload = {
   mode: OverlayMode;
-  roi?: ROIRect;
+  roi?: ROI;
   harmful?: boolean;
 };
 
@@ -73,7 +73,7 @@ app.whenReady().then(() => {
 
     sendOverlayMode('setup');
 
-    const storedROI = store.get('roi') as ROIRect | null;
+    const storedROI = getROI();
     const statePayload: OverlayStatePayload = {
       mode: 'setup',
       ...(storedROI ? { roi: storedROI } : {}),

@@ -1,29 +1,25 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
-import type { ROIRect } from './ipc/roi';
+import type { ROI } from './ipc/roi';
 
-// OverlayMode 타입 정의 (electron에서 직접 정의)
-type OverlayMode = 'setup' | 'detect' | 'alert';
+export type OverlayMode = 'setup' | 'detect' | 'alert';
 
-interface StoreData {
-  roi: ROIRect | null;
+export interface StoreData {
+  roi: ROI | null;
   mode: OverlayMode;
 }
 
-// 저장 파일 경로 (app.whenReady() 후에만 호출되어야 함)
 const getStorePath = () => {
   const userDataPath = app.getPath('userData');
   return path.join(userDataPath, 'store.json');
 };
 
-// 기본 데이터
 const defaultData: StoreData = {
   roi: null,
   mode: 'setup',
 };
 
-// 데이터 읽기
 function loadData(): StoreData {
   const storePath = getStorePath();
   try {
@@ -37,7 +33,6 @@ function loadData(): StoreData {
   return { ...defaultData };
 }
 
-// 데이터 저장
 function saveData(data: StoreData) {
   const storePath = getStorePath();
   try {
@@ -47,26 +42,35 @@ function saveData(data: StoreData) {
   }
 }
 
-// Store 객체
-const store = {
-  get: (key: keyof StoreData): any => {
-    const data = loadData();
-    return data[key];
-  },
-  set: (key: keyof StoreData, value: any) => {
-    const data = loadData();
-    data[key] = value;
-    saveData(data);
-  },
-  // 모든 데이터 가져오기
-  getAll: (): StoreData => {
-    return loadData();
-  },
-  // 모든 데이터 설정
-  setAll: (data: StoreData) => {
-    saveData(data);
-  },
-};
+export function getStoreSnapshot(): StoreData {
+  return loadData();
+}
 
-export { store };
-export type { OverlayMode };
+export function setStoreSnapshot(data: StoreData) {
+  saveData(data);
+}
+
+export function getROI(): ROI | null {
+  return loadData().roi ?? null;
+}
+
+export function setROI(roi: ROI | null) {
+  const data = loadData();
+  data.roi = roi;
+  saveData(data);
+}
+
+export function getMode(): OverlayMode {
+  return loadData().mode;
+}
+
+export function setMode(mode: OverlayMode) {
+  const data = loadData();
+  data.mode = mode;
+  saveData(data);
+}
+
+export function updateStore(updater: (state: StoreData) => StoreData) {
+  const nextState = updater(loadData());
+  saveData(nextState);
+}
