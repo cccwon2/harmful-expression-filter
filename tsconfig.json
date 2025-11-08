@@ -7,7 +7,10 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "moduleResolution": "node",
+    "types": ["node", "react", "react-dom", "vite/client"],
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

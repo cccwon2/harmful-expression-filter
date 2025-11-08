@@ -1,12 +1,21 @@
 import { app, BrowserWindow, Menu, ipcMain, globalShortcut } from 'electron';
 import { createOverlayWindow, setExitEditModeAndHideHandler } from './windows/createOverlayWindow';
 import { createTray } from './tray';
-import { setupROIHandlers } from './ipc/roi';
+import { setupROIHandlers, type ROIRect } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
+import { store } from './store';
 
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
+
+type OverlayMode = 'setup' | 'detect' | 'alert';
+
+type OverlayStatePayload = {
+  mode: OverlayMode;
+  roi?: ROIRect;
+  harmful?: boolean;
+};
 
 // 헤드리스 실행: 메뉴 없음
 Menu.setApplicationMenu(null);
@@ -25,6 +34,65 @@ app.whenReady().then(() => {
     setupROIHandlers(overlayWindow);
   }
   
+  const sendOverlayMode = (mode: OverlayMode) => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) {
+      console.warn('[Main] Cannot send OVERLAY_SET_MODE - overlay window is unavailable');
+      return;
+    }
+    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, mode);
+    console.log('[Main] Sent OVERLAY_SET_MODE:', mode);
+  };
+
+  const pushOverlayState = (state: OverlayStatePayload) => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) {
+      console.warn('[Main] Cannot push overlay state - overlay window is unavailable');
+      return;
+    }
+    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, state);
+    console.log('[Main] Sent OVERLAY_STATE_PUSH:', JSON.stringify(state));
+  };
+
+  const enterSetupMode = () => {
+    const target = overlayWindow;
+    if (!target || target.isDestroyed()) {
+      console.warn('[Main] Cannot enter setup mode - overlay window is unavailable');
+      return;
+    }
+
+    console.log('[Main] Entering overlay setup mode');
+
+    if (!target.isVisible()) {
+      target.show();
+      target.setSkipTaskbar(false);
+    } else {
+      target.show();
+      target.setSkipTaskbar(false);
+    }
+
+    setEditModeState(true);
+
+    sendOverlayMode('setup');
+
+    const storedROI = store.get('roi') as ROIRect | null;
+    const statePayload: OverlayStatePayload = {
+      mode: 'setup',
+      ...(storedROI ? { roi: storedROI } : {}),
+    };
+    pushOverlayState(statePayload);
+
+    target.focus();
+    setTimeout(() => {
+      if (target && !target.isDestroyed() && target.isVisible()) {
+        target.focus();
+        target.setIgnoreMouseEvents(false);
+      }
+    }, 100);
+
+    if (tray && typeof (tray as any).updateContextMenu === 'function') {
+      (tray as any).updateContextMenu();
+    }
+  };
+
   // Edit Mode 종료 핸들러
   ipcMain.on(IPC_CHANNELS.EXIT_EDIT_MODE, () => {
     console.log('[Main] Exit Edit Mode requested from overlay');
@@ -256,7 +324,9 @@ app.whenReady().then(() => {
   
   // 시스템 트레이 생성 (오버레이 창 제어용)
   if (overlayWindow) {
-    tray = createTray(overlayWindow);
+    tray = createTray(overlayWindow, {
+      enterSetupMode,
+    });
     // 트레이 메뉴 업데이트 콜백 등록
     const trayUpdateFn = () => {
       if (tray && typeof (tray as any).updateContextMenu === 'function') {
@@ -271,33 +341,8 @@ app.whenReady().then(() => {
     // 오버레이 창이 로드 완료되면 자동으로 표시하고 설정 모드 진입
     overlayWindow.webContents.once('did-finish-load', () => {
       console.log('[Main] Overlay window loaded, showing and entering setup mode...');
-      if (overlayWindow) {
-        // 오버레이 창 표시
-        overlayWindow.show();
-        overlayWindow.setSkipTaskbar(false);
-        // Edit Mode 활성화
-        setEditModeState(true);
-        // 마우스 이벤트 활성화
-        overlayWindow.setIgnoreMouseEvents(false);
-        // 설정 모드로 진입 (IPC 전송)
-        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
-        console.log('[Main] Sent OVERLAY_SET_MODE: setup to renderer');
-        // 키보드 포커스 설정
-        overlayWindow.focus();
-        // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
-        setTimeout(() => {
-          if (overlayWindow && overlayWindow.isVisible()) {
-            overlayWindow.focus();
-            overlayWindow.setIgnoreMouseEvents(false);
-            console.log('[Main] Overlay focus and mouse events enabled after timeout');
-            // 트레이 메뉴 업데이트
-            if (tray && typeof (tray as any).updateContextMenu === 'function') {
-              (tray as any).updateContextMenu();
-            }
-          }
-        }, 100);
-        console.log('[Main] Setup mode enabled by default on app start');
-      }
+      enterSetupMode();
+      console.log('[Main] Setup mode enabled by default on app start');
     });
   }
 

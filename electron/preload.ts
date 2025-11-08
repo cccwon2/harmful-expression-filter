@@ -4,6 +4,11 @@ import type { ROIRect } from './ipc/roi';
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
+type OverlayState = {
+  mode: OverlayMode;
+  roi?: ROIRect;
+  harmful?: boolean;
+};
 
 // preload 스크립트 로드 확인 (메인 프로세스 콘솔에 출력)
 console.log('[Preload] Preload script loaded');
@@ -87,6 +92,18 @@ try {
           ipcRenderer.removeListener(IPC_CHANNELS.OVERLAY_SET_MODE, listener);
         };
       },
+      onStatePush: (callback: (state: OverlayState) => void) => {
+        console.log('[Preload] overlay.onStatePush() listener registered');
+        const listener = (_event: unknown, state: OverlayState) => {
+          console.log('[Preload] State push received:', state);
+          callback(state);
+        };
+        ipcRenderer.on(IPC_CHANNELS.OVERLAY_STATE_PUSH, listener);
+        return () => {
+          console.log('[Preload] overlay.onStatePush() listener removed');
+          ipcRenderer.removeListener(IPC_CHANNELS.OVERLAY_STATE_PUSH, listener);
+        };
+      },
     },
   });
   
@@ -115,6 +132,7 @@ declare global {
         setClickThrough: (enabled: boolean) => Promise<void>;
         sendROI: (roi: ROIRect) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
+        onStatePush: (callback: (state: OverlayState) => void) => () => void;
       };
     };
   }

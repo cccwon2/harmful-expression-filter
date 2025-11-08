@@ -49,6 +49,8 @@ export type ROI = {
   height: number;
 };
 
+export type ROIRect = ROI; // alias for preload/global definitions
+
 export type OverlayMode = 'setup' | 'detect' | 'alert';
 
 export type OverlayState = {
@@ -95,6 +97,9 @@ declare global {
       overlay: {
         hide: () => void;
         setClickThrough: (enabled: boolean) => Promise<void>;
+        sendROI: (roi: ROIRect) => void;
+        onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
+        onStatePush: (callback: (state: OverlayState) => void) => () => void;
       };
     };
   }

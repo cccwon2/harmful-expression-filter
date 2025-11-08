@@ -1,11 +1,19 @@
-interface ROIRect {
+type ROI = {
   x: number;
   y: number;
   width: number;
   height: number;
-}
+};
+
+type ROIRect = ROI;
 
 type OverlayMode = 'setup' | 'detect' | 'alert';
+
+type OverlayState = {
+  mode: OverlayMode;
+  roi?: ROI;
+  harmful?: boolean;
+};
 
 declare global {
   interface Window {
@@ -26,8 +34,11 @@ declare global {
         setClickThrough: (enabled: boolean) => Promise<void>;
         sendROI: (roi: ROIRect) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
+        onStatePush: (callback: (state: OverlayState) => void) => () => void;
       };
     };
   }
 }
+
+export {};
 

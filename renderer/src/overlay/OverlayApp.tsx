@@ -123,6 +123,33 @@ export const OverlayApp: React.FC = () => {
     };
   }, [applyModeEffects]);
 
+  useEffect(() => {
+    if (!window.api?.overlay?.onStatePush) {
+      console.warn('[Overlay] window.api.overlay.onStatePush is not available');
+      return;
+    }
+
+    console.log('[Overlay] Registering state push listener');
+    const unsubscribe = window.api.overlay.onStatePush((state: OverlayState) => {
+      console.log('[Overlay] State push received from main process:', state);
+      if (state.mode) {
+        setMode(state.mode);
+        applyModeEffects(state.mode);
+      }
+      if (typeof state.harmful === 'boolean') {
+        setHarmful(state.harmful);
+      }
+      if (state.roi) {
+        setRoi(state.roi);
+      }
+    });
+
+    return () => {
+      console.log('[Overlay] Unregistering state push listener');
+      unsubscribe();
+    };
+  }, [applyModeEffects]);
+
   // 키보드 단축키 처리
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
