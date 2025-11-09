@@ -1,13 +1,28 @@
-import { app, BrowserWindow, Menu, ipcMain, globalShortcut } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, globalShortcut, desktopCapturer, screen } from 'electron';
 import { createOverlayWindow, setExitEditModeAndHideHandler } from './windows/createOverlayWindow';
 import { createTray } from './tray';
 import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
 import { getROI } from './store';
+import * as fs from 'fs';
+import * as path from 'path';
+import axios from 'axios';
+import FormData from 'form-data';
+import { createWorker, type Worker } from 'tesseract.js';
+
+const CAPTURE_INTERVAL_MS = 1000;
+const CAPTURE_FILE_NAME = 'captured.png';
+const OCR_LANGUAGES = 'eng+kor';
+const SERVER_ENDPOINT = process.env.MONITORING_ENDPOINT ?? 'YOUR_API_ENDPOINT';
 
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
+let currentROI: ROI | null = null;
+let captureInterval: NodeJS.Timeout | null = null;
+let isMonitoring = false;
+let isCaptureInProgress = false;
+let ocrWorker: Worker | null = null;
 
 type OverlayMode = 'setup' | 'detect' | 'alert';
 
@@ -29,11 +44,6 @@ app.whenReady().then(() => {
     setOverlayWindow(overlayWindow);
   }
   
-  // ROI 핸들러 설정
-  if (overlayWindow) {
-    setupROIHandlers(overlayWindow);
-  }
-  
   const sendOverlayMode = (mode: OverlayMode) => {
     if (!overlayWindow || overlayWindow.isDestroyed()) {
       console.warn('[Main] Cannot send OVERLAY_SET_MODE - overlay window is unavailable');
@@ -52,12 +62,217 @@ app.whenReady().then(() => {
     console.log('[Main] Sent OVERLAY_STATE_PUSH:', JSON.stringify(state));
   };
 
+  const broadcastStopMonitoring = () => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) {
+      return;
+    }
+    overlayWindow.webContents.send(IPC_CHANNELS.STOP_MONITORING);
+    console.log('[Main] Sent STOP_MONITORING to renderer');
+  };
+
+  const initOCR = async (): Promise<Worker | null> => {
+    if (ocrWorker) {
+      return ocrWorker;
+    }
+    try {
+      ocrWorker = await createWorker([], undefined, {
+        logger: (message: { status: string; progress: number }) => {
+          if (message.status === 'recognizing text') {
+            console.log('[OCR]', message.status, `${Math.round((message.progress ?? 0) * 100)}%`);
+          }
+        },
+      });
+      await ocrWorker.load();
+      await ocrWorker.reinitialize(OCR_LANGUAGES);
+      console.log('[Main] OCR worker initialized with languages:', OCR_LANGUAGES);
+      return ocrWorker;
+    } catch (error) {
+      console.error('[Main] Failed to initialize OCR worker:', error);
+      ocrWorker = null;
+      return null;
+    }
+  };
+
+  const performOCR = async (imageBuffer: Buffer): Promise<string> => {
+    try {
+      const worker = await initOCR();
+      if (!worker) {
+        return '';
+      }
+      const {
+        data: { text },
+      } = await worker.recognize(imageBuffer);
+      return text.trim();
+    } catch (error) {
+      console.error('[Main] OCR processing failed:', error);
+      return '';
+    }
+  };
+
+  const sendToServer = async (text: string, imageBuffer: Buffer) => {
+    if (!SERVER_ENDPOINT || SERVER_ENDPOINT === 'YOUR_API_ENDPOINT') {
+      console.warn('[Main] SERVER_ENDPOINT is not configured. Skipping server upload.');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('text', text);
+      formData.append('timestamp', new Date().toISOString());
+      formData.append('image', imageBuffer, {
+        filename: CAPTURE_FILE_NAME,
+        contentType: 'image/png',
+      });
+
+      const response = await axios.post(SERVER_ENDPOINT, formData, {
+        headers: formData.getHeaders(),
+        timeout: 10000,
+      });
+      console.log('[Main] Server response:', response.data);
+    } catch (error: any) {
+      console.error('[Main] Failed to send data to server:', error?.message ?? error);
+    }
+  };
+
+  const captureAndProcessROI = async () => {
+    if (!isMonitoring || !currentROI) {
+      return;
+    }
+
+    if (isCaptureInProgress) {
+      console.log('[Main] Capture already in progress, skipping this interval');
+      return;
+    }
+
+    isCaptureInProgress = true;
+    try {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: primaryDisplay.size,
+      });
+
+      if (!sources.length) {
+        console.warn('[Main] No screen sources available for capture');
+        return;
+      }
+
+      const screenshot = sources[0].thumbnail;
+      if (screenshot.isEmpty()) {
+        console.warn('[Main] Captured screenshot is empty');
+        return;
+      }
+
+      const screenshotSize = screenshot.getSize();
+      const cropX = Math.max(0, Math.floor(currentROI.x));
+      const cropY = Math.max(0, Math.floor(currentROI.y));
+      const cropWidth = Math.max(
+        1,
+        Math.floor(Math.min(currentROI.width, screenshotSize.width - cropX)),
+      );
+      const cropHeight = Math.max(
+        1,
+        Math.floor(Math.min(currentROI.height, screenshotSize.height - cropY)),
+      );
+
+      if (cropWidth <= 0 || cropHeight <= 0) {
+        console.warn('[Main] Invalid crop dimensions calculated:', {
+          cropX,
+          cropY,
+          cropWidth,
+          cropHeight,
+        });
+        return;
+      }
+
+      const croppedImage = screenshot.crop({
+        x: cropX,
+        y: cropY,
+        width: cropWidth,
+        height: cropHeight,
+      });
+
+      const pngBuffer = croppedImage.toPNG();
+      const outputPath = path.join(app.getPath('userData'), CAPTURE_FILE_NAME);
+      fs.writeFileSync(outputPath, pngBuffer);
+      console.log('[Main] Captured ROI frame saved to:', outputPath);
+
+      const text = await performOCR(pngBuffer);
+      console.log('[Main] OCR result:', text || '(empty)');
+
+      await sendToServer(text, pngBuffer);
+    } catch (error) {
+      console.error('[Main] Error during captureAndProcessROI:', error);
+    } finally {
+      isCaptureInProgress = false;
+    }
+  };
+
+  const stopMonitoring = (reason?: string) => {
+    if (captureInterval) {
+      clearInterval(captureInterval);
+      captureInterval = null;
+    }
+
+    if (!isMonitoring && !currentROI) {
+      return;
+    }
+
+    console.log('[Main] Stopping monitoring', reason ? `(${reason})` : '');
+
+    isMonitoring = false;
+    currentROI = null;
+    isCaptureInProgress = false;
+
+    broadcastStopMonitoring();
+    sendOverlayMode('setup');
+    pushOverlayState({ mode: 'setup' });
+  };
+
+  const startMonitoring = () => {
+    if (!currentROI) {
+      console.warn('[Main] Cannot start monitoring - ROI is not defined');
+      return;
+    }
+
+    if (isMonitoring) {
+      console.log('[Main] Monitoring already active');
+      return;
+    }
+
+    console.log('[Main] Starting monitoring loop for ROI:', currentROI);
+    isMonitoring = true;
+    pushOverlayState({ mode: 'detect', roi: currentROI });
+    captureInterval = setInterval(() => {
+      captureAndProcessROI().catch((error) => {
+        console.error('[Main] Monitoring interval error:', error);
+      });
+    }, CAPTURE_INTERVAL_MS);
+
+    captureAndProcessROI().catch((error) => {
+      console.error('[Main] Initial capture error:', error);
+    });
+  };
+
+  if (overlayWindow) {
+    setupROIHandlers(overlayWindow, {
+      onROISelected: (roi) => {
+        currentROI = roi;
+        console.log('[Main] Current ROI updated:', roi);
+      },
+      onROICancelled: () => {
+        stopMonitoring('ROI selection cancelled');
+      },
+    });
+  }
+
   const enterSetupMode = () => {
     const target = overlayWindow;
     if (!target || target.isDestroyed()) {
       console.warn('[Main] Cannot enter setup mode - overlay window is unavailable');
       return;
     }
+
+    stopMonitoring('Entering setup mode');
 
     console.log('[Main] Entering overlay setup mode');
 
@@ -106,6 +321,7 @@ app.whenReady().then(() => {
       overlayWindow.hide();
       overlayWindow.setSkipTaskbar(true);
       setEditModeState(false);
+      stopMonitoring('Overlay hide request');
       // 트레이 메뉴 업데이트
       if (tray && typeof (tray as any).updateContextMenu === 'function') {
         (tray as any).updateContextMenu();
@@ -120,6 +336,7 @@ app.whenReady().then(() => {
       setEditModeState(false);
       overlayWindow.hide();
       overlayWindow.setSkipTaskbar(true);
+      stopMonitoring('Exit edit mode and hide overlay request');
       // 트레이 메뉴 업데이트
       if (tray && typeof (tray as any).updateContextMenu === 'function') {
         (tray as any).updateContextMenu();
@@ -138,6 +355,16 @@ app.whenReady().then(() => {
     return false;
   });
   
+  ipcMain.on(IPC_CHANNELS.START_MONITORING, () => {
+    console.log('[Main] START_MONITORING request received');
+    startMonitoring();
+  });
+
+  ipcMain.on(IPC_CHANNELS.STOP_MONITORING, () => {
+    console.log('[Main] STOP_MONITORING request received');
+    stopMonitoring('Renderer request');
+  });
+  
   // Edit Mode 종료 및 오버레이 숨김 함수 (메인 프로세스에서 직접 호출용)
   const handleExitEditModeAndHide = () => {
     console.log('[Main] Exit Edit Mode and hide overlay (direct call from main process)');
@@ -145,6 +372,7 @@ app.whenReady().then(() => {
       setEditModeState(false);
       overlayWindow.hide();
       overlayWindow.setSkipTaskbar(true);
+      stopMonitoring('Direct exit edit mode and hide');
       // 트레이 메뉴 업데이트
       if (tray && typeof (tray as any).updateContextMenu === 'function') {
         (tray as any).updateContextMenu();
@@ -345,6 +573,22 @@ app.whenReady().then(() => {
       console.log('[Main] Setup mode enabled by default on app start');
     });
   }
+
+  initOCR().catch((error) => {
+    console.error('[Main] OCR initialization error during startup:', error);
+  });
+
+  app.on('before-quit', () => {
+    stopMonitoring('Application quitting');
+    if (ocrWorker && typeof ocrWorker.terminate === 'function') {
+      ocrWorker
+        .terminate()
+        .catch((error: unknown) => {
+          console.error('[Main] Failed to terminate OCR worker gracefully:', error);
+        });
+      ocrWorker = null;
+    }
+  });
 
   app.on('activate', () => {
     // 헤드리스 모드에서는 activate 이벤트 무시

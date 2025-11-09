@@ -61,6 +61,11 @@
    - `electron/preload.ts`와 `renderer/src/global.d.ts`는 `ROI` 타입 기준으로 `roi.sendSelected`와 `overlay.sendROI`를 노출.
    - `INTERFACES.md`에 동일한 시그니처를 문서화하여 명칭을 `ROI`로 일원화.
 
+5. **모니터링 루프 & HUD**
+   - ROI 선택 직후 `overlay.startMonitoring()` IPC를 통해 메인 프로세스가 주기적으로 스크린샷을 캡처.
+   - 렌더러는 `isMonitoring` 상태로 빨간색 테두리와 “🔴 감시 중” 배지를 표시하며 클릭은 투과된다.
+   - 메인 프로세스는 `captureAndProcessROI()`에서 캡처 → OCR → 서버 전송을 담당하며, 중단 시 `STOP_MONITORING`으로 동기화.
+
 ## 산출물/수락 기준
 - ✅ 드래그-드롭 후 메인 프로세스 로그에 ROI 좌표 출력
 - ✅ ROI 저장 완료 (`electron/store.ts` 스냅샷 반영)

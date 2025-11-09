@@ -9,6 +9,8 @@ export const IPC_CHANNELS = {
   SET_CLICK_THROUGH: 'overlay:setClickThrough',
   OVERLAY_SET_MODE: 'overlay:setMode',
   OVERLAY_STATE_PUSH: 'overlay:state',
+  START_MONITORING: 'monitoring:start',
+  STOP_MONITORING: 'monitoring:stop',
   OCR_START: 'ocr:start',
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',

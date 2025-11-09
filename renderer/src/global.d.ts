@@ -33,6 +33,9 @@ declare global {
         sendROI: (roi: ROI) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
+        startMonitoring: () => void;
+        onStopMonitoring: (callback: () => void) => () => void;
+        removeAllListeners: (channel: string) => void;
       };
     };
   }

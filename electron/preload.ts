@@ -104,6 +104,30 @@ try {
           ipcRenderer.removeListener(IPC_CHANNELS.OVERLAY_STATE_PUSH, listener);
         };
       },
+      startMonitoring: () => {
+        console.log('[Preload] overlay.startMonitoring() called');
+        try {
+          ipcRenderer.send(IPC_CHANNELS.START_MONITORING);
+        } catch (error) {
+          console.error('[Preload] Error sending START_MONITORING:', error);
+        }
+      },
+      onStopMonitoring: (callback: () => void) => {
+        console.log('[Preload] overlay.onStopMonitoring() listener registered');
+        const listener = () => {
+          console.log('[Preload] STOP_MONITORING received');
+          callback();
+        };
+        ipcRenderer.on(IPC_CHANNELS.STOP_MONITORING, listener);
+        return () => {
+          console.log('[Preload] overlay.onStopMonitoring() listener removed');
+          ipcRenderer.removeListener(IPC_CHANNELS.STOP_MONITORING, listener);
+        };
+      },
+      removeAllListeners: (channel: typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]) => {
+        console.log('[Preload] overlay.removeAllListeners() called for channel:', channel);
+        ipcRenderer.removeAllListeners(channel);
+      },
     },
   });
   
@@ -133,6 +157,9 @@ declare global {
         sendROI: (roi: ROI) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
+        startMonitoring: () => void;
+        onStopMonitoring: (callback: () => void) => () => void;
+        removeAllListeners: (channel: typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]) => void;
       };
     };
   }

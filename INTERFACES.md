@@ -24,6 +24,8 @@ export const IPC_CHANNELS = {
   SET_CLICK_THROUGH: 'overlay:setClickThrough',
   OVERLAY_SET_MODE: 'overlay:setMode',
   OVERLAY_STATE_PUSH: 'overlay:state',
+  START_MONITORING: 'monitoring:start',
+  STOP_MONITORING: 'monitoring:stop',
   OCR_START: 'ocr:start',
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',
@@ -98,6 +100,9 @@ declare global {
         sendROI: (roi: ROI) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
+        startMonitoring: () => void;
+        onStopMonitoring: (callback: () => void) => () => void;
+        removeAllListeners: (channel: string) => void;
       };
     };
   }
@@ -214,6 +219,17 @@ export function getStoreSnapshot(): StoreData;
 - ROI 읽기: `const roi = getROI()`
 - 모드 저장: `setMode('detect')`
 - 저장소 전체 확인: `const state = getStoreSnapshot()`
+
+---
+
+### 10. 모니터링 & OCR
+**파일**: `electron/main.ts`
+
+주요 역할:
+- `captureAndProcessROI()`로 ROI 영역을 주기적으로 캡처
+- `tesseract.js` 기반 `performOCR()`로 텍스트 추출
+- `sendToServer()`를 통해 OCR 결과/이미지를 외부 엔드포인트로 전송
+- `START_MONITORING` / `STOP_MONITORING` IPC로 렌더러와 동기화
 
 ---
 

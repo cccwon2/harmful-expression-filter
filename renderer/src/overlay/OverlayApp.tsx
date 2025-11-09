@@ -6,6 +6,7 @@ export const OverlayApp: React.FC = () => {
   const [mode, setMode] = useState<OverlayMode>('setup');
   const [roi, setRoi] = useState<ROI | undefined>(undefined);
   const [harmful, setHarmful] = useState<boolean>(false);
+  const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
   
   // 전역 변수로 상태를 window에 노출 (개발자 도구에서 접근 가능하도록)
   useEffect(() => {
@@ -26,34 +27,52 @@ export const OverlayApp: React.FC = () => {
   // 모드 효과 적용 함수
   const applyModeEffects = useCallback((newMode: OverlayMode) => {
     console.log('[Overlay] Applying mode effects for mode:', newMode);
-    
-    // window.api가 준비될 때까지 대기
-    const checkAndApply = () => {
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const clickThrough = newMode !== 'setup';
+    const maxAttempts = 10;
+
+    const attempt = (attemptIndex: number) => {
+      if (cancelled) {
+        return;
+      }
+
       if (window.api?.overlay?.setClickThrough) {
-        const clickThrough = newMode !== 'setup'; // setup 모드가 아닐 때만 클릭-스루 활성화
         console.log('[Overlay] Setting click-through to:', clickThrough, 'for mode:', newMode);
-        window.api.overlay.setClickThrough(clickThrough)
+        window.api.overlay
+          .setClickThrough(clickThrough)
           .then(() => {
             console.log('[Overlay] Click-through successfully set to:', clickThrough);
           })
           .catch((error) => {
             console.error('[Overlay] Error setting click-through:', error);
           });
-      } else {
-        console.warn('[Overlay] window.api.overlay.setClickThrough is not available yet');
+        return;
+      }
+
+      if (attemptIndex >= maxAttempts) {
+        console.error('[Overlay] Failed to set click-through - API unavailable after', maxAttempts, 'attempts');
+        return;
+      }
+
+      console.warn(
+        `[Overlay] window.api.overlay.setClickThrough is not available yet (attempt ${attemptIndex + 1}/${maxAttempts})`,
+      );
+
+      const delay = Math.min(100 * Math.pow(1.5, attemptIndex), 1000);
+      timeoutId = setTimeout(() => attempt(attemptIndex + 1), delay);
+    };
+
+    attempt(0);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
     };
-    
-    // 즉시 시도
-    checkAndApply();
-    
-    // window.api가 아직 준비되지 않았을 수 있으므로 짧은 지연 후 재시도
-    const timeoutId = setTimeout(() => {
-      checkAndApply();
-    }, 100);
-    
-    // cleanup 함수는 useEffect에서 처리
-    return timeoutId;
   }, []);
   
   // window.api 사용 가능 여부 확인 및 초기 상태 출력
@@ -71,30 +90,25 @@ export const OverlayApp: React.FC = () => {
     console.log('[Overlay] init state:', JSON.stringify(state, null, 2));
     
     // 초기 모드 효과 적용 (약간의 지연 후)
-    let effectTimeoutId: NodeJS.Timeout | null = null;
+    let cleanupApply: (() => void) | null = null;
     const timeoutId1 = setTimeout(() => {
       console.log('[Overlay] Applying initial mode effects');
-      effectTimeoutId = applyModeEffects(mode);
+      cleanupApply = applyModeEffects(mode);
     }, 200);
     
     return () => {
       clearTimeout(timeoutId1);
-      if (effectTimeoutId) {
-        clearTimeout(effectTimeoutId);
-      }
+      cleanupApply?.();
+      cleanupApply = null;
     };
   }, []); // 초기 마운트 시에만 실행
   
   // 모드 변경 시 효과 적용
   useEffect(() => {
     console.log('[Overlay] Mode changed to:', mode);
-    const timeoutId = applyModeEffects(mode);
-    
-    // cleanup: timeout 정리
+    const cleanup = applyModeEffects(mode);
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      cleanup?.();
     };
   }, [mode, applyModeEffects]);
   
@@ -111,10 +125,9 @@ export const OverlayApp: React.FC = () => {
     }
 
     console.log('[Overlay] Registering mode change listener');
-    const unsubscribe = window.api.overlay.onModeChange((mode: OverlayMode) => {
-      console.log('[Overlay] Mode change received from main process:', mode);
-      setMode(mode);
-      applyModeEffects(mode);
+    const unsubscribe = window.api.overlay.onModeChange((nextMode: OverlayMode) => {
+      console.log('[Overlay] Mode change received from main process:', nextMode);
+      setMode(nextMode);
     });
 
     return () => {
@@ -149,6 +162,28 @@ export const OverlayApp: React.FC = () => {
       unsubscribe();
     };
   }, [applyModeEffects]);
+
+  useEffect(() => {
+    if (!window.api?.overlay?.onStopMonitoring) {
+      console.warn('[Overlay] window.api.overlay.onStopMonitoring is not available');
+      return;
+    }
+
+    console.log('[Overlay] Registering stop monitoring listener');
+    const unsubscribe = window.api.overlay.onStopMonitoring(() => {
+      console.log('[Overlay] Stop monitoring signal received from main process');
+      setIsMonitoring(false);
+      setIsSelectionComplete(false);
+      setSelectionState(null);
+      setRoi(undefined);
+      setMode('setup');
+    });
+
+    return () => {
+      console.log('[Overlay] Unregistering stop monitoring listener');
+      unsubscribe();
+    };
+  }, []);
 
   // 키보드 단축키 처리
   useEffect(() => {
@@ -235,6 +270,8 @@ export const OverlayApp: React.FC = () => {
       }
 
       console.log('[Overlay] Starting ROI selection');
+      setIsMonitoring(false);
+      setRoi(undefined);
       setSelectionState({
         isSelecting: true,
         startX: e.clientX,
@@ -317,6 +354,13 @@ export const OverlayApp: React.FC = () => {
       setMode('detect');
       console.log('[Overlay] Mode locally set to detect (awaiting main process confirmation)');
       applyModeEffects('detect');
+
+      if (window.api?.overlay?.startMonitoring) {
+        window.api.overlay.startMonitoring();
+        setIsMonitoring(true);
+      } else {
+        console.warn('[Overlay] overlay.startMonitoring is not available');
+      }
       
       // 메인 프로세스에서도 ROI 저장 후 OVERLAY_SET_MODE/STATE_PUSH를 재전송하므로
       // 위의 로컬 모드 전환은 Fail-safe 용도이며, 최종 상태는 메인 프로세스 브로드캐스트에 맞춰진다.
@@ -384,7 +428,7 @@ export const OverlayApp: React.FC = () => {
         width: '100vw',
         height: '100vh',
         backgroundColor: 'transparent', // 완전히 투명
-        pointerEvents: isSelectionComplete ? 'none' : 'auto',
+        pointerEvents: isSelectionComplete || isMonitoring ? 'none' : 'auto',
         cursor: selectionState?.isSelecting ? 'crosshair' : 'default',
         outline: 'none', // 포커스 시 outline 제거
         // 투명도 보장
@@ -431,6 +475,46 @@ export const OverlayApp: React.FC = () => {
           }}
         >
           ROI 선택 완료. ESC 키를 눌러 다시 선택하거나 Ctrl+E/Q로 Edit Mode를 종료하세요.
+        </div>
+      )}
+
+      {isMonitoring && roi && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${roi.x}px`,
+            top: `${roi.y}px`,
+            width: `${roi.width}px`,
+            height: `${roi.height}px`,
+            border: '3px solid #ff0000',
+            pointerEvents: 'none',
+            zIndex: 1002,
+            boxSizing: 'border-box',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: '-32px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: 'rgba(255, 0, 0, 0.85)',
+              color: '#ffffff',
+              padding: '4px 12px',
+              borderRadius: '16px',
+              fontSize: '14px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              pointerEvents: 'none',
+            }}
+          >
+            <span role="img" aria-label="monitoring">
+              🔴
+            </span>
+            감시 중
+          </div>
         </div>
       )}
 

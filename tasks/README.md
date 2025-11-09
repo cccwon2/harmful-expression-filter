@@ -24,7 +24,7 @@
 11. [상태 모델 정의](./11-state-model-definition.md) - 상태 모델 정의 (기본 구현 완료)
 12. [트레이 메뉴 "영역 지정"](./12-tray-setup-mode-entry.md) - 설정 모드 진입
 13. [설정 모드 ROI 선택](./13-setup-mode-roi-selection.md) - ROI 선택 및 감지 모드 전환
-14. [감지 모드 HUD](./14-detect-mode-hud.md) - HUD 표시
+14. [감시 모니터링 & HUD/OCR](./14-monitoring-ocr.md) - HUD, 캡처, OCR, 서버 전송
 15. [OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md) - OCR/STT 스텁 구현
 16. [서버 알림 및 블라인드](./16-server-alert-blind.md) - 블라인드 표시
 17. [ESC/트레이 재진입](./17-escape-tray-resetup.md) - 설정 모드 재진입
@@ -55,4 +55,3 @@
 2. [작업 개요](./00-overview.md)에 작업 추가
 3. 의존성 관계 업데이트
 4. 관련 작업 문서에 링크 추가
-

@@ -12,6 +12,11 @@ export interface ROI {
 
 export type ROIRect = ROI;
 
+export interface ROIHandlersOptions {
+  onROISelected?: (roi: ROI) => void;
+  onROICancelled?: () => void;
+}
+
 // ROI 선택 상태 추적
 let isROISelectionComplete = false;
 let isROISelecting = false; // ROI 선택 중인지 여부
@@ -24,7 +29,7 @@ export function isROISelectingState(): boolean {
   return isROISelecting;
 }
 
-export function setupROIHandlers(overlayWindow: BrowserWindow) {
+export function setupROIHandlers(overlayWindow: BrowserWindow, options?: ROIHandlersOptions) {
   ipcMain.on(IPC_CHANNELS.ROI_SELECTED, (_event, rect: ROI) => {
     console.log('[ROI] ROI selected:', rect);
 
@@ -38,6 +43,7 @@ export function setupROIHandlers(overlayWindow: BrowserWindow) {
     console.log('[ROI] Persisted ROI and mode=detect:', getStoreSnapshot());
 
     setEditModeState(false, { hideOverlay: false });
+    options?.onROISelected?.(rect);
 
     isROISelectionComplete = true;
     isROISelecting = false;
@@ -113,5 +119,7 @@ export function setupROIHandlers(overlayWindow: BrowserWindow) {
       overlayWindow.setIgnoreMouseEvents(false);
       console.log('[ROI] Mouse events kept enabled after cancellation (Edit Mode active, DevTools closed)');
     }
+
+    options?.onROICancelled?.();
   });
 }
