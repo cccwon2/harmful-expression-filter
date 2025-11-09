@@ -28,8 +28,7 @@
 15. [OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md) - OCR/STT 스텁 구현
 16. [서버 알림 및 블라인드](./16-server-alert-blind.md) - 블라인드 표시
 17. [ESC/트레이 재진입](./17-escape-tray-resetup.md) - 설정 모드 재진입
-18. [ROI/모드 영속화](./18-persistence-boot-restore.md) - 부팅 시 복원
-19. [Preload API 확장](./19-preload-api-extension.md) - API 확장
+18. [ROI/모드 영속화 및 부팅 시 복원](./18-persistence-boot-restore.md) - 부팅 시 복원
 
 ## 작업 문서 사용법
 

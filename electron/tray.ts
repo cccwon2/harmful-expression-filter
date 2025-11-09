@@ -2,7 +2,7 @@ import { app, Menu, Tray, BrowserWindow, nativeImage } from 'electron';
 import type { NativeImage } from 'electron';
 import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
-import { IPC_CHANNELS } from './ipc';
+import { IPC_CHANNELS } from './ipc/channels';
 
 let tray: Tray | null = null;
 

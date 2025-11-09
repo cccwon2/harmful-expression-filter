@@ -120,15 +120,9 @@
 - 트레이 메뉴로 설정 모드 재진입
 - 모니터링(OCR) 중지 처리
 
-### T18: ROI/모드 영속화 및 부팅 시 복원 ⏳
-- electron-store로 ROI/모드 저장
-- 부팅 시 자동 복원
-- OCR 자동 시작
-
-### T19: Preload API 확장 ⏳
-- `sendROI`, `onModeChange`, `onServerAlert`, `onStatePush` API 추가
-- 타입 안전성 보장
-- 메모리 누수 방지
+### T18: ROI/모드 영속화 및 부팅 시 복원 ⚠️ 부분 완료
+- 부팅 시 마지막 ROI/모드를 자동 복원 (감지 모드 & 모니터링 자동 시작)
+- electron-store 마이그레이션 및 alert 상태 복원은 추후 진행
 
 ### 향후 작업 (추가 예정)
 - 실제 OCR 구현 (desktopCapturer)

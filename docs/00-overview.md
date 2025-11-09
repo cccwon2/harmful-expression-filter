@@ -28,8 +28,7 @@
 15. **[OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md)** ✅ 완료
 16. **[서버 알림 수신 및 블라인드 표시](./16-server-alert-blind.md)** ✅ 완료
 17. **[ESC/트레이로 설정 모드 재진입](./17-escape-tray-resetup.md)** ✅ 완료
-18. **[ROI/모드 영속화 및 부팅 시 복원](./18-persistence-boot-restore.md)** ⏳ 진행 예정
-19. **[Preload API 확장](./19-preload-api-extension.md)** ⏳ 진행 예정
+18. **[ROI/모드 영속화 및 부팅 시 복원](./18-persistence-boot-restore.md)** ⚠️ 부분 완료
 
 ## 작업 의존성 그래프
 
@@ -57,8 +56,7 @@
         │   └─ 15-ocr-stt-stub
         ├─ 16-server-alert-blind
         ├─ 17-escape-tray-resetup
-        ├─ 18-persistence-boot-restore
-        └─ 19-preload-api-extension
+        └─ 18-persistence-boot-restore
 ```
 
 ## 작업 상태
@@ -82,8 +80,7 @@
 | OCR/STT 파이프라인 스텁 | ✅ 완료      | 100%   | Medium   |
 | 서버 알림 및 블라인드   | ✅ 완료      | 100%   | High     |
 | ESC/트레이 재진입       | ✅ 완료      | 100%   | Medium   |
-| ROI/모드 영속화         | ⏳ 진행 예정 | 0%     | Medium   |
-| Preload API 확장        | ⏳ 진행 예정 | 0%     | High     |
+| ROI/모드 영속화         | ⚠️ 부분 완료 | 80%    | Medium   |
 
 ## 다음 단계
 

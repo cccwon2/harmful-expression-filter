@@ -4,7 +4,7 @@ import { createTray } from './tray';
 import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
-import { getROI, setMode } from './store';
+import { getROI, getMode, setMode } from './store';
 import { setupServerClientStub, stopServerClientStub } from './serverClient';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -594,11 +594,40 @@ app.whenReady().then(() => {
     const { setOverlayTrayUpdateCallback } = require('./windows/createOverlayWindow');
     setOverlayTrayUpdateCallback(trayUpdateFn);
     
-    // 오버레이 창이 로드 완료되면 자동으로 표시하고 설정 모드 진입
+    // 오버레이 창이 로드 완료되면 저장된 상태를 복원하거나 설정 모드 진입
     overlayWindow.webContents.once('did-finish-load', () => {
-      console.log('[Main] Overlay window loaded, showing and entering setup mode...');
-      enterSetupMode();
-      console.log('[Main] Setup mode enabled by default on app start');
+      const savedROI = getROI();
+      const savedMode = getMode();
+
+      if (savedROI && savedMode && savedMode !== 'setup') {
+        console.log('[Main] Restoring saved state:', { savedROI, savedMode });
+        currentROI = savedROI;
+        setMode('detect');
+        setEditModeState(false, { hideOverlay: false });
+
+        const target = overlayWindow;
+        if (!target || target.isDestroyed()) {
+          console.warn('[Main] Cannot restore state - overlay window unavailable');
+          enterSetupMode();
+          return;
+        }
+
+        target.show();
+        target.setSkipTaskbar(false);
+        target.setIgnoreMouseEvents(true, { forward: true });
+
+        sendOverlayMode('detect');
+        pushOverlayState({
+          mode: 'detect',
+          roi: savedROI,
+          harmful: false,
+        });
+
+        startMonitoring();
+      } else {
+        console.log('[Main] Starting in setup mode (no saved state)');
+        enterSetupMode();
+      }
     });
   }
 
