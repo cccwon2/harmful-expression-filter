@@ -148,6 +148,18 @@ try {
           ipcRenderer.removeListener(IPC_CHANNELS.STOP_MONITORING, listener);
         };
       },
+      onServerAlert: (callback: (harmful: boolean) => void) => {
+        console.log('[Preload] overlay.onServerAlert() listener registered');
+        const listener = (_event: unknown, payload: { harmful: boolean }) => {
+          console.log('[Preload] Server alert received:', payload);
+          callback(payload.harmful);
+        };
+        ipcRenderer.on(IPC_CHANNELS.ALERT_FROM_SERVER, listener);
+        return () => {
+          console.log('[Preload] overlay.onServerAlert() listener removed');
+          ipcRenderer.removeListener(IPC_CHANNELS.ALERT_FROM_SERVER, listener);
+        };
+      },
     },
   });
   

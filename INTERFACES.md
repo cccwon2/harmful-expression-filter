@@ -233,7 +233,20 @@ export function getStoreSnapshot(): StoreData;
 
 ---
 
-### 10. OCR Worker - 향후 추가
+### 11. 서버 클라이언트 스텁
+**파일**: `electron/serverClient.ts`
+
+주요 역할:
+- 테스트용 서버 알림 인터벌 생성 (`setupServerClientStub`)
+- 3초마다 `ALERT_FROM_SERVER` 채널로 `{ harmful: boolean }` 페이로드 전송
+- 정리 시 `stopServerClientStub()`로 인터벌 해제
+- 콘솔 로그: `[Server] Alert signal: 0/1`
+
+렌더러는 `overlay.onServerAlert` API로 알림을 구독한다.
+
+---
+
+### 12. OCR Worker - 향후 추가
 **파일**: `electron/ocrWorker.ts` (새로 생성 예정)
 
 OCR/STT 파이프라인을 관리하는 모듈입니다.
@@ -241,17 +254,6 @@ OCR/STT 파이프라인을 관리하는 모듈입니다.
 **사용 예시**:
 - OCR 시작: `ipcMain.on(OCR_START, ...)`
 - OCR 중지: `ipcMain.on(OCR_STOP, ...)`
-
----
-
-### 11. 서버 클라이언트 - 향후 추가
-**파일**: `electron/serverClient.ts` (새로 생성 예정)
-
-서버 연결 및 알림을 처리하는 모듈입니다.
-
-**사용 예시**:
-- 서버 연결: WebSocket 또는 HTTP 폴링
-- 알림 전송: `overlayWindow.webContents.send(ALERT_FROM_SERVER, ...)`
 
 ---
 

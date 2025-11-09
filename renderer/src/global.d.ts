@@ -36,6 +36,7 @@ declare global {
         startMonitoring: () => void;
         stopMonitoring: () => void;
         onStopMonitoring: (callback: () => void) => () => void;
+        onServerAlert: (callback: (harmful: boolean) => void) => () => void;
       };
     };
   }

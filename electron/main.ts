@@ -5,6 +5,7 @@ import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
 import { getROI, setMode } from './store';
+import { setupServerClientStub, stopServerClientStub } from './serverClient';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -265,6 +266,8 @@ app.whenReady().then(() => {
         stopMonitoring('ROI selection cancelled');
       },
     });
+
+    setupServerClientStub(overlayWindow);
   }
 
   const enterSetupMode = () => {
@@ -582,6 +585,7 @@ app.whenReady().then(() => {
 
   app.on('before-quit', () => {
     stopMonitoring('Application quitting');
+    stopServerClientStub();
     if (ocrWorker && typeof ocrWorker.terminate === 'function') {
       ocrWorker
         .terminate()

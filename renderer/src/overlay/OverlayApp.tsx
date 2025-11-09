@@ -220,10 +220,36 @@ export const OverlayApp: React.FC = () => {
           setSelectionState(null);
           setRoi(undefined);
           setMode('setup');
+          setHarmful(false);
         }),
       'onStopMonitoring',
     );
   }, [createOverlayApiWaiter]);
+
+  useEffect(() => {
+    return createOverlayApiWaiter(
+      (api) => api.onServerAlert,
+      (onServerAlert) =>
+        onServerAlert((nextHarmful: boolean) => {
+          console.log('[Overlay] Server alert received:', nextHarmful);
+          if (!isMonitoring || !roi) {
+            console.log(
+              '[Overlay] Ignoring server alert because monitoring is inactive or ROI is undefined',
+              { isMonitoring, hasRoi: !!roi },
+            );
+            setHarmful(false);
+            if (mode !== 'setup') {
+              setMode('setup');
+            }
+            return;
+          }
+
+          setHarmful(nextHarmful);
+          setMode(nextHarmful ? 'alert' : 'detect');
+        }),
+      'onServerAlert',
+    );
+  }, [createOverlayApiWaiter, isMonitoring, roi, mode]);
 
   // 키보드 단축키 처리
   useEffect(() => {
@@ -568,6 +594,24 @@ export const OverlayApp: React.FC = () => {
             감시 중
           </div>
         </div>
+      )}
+
+      {mode === 'alert' && roi && harmful && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${roi.x}px`,
+            top: `${roi.y}px`,
+            width: `${roi.width}px`,
+            height: `${roi.height}px`,
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            border: '2px solid rgba(255, 0, 0, 0.5)',
+            pointerEvents: 'none',
+            zIndex: 1003,
+            transition: 'opacity 200ms ease-in-out',
+            boxSizing: 'border-box',
+          }}
+        />
       )}
 
       {/* 사용 안내 - Edit Mode일 때만 표시 */}
