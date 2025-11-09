@@ -118,72 +118,112 @@ export const OverlayApp: React.FC = () => {
   }, []);
 
   // IPC로 모드 변경 수신 (메인 프로세스에서 전송)
+  const createOverlayApiWaiter = useCallback(
+    <T extends (...args: any[]) => any>(
+      getter: (api: NonNullable<typeof window.api>['overlay']) => T | undefined,
+      register: (fn: T) => () => void,
+      debugLabel: string,
+    ) => {
+      const maxAttempts = 20;
+      const baseDelay = 100;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let cancelled = false;
+      let cleanup: (() => void) | null = null;
+
+      const attempt = (attemptIndex: number) => {
+        if (cancelled) {
+          return;
+        }
+
+        const overlayApi = window.api?.overlay;
+        const targetFn = overlayApi ? getter(overlayApi) : undefined;
+
+        if (targetFn) {
+          console.log('[Overlay] Registering', debugLabel, 'listener');
+          cleanup = register(targetFn);
+          return;
+        }
+
+        if (attemptIndex >= maxAttempts) {
+          console.error(
+            `[Overlay] Failed to register ${debugLabel} listener - API unavailable after ${maxAttempts} attempts`,
+          );
+          return;
+        }
+
+        const delay = Math.min(baseDelay * Math.pow(1.5, attemptIndex), 1000);
+        console.warn(
+          `[Overlay] ${debugLabel} API not available yet (attempt ${attemptIndex + 1}/${maxAttempts})`,
+        );
+        timeoutId = setTimeout(() => attempt(attemptIndex + 1), delay);
+      };
+
+      attempt(0);
+
+      return () => {
+        cancelled = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        if (cleanup) {
+          console.log('[Overlay] Unregistering', debugLabel, 'listener');
+          cleanup();
+          cleanup = null;
+        }
+      };
+    },
+    [],
+  );
+
   useEffect(() => {
-    if (!window.api?.overlay?.onModeChange) {
-      console.warn('[Overlay] window.api.overlay.onModeChange is not available');
-      return;
-    }
-
-    console.log('[Overlay] Registering mode change listener');
-    const unsubscribe = window.api.overlay.onModeChange((nextMode: OverlayMode) => {
-      console.log('[Overlay] Mode change received from main process:', nextMode);
-      setMode(nextMode);
-    });
-
-    return () => {
-      console.log('[Overlay] Unregistering mode change listener');
-      unsubscribe();
-    };
-  }, [applyModeEffects]);
+    return createOverlayApiWaiter(
+      (api) => api.onModeChange,
+      (onModeChange) =>
+        onModeChange((nextMode: OverlayMode) => {
+          console.log('[Overlay] Mode change received from main process:', nextMode);
+          setMode(nextMode);
+        }),
+      'onModeChange',
+    );
+  }, [createOverlayApiWaiter]);
 
   useEffect(() => {
-    if (!window.api?.overlay?.onStatePush) {
-      console.warn('[Overlay] window.api.overlay.onStatePush is not available');
-      return;
-    }
-
-    console.log('[Overlay] Registering state push listener');
-    const unsubscribe = window.api.overlay.onStatePush((state: OverlayState) => {
-      console.log('[Overlay] State push received from main process:', state);
-      if (state.mode) {
-        setMode(state.mode);
-        applyModeEffects(state.mode);
-      }
-      if (typeof state.harmful === 'boolean') {
-        setHarmful(state.harmful);
-      }
-      if (state.roi) {
-        setRoi(state.roi);
-      }
-    });
-
-    return () => {
-      console.log('[Overlay] Unregistering state push listener');
-      unsubscribe();
-    };
-  }, [applyModeEffects]);
+    return createOverlayApiWaiter(
+      (api) => api.onStatePush,
+      (onStatePush) =>
+        onStatePush((state: OverlayState) => {
+          console.log('[Overlay] State push received from main process:', state);
+          if (state.mode) {
+            setMode(state.mode);
+            applyModeEffects(state.mode);
+          }
+          if (typeof state.harmful === 'boolean') {
+            setHarmful(state.harmful);
+          }
+          if (state.roi) {
+            setRoi(state.roi);
+          }
+        }),
+      'onStatePush',
+    );
+  }, [createOverlayApiWaiter, applyModeEffects]);
 
   useEffect(() => {
-    if (!window.api?.overlay?.onStopMonitoring) {
-      console.warn('[Overlay] window.api.overlay.onStopMonitoring is not available');
-      return;
-    }
-
-    console.log('[Overlay] Registering stop monitoring listener');
-    const unsubscribe = window.api.overlay.onStopMonitoring(() => {
-      console.log('[Overlay] Stop monitoring signal received from main process');
-      setIsMonitoring(false);
-      setIsSelectionComplete(false);
-      setSelectionState(null);
-      setRoi(undefined);
-      setMode('setup');
-    });
-
-    return () => {
-      console.log('[Overlay] Unregistering stop monitoring listener');
-      unsubscribe();
-    };
-  }, []);
+    return createOverlayApiWaiter(
+      (api) => api.onStopMonitoring,
+      (onStopMonitoring) =>
+        onStopMonitoring(() => {
+          console.log('[Overlay] Stop monitoring signal received from main process');
+          setIsMonitoring(false);
+          setIsSelectionComplete(false);
+          setSelectionState(null);
+          setRoi(undefined);
+          setMode('setup');
+        }),
+      'onStopMonitoring',
+    );
+  }, [createOverlayApiWaiter]);
 
   // 키보드 단축키 처리
   useEffect(() => {
@@ -227,6 +267,18 @@ export const OverlayApp: React.FC = () => {
           return;
         }
         
+        if (isMonitoring || mode !== 'setup') {
+          console.log('[Overlay] ESC pressed - requesting monitoring stop');
+          if (window.api?.overlay?.stopMonitoring) {
+            window.api.overlay.stopMonitoring();
+          }
+          setIsMonitoring(false);
+          setSelectionState(null);
+          setIsSelectionComplete(false);
+          setMode('setup');
+          return;
+        }
+        
         // ROI 선택이 없으면 ESC는 아무 동작도 하지 않음 (Edit Mode 유지)
         console.log('[Overlay] ESC pressed but no active ROI selection - no action');
       }
@@ -243,7 +295,7 @@ export const OverlayApp: React.FC = () => {
       document.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [selectionState, isSelectionComplete]);
+  }, [selectionState, isSelectionComplete, isMonitoring, mode]);
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
@@ -382,7 +434,7 @@ export const OverlayApp: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [selectionState, isSelectionComplete, handleModeChange]);
+  }, [selectionState, isSelectionComplete, handleModeChange, mode, roi]);
 
   // ROI 선택 영역 계산
   const selectionRect = selectionState

@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS } from './ipc/channels';
 import type { ROI } from './ipc/roi';
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
@@ -9,6 +8,23 @@ type OverlayState = {
   roi?: ROI;
   harmful?: boolean;
 };
+
+const IPC_CHANNELS = {
+  ROI_SELECTED: 'roi:selected',
+  ROI_START_SELECTION: 'roi-start-selection',
+  ROI_CANCEL_SELECTION: 'roi-cancel-selection',
+  EXIT_EDIT_MODE: 'exit-edit-mode',
+  HIDE_OVERLAY: 'hide-overlay',
+  EXIT_EDIT_MODE_AND_HIDE: 'exit-edit-mode-and-hide',
+  SET_CLICK_THROUGH: 'overlay:setClickThrough',
+  OVERLAY_SET_MODE: 'overlay:setMode',
+  OVERLAY_STATE_PUSH: 'overlay:state',
+  START_MONITORING: 'monitoring:start',
+  STOP_MONITORING: 'monitoring:stop',
+  OCR_START: 'ocr:start',
+  OCR_STOP: 'ocr:stop',
+  ALERT_FROM_SERVER: 'alert:server',
+} as const;
 
 // preload 스크립트 로드 확인 (메인 프로세스 콘솔에 출력)
 console.log('[Preload] Preload script loaded');
@@ -112,6 +128,14 @@ try {
           console.error('[Preload] Error sending START_MONITORING:', error);
         }
       },
+      stopMonitoring: () => {
+        console.log('[Preload] overlay.stopMonitoring() called');
+        try {
+          ipcRenderer.send(IPC_CHANNELS.STOP_MONITORING);
+        } catch (error) {
+          console.error('[Preload] Error sending STOP_MONITORING:', error);
+        }
+      },
       onStopMonitoring: (callback: () => void) => {
         console.log('[Preload] overlay.onStopMonitoring() listener registered');
         const listener = () => {
@@ -123,10 +147,6 @@ try {
           console.log('[Preload] overlay.onStopMonitoring() listener removed');
           ipcRenderer.removeListener(IPC_CHANNELS.STOP_MONITORING, listener);
         };
-      },
-      removeAllListeners: (channel: typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]) => {
-        console.log('[Preload] overlay.removeAllListeners() called for channel:', channel);
-        ipcRenderer.removeAllListeners(channel);
       },
     },
   });

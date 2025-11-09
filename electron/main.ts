@@ -4,7 +4,7 @@ import { createTray } from './tray';
 import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
-import { getROI } from './store';
+import { getROI, setMode } from './store';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -225,7 +225,9 @@ app.whenReady().then(() => {
 
     broadcastStopMonitoring();
     sendOverlayMode('setup');
+    setMode('setup');
     pushOverlayState({ mode: 'setup' });
+    setEditModeState(true);
   };
 
   const startMonitoring = () => {
