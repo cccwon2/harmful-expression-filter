@@ -9,10 +9,10 @@
 
 1. **[PROJECT_SPEC.md](./PROJECT_SPEC.md)**: 전체 프로젝트 명세서 및 요구사항
 2. **[INTERFACES.md](./INTERFACES.md)**: 핵심 인터페이스 및 연결부 코드 (⚠️ 매우 중요)
-3. **[tasks/TASK_WORKFLOW.md](./tasks/TASK_WORKFLOW.md)**: 작업 워크플로우 가이드
+3. **[docs/TASK_WORKFLOW.md](./docs/TASK_WORKFLOW.md)**: 작업 워크플로우 가이드
 
 ### 작업 문서
-각 작업의 상세 내용은 [tasks/](./tasks/) 폴더를 참조하세요.
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요.
 
 ## 🚀 빠른 시작
 
@@ -36,7 +36,7 @@ npm start
 harmful-expression-filter/
 ├── PROJECT_SPEC.md          # 마스터 플랜 (전체 프로젝트 명세서)
 ├── INTERFACES.md            # 핵심 인터페이스 및 연결부 코드
-├── tasks/                   # 작업 문서
+├── docs/                    # 작업/문서 모음
 │   ├── README.md           # 작업 문서 개요
 │   ├── TASK_WORKFLOW.md    # 작업 워크플로우 가이드
 │   ├── 00-overview.md      # 작업 개요
@@ -65,7 +65,7 @@ harmful-expression-filter/
 
 ## 📝 작업 추가하기
 
-새로운 작업을 추가할 때는 [tasks/TASK_WORKFLOW.md](./tasks/TASK_WORKFLOW.md)의 워크플로우를 따르세요.
+새로운 작업을 추가할 때는 [docs/TASK_WORKFLOW.md](./docs/TASK_WORKFLOW.md)의 워크플로우를 따르세요.
 
 ## 📄 라이선스
 

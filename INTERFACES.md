@@ -307,6 +307,6 @@ OCR/STT 파이프라인을 관리하는 모듈입니다.
 ## 관련 문서
 
 - `PROJECT_SPEC.md`: 전체 프로젝트 명세서
-- `tasks/00-overview.md`: 작업 개요
-- 각 작업 문서: `tasks/01-electron-setup.md` 등
+- `docs/00-overview.md`: 작업 개요
+- 각 작업 문서: `docs/01-electron-setup.md` 등
 

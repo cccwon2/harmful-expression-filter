@@ -78,7 +78,7 @@ const applyModeEffects = useCallback((newMode: OverlayMode) => {
 ## 다음 작업
 - [작업 12: 트레이 메뉴 "영역 지정" → 설정 모드 진입](./12-tray-setup-mode-entry.md)
 - [작업 13: 설정 모드 ROI 선택 및 감지 모드 전환](./13-setup-mode-roi-selection.md)
-- [작업 14: 감지 모드 HUD 표시](./14-detect-mode-hud.md)
+- [작업 14: 감시 모니터링 & HUD/OCR](./14-monitoring-ocr.md)
 
 ## 참조
 - [INTERFACES.md](../INTERFACES.md): 핵심 인터페이스 문서

@@ -79,7 +79,7 @@
 4. 화면 클릭이 뒤 앱으로 전달되는지 확인
 
 ## 다음 작업
-- [작업 14: 감지 모드 HUD 표시](./14-detect-mode-hud.md)
+- [작업 14: 감시 모니터링 & HUD/OCR](./14-monitoring-ocr.md)
 - [작업 15: OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md)
 
 ## 참조

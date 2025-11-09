@@ -235,10 +235,10 @@ npm start
 
 ## 작업 문서
 
-각 작업의 상세 내용은 `tasks/` 폴더의 문서를 참조하세요:
-- `tasks/00-overview.md`: 전체 작업 개요
-- `tasks/01-electron-setup.md`: 기본 설정
-- `tasks/02-system-tray.md`: 시스템 트레이
+각 작업의 상세 내용은 `docs/` 폴더의 문서를 참조하세요:
+- `docs/00-overview.md`: 전체 작업 개요
+- `docs/01-electron-setup.md`: 기본 설정
+- `docs/02-system-tray.md`: 시스템 트레이
 - ... (기타 작업 문서)
 
 ## 업데이트 히스토리
