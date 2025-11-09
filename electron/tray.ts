@@ -2,11 +2,13 @@ import { app, Menu, Tray, BrowserWindow, nativeImage } from 'electron';
 import type { NativeImage } from 'electron';
 import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
+import { IPC_CHANNELS } from './ipc';
 
 let tray: Tray | null = null;
 
 type TrayHandlers = {
   enterSetupMode: () => void;
+  resetToSetupMode?: () => void;
 };
 
 function createTrayIcon(): NativeImage {
@@ -98,7 +100,33 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
           if (handlers?.enterSetupMode) {
             handlers.enterSetupMode();
           } else {
-            console.warn('[Tray] enterSetupMode handler is not available');
+            overlayWindow.show();
+            overlayWindow.setSkipTaskbar(false);
+            overlayWindow.setIgnoreMouseEvents(false);
+            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
+              mode: 'setup',
+            });
+          }
+          updateContextMenu();
+        },
+      },
+      {
+        label: '영역 재지정 (Re-setup)',
+        type: 'normal',
+        click: () => {
+          console.log('[Tray] Reset to setup mode');
+          if (handlers?.resetToSetupMode) {
+            handlers.resetToSetupMode();
+          } else {
+            overlayWindow.show();
+            overlayWindow.setSkipTaskbar(false);
+            overlayWindow.setIgnoreMouseEvents(false);
+            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
+              mode: 'setup',
+              harmful: false,
+            });
           }
           updateContextMenu();
         },

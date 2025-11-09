@@ -253,7 +253,7 @@ export const OverlayApp: React.FC = () => {
 
   // 키보드 단축키 처리
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       // 개발자 도구가 열려 있으면 오버레이 창의 키보드 이벤트를 개발자 도구로 전달
       // (개발자 도구 콘솔에서 입력 가능하도록)
       const isDevToolsOpen = (window as any).__devToolsOpen || false;
@@ -264,21 +264,21 @@ export const OverlayApp: React.FC = () => {
       
       console.log('[Overlay] Key pressed:', e.key, 'Ctrl:', e.ctrlKey, 'Alt:', e.altKey, 'Shift:', e.shiftKey);
       
-      // ESC: ROI 선택 취소/리셋만 (Edit Mode 종료하지 않음)
       if (e.key === 'Escape' || e.key === 'Esc') {
         e.preventDefault();
         e.stopPropagation();
-        console.log('[Overlay] ESC key detected - ROI selection only');
+        console.log('[Overlay] ESC key detected - resetting to setup mode');
         
+        let cancelledSelection = false;
         // ROI 선택 중이면 선택 취소
         if (selectionState?.isSelecting) {
           console.log('[Overlay] Cancelling ROI selection');
           setSelectionState(null);
           setIsSelectionComplete(false);
+          cancelledSelection = true;
           if (window.api?.roi) {
             window.api.roi.sendCancelSelection();
           }
-          return;
         }
         
         // ROI 선택 완료 상태면 다시 선택 가능하도록 리셋
@@ -286,27 +286,39 @@ export const OverlayApp: React.FC = () => {
           console.log('[Overlay] Resetting ROI selection');
           setIsSelectionComplete(false);
           setSelectionState(null);
+          cancelledSelection = true;
           if (window.api?.roi) {
             window.api.roi.sendCancelSelection();
           }
-          // Edit Mode는 유지
-          return;
         }
         
-        if (isMonitoring || mode !== 'setup') {
-          console.log('[Overlay] ESC pressed - requesting monitoring stop');
+        try {
           if (window.api?.overlay?.stopMonitoring) {
-            window.api.overlay.stopMonitoring();
+            await window.api.overlay.stopMonitoring();
           }
-          setIsMonitoring(false);
-          setSelectionState(null);
-          setIsSelectionComplete(false);
-          setMode('setup');
-          return;
+        } catch (error) {
+          console.error('[Overlay] Failed to stop monitoring via ESC:', error);
         }
         
-        // ROI 선택이 없으면 ESC는 아무 동작도 하지 않음 (Edit Mode 유지)
-        console.log('[Overlay] ESC pressed but no active ROI selection - no action');
+        try {
+          if (window.api?.overlay?.setClickThrough) {
+            await window.api.overlay.setClickThrough(false);
+            console.log('[Overlay] Click-through disabled via ESC');
+          }
+        } catch (error) {
+          console.error('[Overlay] Failed to disable click-through via ESC:', error);
+        }
+        
+        setIsMonitoring(false);
+        setHarmful(false);
+        setMode('setup');
+        setSelectionState(null);
+        setIsSelectionComplete(false);
+        setRoi(undefined);
+        
+        if (!cancelledSelection) {
+          console.log('[Overlay] Reset to setup mode (ESC)');
+        }
       }
       
       // Ctrl+E/Q는 메인 프로세스에서 처리 (before-input-event)
@@ -321,7 +333,7 @@ export const OverlayApp: React.FC = () => {
       document.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [selectionState, isSelectionComplete, isMonitoring, mode]);
+  }, [selectionState, isSelectionComplete]);
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {

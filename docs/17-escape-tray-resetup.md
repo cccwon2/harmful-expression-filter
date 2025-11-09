@@ -1,7 +1,7 @@
 # 작업 17: ESC/트레이로 설정 모드 재진입
 
 ## 상태
-⏳ 진행 예정
+✅ 완료
 
 ## 개요
 ESC 키 또는 트레이 메뉴를 통해 언제든지 설정 모드로 재진입하여 ROI를 다시 지정할 수 있도록 합니다.
@@ -9,19 +9,18 @@ ESC 키 또는 트레이 메뉴를 통해 언제든지 설정 모드로 재진�
 ## 요구사항
 
 ### ESC 키 처리
-- [ ] `keydown` 이벤트에서 Escape 키 감지
-- [ ] `harmful` 상태를 `false`로 리셋
-- [ ] 모드를 `setup`으로 변경
-- [ ] 클릭-스루 비활성화 (`setClickThrough(false)`)
-- [ ] 드래그 재활성화
+- [x] `keydown` 이벤트에서 Escape 키 감지
+- [x] `harmful` 상태를 `false`로 리셋
+- [x] 모드를 `setup`으로 변경
+- [x] 클릭-스루 비활성화 (`setClickThrough(false)`)
+- [x] 드래그 재활성화
 
 ### 트레이 메뉴
-- [ ] "영역 재지정(Re-setup)" 메뉴 항목 추가
-- [ ] 클릭 시 설정 모드 진입 (작업 12와 동일한 로직)
+- [x] \"영역 재지정 (Re-setup)\" 메뉴 항목 추가
+- [x] 클릭 시 설정 모드 진입 (OCR/모니터링 중지 포함)
 
 ### OCR 중지
-- [ ] 설정 모드 진입 시 `OCR_STOP` IPC 전송
-- [ ] OCR 타이머 정리
+- [x] 설정 모드 진입 시 모니터링/OCR 루프 정리
 
 ## 의존성
 - [작업 12: 트레이 메뉴 "영역 지정" → 설정 모드 진입](./12-tray-setup-mode-entry.md)
@@ -49,22 +48,25 @@ useEffect(() => {
     if (e.key === 'Escape' || e.key === 'Esc') {
       e.preventDefault();
       e.stopPropagation();
-      
-      // 유해 상태 리셋
+
+      if (window.api?.overlay?.stopMonitoring) {
+        await window.api.overlay.stopMonitoring();
+      }
+      if (window.api?.overlay?.setClickThrough) {
+        await window.api.overlay.setClickThrough(false);
+      }
+
+      setIsMonitoring(false);
       setHarmful(false);
-      
-      // 설정 모드로 전환
       setMode('setup');
-      await window.api.overlay.setClickThrough(false);
-      
-      // ROI 선택 상태 리셋
       setSelectionState(null);
       setIsSelectionComplete(false);
-      
+      setRoi(undefined);
+
       console.log('[Overlay] Reset to setup mode (ESC)');
     }
   };
-  
+
   document.addEventListener('keydown', handleKeyDown, true);
   return () => {
     document.removeEventListener('keydown', handleKeyDown, true);
@@ -79,26 +81,23 @@ useEffect(() => {
   label: '영역 재지정 (Re-setup)',
   type: 'normal',
   click: () => {
-    // OCR 중지
-    ipcMain.emit(IPC_CHANNELS.OCR_STOP);
-    
-    // 설정 모드 진입
-    overlayWindow.show();
-    overlayWindow.setIgnoreMouseEvents(false);
-    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
-    
     console.log('[Tray] Reset to setup mode');
+    handlers?.resetToSetupMode?.();
   },
 }
 ```
 
-### 3. 설정 모드 진입 시 OCR 중지
+### 3. 설정 모드 진입 시 모니터링 중지
 ```typescript
-// electron/ipc/roi.ts 또는 electron/main.ts
-ipcMain.on(IPC_CHANNELS.OVERLAY_SET_MODE, (event, mode: OverlayMode) => {
+// electron/main.ts
+const resetToSetupMode = () => {
+  console.log('[Main] Reset to setup mode request received');
+  enterSetupMode();
+};
+
+ipcMain.on(IPC_CHANNELS.OVERLAY_SET_MODE, (_event, mode: OverlayMode) => {
   if (mode === 'setup') {
-    // OCR 중지
-    ipcMain.emit(IPC_CHANNELS.OCR_STOP);
+    stopMonitoring('Renderer requested setup mode');
   }
 });
 ```

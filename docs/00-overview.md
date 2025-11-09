@@ -27,7 +27,7 @@
 14. **[감시 모니터링 & HUD/OCR](./14-monitoring-ocr.md)** ✅ 완료
 15. **[OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md)** ✅ 완료
 16. **[서버 알림 수신 및 블라인드 표시](./16-server-alert-blind.md)** ✅ 완료
-17. **[ESC/트레이로 설정 모드 재진입](./17-escape-tray-resetup.md)** ⏳ 진행 예정
+17. **[ESC/트레이로 설정 모드 재진입](./17-escape-tray-resetup.md)** ✅ 완료
 18. **[ROI/모드 영속화 및 부팅 시 복원](./18-persistence-boot-restore.md)** ⏳ 진행 예정
 19. **[Preload API 확장](./19-preload-api-extension.md)** ⏳ 진행 예정
 
@@ -81,7 +81,7 @@
 | 감시 모니터링 & HUD/OCR | ✅ 완료      | 100%   | High     |
 | OCR/STT 파이프라인 스텁 | ✅ 완료      | 100%   | Medium   |
 | 서버 알림 및 블라인드   | ✅ 완료      | 100%   | High     |
-| ESC/트레이 재진입       | ⏳ 진행 예정 | 0%     | Medium   |
+| ESC/트레이 재진입       | ✅ 완료      | 100%   | Medium   |
 | ROI/모드 영속화         | ⏳ 진행 예정 | 0%     | Medium   |
 | Preload API 확장        | ⏳ 진행 예정 | 0%     | High     |
 

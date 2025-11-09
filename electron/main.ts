@@ -12,7 +12,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { createWorker, type Worker } from 'tesseract.js';
 
-const CAPTURE_INTERVAL_MS = 1000;
+const CAPTURE_INTERVAL_MS = 4000;
 const CAPTURE_FILE_NAME = 'captured.png';
 const OCR_LANGUAGES = 'eng+kor';
 const SERVER_ENDPOINT = process.env.MONITORING_ENDPOINT ?? 'YOUR_API_ENDPOINT';
@@ -61,6 +61,11 @@ app.whenReady().then(() => {
     }
     overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, state);
     console.log('[Main] Sent OVERLAY_STATE_PUSH:', JSON.stringify(state));
+  };
+
+  const resetToSetupMode = () => {
+    console.log('[Main] Reset to setup mode request received');
+    enterSetupMode();
   };
 
   const broadcastStopMonitoring = () => {
@@ -254,6 +259,15 @@ app.whenReady().then(() => {
     captureAndProcessROI().catch((error) => {
       console.error('[Main] Initial capture error:', error);
     });
+
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      try {
+        overlayWindow.blur();
+        console.log('[Main] Overlay window blurred to restore underlying app focus');
+      } catch (error) {
+        console.warn('[Main] Failed to blur overlay window:', error);
+      }
+    }
   };
 
   if (overlayWindow) {
@@ -296,6 +310,7 @@ app.whenReady().then(() => {
     const storedROI = getROI();
     const statePayload: OverlayStatePayload = {
       mode: 'setup',
+      harmful: false,
       ...(storedROI ? { roi: storedROI } : {}),
     };
     pushOverlayState(statePayload);
@@ -359,7 +374,14 @@ app.whenReady().then(() => {
     }
     return false;
   });
-  
+
+  ipcMain.on(IPC_CHANNELS.OVERLAY_SET_MODE, (_event, mode: OverlayMode) => {
+    console.log('[Main] OVERLAY_SET_MODE requested by renderer:', mode);
+    if (mode === 'setup') {
+      stopMonitoring('Renderer requested setup mode');
+    }
+  });
+
   ipcMain.on(IPC_CHANNELS.START_MONITORING, () => {
     console.log('[Main] START_MONITORING request received');
     startMonitoring();
@@ -559,6 +581,7 @@ app.whenReady().then(() => {
   if (overlayWindow) {
     tray = createTray(overlayWindow, {
       enterSetupMode,
+      resetToSetupMode,
     });
     // 트레이 메뉴 업데이트 콜백 등록
     const trayUpdateFn = () => {

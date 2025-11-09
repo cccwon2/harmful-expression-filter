@@ -8,6 +8,18 @@ AI가 새로운 작업을 수행할 때, 이전 작업에서 만든 인터페이
 
 ## 필수 참조 파일
 
+### ESC / 트레이 재진입 플로우
+- **렌더러** (`renderer/src/overlay/OverlayApp.tsx`)
+  - ESC 키 감지 시 모니터링 중지, 클릭-스루 해제, `mode='setup'`으로 리셋.
+  - `overlay.stopMonitoring()`과 `overlay.setClickThrough(false)` 호출, ROI/유해 상태 초기화.
+- **트레이** (`electron/tray.ts`)
+  - "영역 재지정 (Re-setup)" 메뉴 항목 → 메인 프로세스의 `resetToSetupMode()` 실행.
+- **메인 프로세스** (`electron/main.ts`)
+  - `resetToSetupMode()`에서 `stopMonitoring()` 수행 후 설정 모드로 재진입.
+  - `OVERLAY_SET_MODE` IPC가 `setup`일 때도 모니터링을 중지해 상태를 동기화.
+
+---
+
 ### 1. IPC 채널 정의
 **파일**: `electron/ipc/channels.ts`
 
