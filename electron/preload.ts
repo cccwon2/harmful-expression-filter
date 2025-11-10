@@ -145,7 +145,11 @@ try {
       onStatePush: (callback: (state: OverlayState) => void) => {
         console.log('[Preload] overlay.onStatePush() listener registered');
         const listener = (_event: unknown, state: OverlayState) => {
-          console.log('[Preload] State push received:', state);
+          const isHarmful = Boolean(state.harmful);
+          if (!isHarmful) {
+            return;
+          }
+          console.warn('[Preload] Harmful state push detail:', state);
           callback(state);
         };
         ipcRenderer.on(IPC_CHANNELS.OVERLAY_STATE_PUSH, listener);
@@ -185,7 +189,10 @@ try {
       onServerAlert: (callback: (harmful: boolean) => void) => {
         console.log('[Preload] overlay.onServerAlert() listener registered');
         const listener = (_event: unknown, payload: { harmful: boolean }) => {
-          console.log('[Preload] Server alert received:', payload);
+          if (!payload.harmful) {
+            return;
+          }
+          console.warn('[Preload] Harmful server alert detail');
           callback(payload.harmful);
         };
         ipcRenderer.on(IPC_CHANNELS.ALERT_FROM_SERVER, listener);

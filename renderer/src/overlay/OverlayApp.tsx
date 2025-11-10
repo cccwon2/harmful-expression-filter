@@ -20,8 +20,10 @@ export const OverlayApp: React.FC = () => {
   
   // 상태 변경 로그 출력
   useEffect(() => {
-    const state: OverlayState = { mode, roi, harmful };
-    console.log('[Overlay] state changed:', JSON.stringify(state, null, 2));
+    if (harmful) {
+      const state: OverlayState = { mode, roi, harmful };
+      console.warn('[Overlay] state changed (harmful):', JSON.stringify(state, null, 2));
+    }
   }, [mode, roi, harmful]);
 
   // 모드 효과 적용 함수
@@ -213,7 +215,9 @@ export const OverlayApp: React.FC = () => {
       (api) => api.onStatePush,
       (onStatePush) =>
         onStatePush((state: OverlayState) => {
-          console.log('[Overlay] State push received from main process:', state);
+          if (state.harmful) {
+            console.warn('[Overlay] State push received from main process (harmful):', state);
+          }
           if (state.mode) {
             setMode(state.mode);
           }
@@ -250,7 +254,9 @@ export const OverlayApp: React.FC = () => {
       (api) => api.onServerAlert,
       (onServerAlert) =>
         onServerAlert((nextHarmful: boolean) => {
-          console.log('[Overlay] Server alert received:', nextHarmful);
+          if (nextHarmful) {
+            console.warn('[Overlay] Server alert received (harmful)');
+          }
           if (!isMonitoring || !roi) {
             console.log(
               '[Overlay] Ignoring server alert because monitoring is inactive or ROI is undefined',
