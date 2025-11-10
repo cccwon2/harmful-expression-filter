@@ -11,7 +11,7 @@ import axios from 'axios';
 import { createWorker, type Worker } from 'tesseract.js';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
 
-const CAPTURE_INTERVAL_MS = 1500;
+const CAPTURE_INTERVAL_MS = 2500;
 const CAPTURE_FILE_NAME = 'captured.png';
 const OCR_LANGUAGES = 'eng+kor';
 const SERVER_ANALYZE_URL = 'http://127.0.0.1:8000/analyze';
@@ -181,7 +181,8 @@ app.whenReady().then(async () => {
   };
 
   const captureAndProcessROI = async () => {
-    if (!isMonitoring || !currentROI) {
+    const roi = currentROI;
+    if (!isMonitoring || !roi) {
       return;
     }
 
@@ -210,15 +211,15 @@ app.whenReady().then(async () => {
       }
 
       const screenshotSize = screenshot.getSize();
-      const cropX = Math.max(0, Math.floor(currentROI.x));
-      const cropY = Math.max(0, Math.floor(currentROI.y));
+      const cropX = Math.max(0, Math.floor(roi.x));
+      const cropY = Math.max(0, Math.floor(roi.y));
       const cropWidth = Math.max(
         1,
-        Math.floor(Math.min(currentROI.width, screenshotSize.width - cropX)),
+        Math.floor(Math.min(roi.width, screenshotSize.width - cropX)),
       );
       const cropHeight = Math.max(
         1,
-        Math.floor(Math.min(currentROI.height, screenshotSize.height - cropY)),
+        Math.floor(Math.min(roi.height, screenshotSize.height - cropY)),
       );
 
       if (cropWidth <= 0 || cropHeight <= 0) {
@@ -250,6 +251,11 @@ app.whenReady().then(async () => {
       const harmful = analysis.harmful;
       if (analysis.matched.length > 0) {
         console.log('[Main] Matched harmful keywords:', analysis.matched);
+      }
+
+      if (!isMonitoring || !currentROI) {
+        console.log('[Main] Monitoring stopped during capture; skipping state update');
+        return;
       }
 
       if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -290,6 +296,15 @@ app.whenReady().then(async () => {
     setMode('setup');
     pushOverlayState({ mode: 'setup' });
     setEditModeState(true);
+
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      try {
+        overlayWindow.setIgnoreMouseEvents(false);
+        console.log('[Main] Mouse events re-enabled during stopMonitoring');
+      } catch (error) {
+        console.warn('[Main] Failed to disable click-through during stopMonitoring:', error);
+      }
+    }
   };
 
   const startMonitoring = () => {

@@ -103,10 +103,30 @@ export const OverlayApp: React.FC = () => {
     };
   }, []); // 초기 마운트 시에만 실행
   
-  // 모드 변경 시 효과 적용
+  // 모드 변경 시 효과 및 상태 동기화
   useEffect(() => {
     console.log('[Overlay] Mode changed to:', mode);
     const cleanup = applyModeEffects(mode);
+
+    const monitoringActive = mode === 'detect' || mode === 'alert';
+    setIsMonitoring((prev) => {
+      if (prev === monitoringActive) {
+        return prev;
+      }
+      console.log('[Overlay] isMonitoring updated via mode change:', monitoringActive);
+      return monitoringActive;
+    });
+
+    if (!monitoringActive) {
+      console.log('[Overlay] Resetting selection state due to non-monitoring mode');
+      setIsSelectionComplete(false);
+      setSelectionState(null);
+    }
+
+    if (mode === 'setup') {
+      setHarmful(false);
+    }
+
     return () => {
       cleanup?.();
     };
@@ -196,7 +216,6 @@ export const OverlayApp: React.FC = () => {
           console.log('[Overlay] State push received from main process:', state);
           if (state.mode) {
             setMode(state.mode);
-            applyModeEffects(state.mode);
           }
           if (typeof state.harmful === 'boolean') {
             setHarmful(state.harmful);

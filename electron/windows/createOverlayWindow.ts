@@ -29,14 +29,14 @@ export function createOverlayWindow(): BrowserWindow {
     alwaysOnTop: true,
     type: process.platform === 'linux' ? 'panel' : undefined, // Linux에서 더 나은 오버레이 지원
     show: false, // 초기에는 숨김, 로드 완료 후 표시
-      webPreferences: {
-        preload: path.resolve(__dirname, '../preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        // 개발자 도구에서 콘솔 로그가 제대로 표시되도록 설정
-        devTools: true,
-      },
+    webPreferences: {
+      preload: path.resolve(__dirname, '../preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      // 개발자 도구에서 콘솔 로그가 제대로 표시되도록 설정
+      devTools: true,
+    },
   });
 
   console.log('[Overlay] Overlay window created');
