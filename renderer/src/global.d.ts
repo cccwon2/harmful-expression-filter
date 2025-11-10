@@ -13,6 +13,35 @@ type OverlayState = {
   harmful?: boolean;
 };
 
+interface ServerAPI {
+  healthCheck: () => Promise<
+    | {
+        status: string;
+        keywords_loaded: number;
+        stt_loaded: boolean;
+        ai_model_loaded: boolean;
+      }
+    | { error: true; message: string; code?: string; status?: number }
+  >;
+  analyzeText: (text: string) => Promise<
+    | {
+        has_violation: boolean;
+        confidence: number;
+        matched_keywords: string[];
+        method: string;
+        processing_time: number;
+      }
+    | { error: true; message: string; code?: string; status?: number }
+  >;
+  getKeywords: () => Promise<
+    | {
+        total: number;
+        keywords: string[];
+      }
+    | { error: true; message: string; code?: string; status?: number }
+  >;
+}
+
 declare global {
   interface Window {
     api: {
@@ -38,6 +67,7 @@ declare global {
         onStopMonitoring: (callback: () => void) => () => void;
         onServerAlert: (callback: (harmful: boolean) => void) => () => void;
       };
+      server: ServerAPI;
     };
   }
 }

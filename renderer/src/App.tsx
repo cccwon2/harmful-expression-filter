@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ServerTest } from './components/ServerTest';
 
 export const App: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string>('');
@@ -13,46 +14,44 @@ export const App: React.FC = () => {
   return (
     <div
       style={{
-        padding: '40px',
+        padding: '32px',
         fontFamily: 'system-ui, -apple-system, sans-serif',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
+        gap: '32px',
         minHeight: '100vh',
         backgroundColor: '#f5f5f5',
       }}
     >
-      <h1
+      <header
         style={{
-          fontSize: '2.5rem',
-          color: '#2563eb',
-          marginBottom: '1rem',
-          fontWeight: 'bold',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
         }}
       >
-        Hello from Renderer
-      </h1>
-      <p
+        <h1 style={{ fontSize: '2.4rem', color: '#2563eb', fontWeight: 700, margin: 0 }}>
+          Harmful Expression Filter
+        </h1>
+        <p style={{ fontSize: '1.1rem', color: '#555', margin: 0 }}>Vite + React + TypeScript</p>
+        {appVersion && (
+          <p style={{ fontSize: '0.95rem', color: '#2563eb', fontWeight: 500, margin: 0 }}>
+            App Version: {appVersion}
+          </p>
+        )}
+      </header>
+
+      <main
         style={{
-          fontSize: '1.2rem',
-          color: '#666',
-          marginBottom: '0.5rem',
+          background: '#ffffff',
+          borderRadius: 12,
+          boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)',
         }}
       >
-        Vite + React + TypeScript
-      </p>
-      {appVersion && (
-        <p
-          style={{
-            fontSize: '1rem',
-            color: '#2563eb',
-            fontWeight: '500',
-          }}
-        >
-          App Version: {appVersion}
-        </p>
-      )}
+        <ServerTest />
+      </main>
     </div>
   );
 };

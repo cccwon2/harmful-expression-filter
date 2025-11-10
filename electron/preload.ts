@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ROI } from './ipc/roi';
+import { SERVER_CHANNELS } from './ipc/channels';
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
@@ -7,6 +8,39 @@ type OverlayState = {
   mode: OverlayMode;
   roi?: ROI;
   harmful?: boolean;
+};
+
+type ServerHealthResponse = {
+  status: string;
+  keywords_loaded: number;
+  stt_loaded: boolean;
+  ai_model_loaded: boolean;
+};
+
+type ServerAnalyzeResponse = {
+  has_violation: boolean;
+  confidence: number;
+  matched_keywords: string[];
+  method: string;
+  processing_time: number;
+};
+
+type ServerKeywordsResponse = {
+  total: number;
+  keywords: string[];
+};
+
+type ServerErrorResponse = {
+  error: true;
+  message: string;
+  code?: string;
+  status?: number;
+};
+
+type ServerAPI = {
+  healthCheck: () => Promise<ServerHealthResponse | ServerErrorResponse>;
+  analyzeText: (text: string) => Promise<ServerAnalyzeResponse | ServerErrorResponse>;
+  getKeywords: () => Promise<ServerKeywordsResponse | ServerErrorResponse>;
 };
 
 const IPC_CHANNELS = {
@@ -161,6 +195,11 @@ try {
         };
       },
     },
+    server: {
+      healthCheck: () => ipcRenderer.invoke(SERVER_CHANNELS.HEALTH_CHECK),
+      analyzeText: (text: string) => ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text),
+      getKeywords: () => ipcRenderer.invoke(SERVER_CHANNELS.GET_KEYWORDS),
+    } as ServerAPI,
   });
   
   console.log('[Preload] api exposed successfully');
@@ -190,10 +229,14 @@ declare global {
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
         startMonitoring: () => void;
+        stopMonitoring: () => void;
         onStopMonitoring: (callback: () => void) => () => void;
-        removeAllListeners: (channel: typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]) => void;
+        onServerAlert: (callback: (harmful: boolean) => void) => () => void;
       };
+      server: ServerAPI;
     };
   }
 }
+
+export {};
 
