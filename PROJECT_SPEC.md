@@ -4,7 +4,7 @@
 
 **라이브 플랫폼 유해 표현 필터링, Blur 처리, 비프음, 볼륨 조절** 애플리케이션
 
-전체 화면 투명 오버레이를 사용하여 사용자가 지정한 ROI (Region of Interest) 영역을 모니터링하고, 유해한 표현을 감지하면 Blur 처리, 비프음, 볼륨 조절 등의 조치를 취하는 Electron 애플리케이션입니다.
+전체 화면 투명 오버레이를 사용하여 사용자가 지정한 ROI (Region of Interest) 영역을 모니터링하고, 유해한 표현을 감지하면 Blur 처리, 비프음, 볼륨 조절 등의 조치를 취하는 Electron 애플리케이션입니다. FastAPI 백엔드와 연동하여 텍스트 분석 및 향후 음성 분석 API를 제공합니다.
 
 ## 아키텍처 개요
 
@@ -12,6 +12,7 @@
 - **Main Process**: Electron 메인 프로세스 (창 관리, 시스템 트레이, IPC 처리)
 - **Renderer Process**: React + TypeScript 렌더러 (오버레이 UI)
 - **Preload Script**: Context Isolation을 통한 안전한 API 노출
+- **FastAPI Server**: 텍스트 분석 API, 향후 STT/알림 엔드포인트 제공
 
 ### 핵심 개념
 
@@ -20,6 +21,7 @@
 3. **Edit Mode**: ROI 선택을 위한 모드 (클릭-스루 비활성화)
 4. **상태 머신**: setup → detect → alert 상태 전환
 5. **IPC 통신**: 메인-렌더러 간 안전한 통신
+6. **서버 연동**: Electron ↔ FastAPI IPC 헬스체크/분석/키워드 조회 (Task 22~23 완료)
 
 ## 작업 목록 및 요구사항
 
@@ -84,8 +86,6 @@
 - ROI, Edit Mode, Overlay API
 - 타입 정의 및 문서화
 
-## 향후 작업 (Future Tasks)
-
 ### T11: 상태 모델 정의 ✅ (기본 구현 완료)
 - 상태 타입 정의 (ROI, OverlayMode, OverlayState)
 - 상태 머신 훅 구현
@@ -124,12 +124,33 @@
 - 부팅 시 마지막 ROI/모드를 자동 복원 (감지 모드 & 모니터링 자동 시작)
 - electron-store 마이그레이션 및 alert 상태 복원은 추후 진행
 
-### 향후 작업 (추가 예정)
-- 실제 OCR 구현 (desktopCapturer)
-- 실제 STT 구현 (오디오 캡처)
-- 실제 서버 연결 (WebSocket/HTTP)
-- 유해 표현 감지 알고리즘
-- 마스킹, 비프음, 볼륨 조절
+### T19: 네이티브 Tesseract 통합 ⏳
+- WASM 대신 네이티브 실행 파일 호출로 OCR 성능 개선
+
+### T20: FastAPI 기본 구조 ✅
+- FastAPI 앱/엔드포인트(`/health`, `/keywords`, `/`) 구축
+- CORS 설정 및 키워드 로딩 처리
+
+### T21: 텍스트 분석 API ✅
+- `/analyze`, `/test` 엔드포인트 구현
+- 키워드 기반 필터링 및 수동 검증 스크립트 제공
+
+### T22: IPC 서버 핸들러 ✅
+- Electron 메인에서 FastAPI 호출을 위한 IPC 핸들러 구현
+- `SERVER_CHANNELS` 정의 및 오류 처리 응답 표준화
+
+### T23: Electron 통합 ✅
+- Preload에서 서버 API를 노출하고 타입 정의 업데이트
+- Renderer 개발용 `ServerTest` 컴포넌트로 헬스/분석/키워드 조회 테스트 가능
+
+## 향후 작업 (Future Tasks)
+
+- T16: 서버 알림 수신 및 블라인드 표시 (진행 중)
+- T18: 저장소 마이그레이션 및 상태 복원 마무리
+- T19: 네이티브 Tesseract 통합 (성능 향상)
+- T24: 음성 STT API 구현 (FastAPI)
+- T25: 음성 Electron 연동 (녹음/IPC/서버 호출)
+- 실제 OCR/음성 분석 파이프라인 고도화, Blur/비프음/볼륨 조절 동작 연동
 
 ## 핵심 인터페이스 및 타입
 
@@ -150,6 +171,12 @@ export const IPC_CHANNELS = {
   OCR_START: 'ocr:start',
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',
+} as const;
+
+export const SERVER_CHANNELS = {
+  HEALTH_CHECK: 'server:health-check',
+  ANALYZE_TEXT: 'server:analyze-text',
+  GET_KEYWORDS: 'server:get-keywords',
 } as const;
 ```
 

@@ -42,6 +42,12 @@ export const IPC_CHANNELS = {
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',
 } as const;
+
+export const SERVER_CHANNELS = {
+  HEALTH_CHECK: 'server:health-check',
+  ANALYZE_TEXT: 'server:analyze-text',
+  GET_KEYWORDS: 'server:get-keywords',
+} as const;
 ```
 
 **사용 예시**:
@@ -89,9 +95,15 @@ export interface SelectionState {
 ### 3. Preload API 타입
 **파일**: `renderer/src/global.d.ts`
 
-렌더러 프로세스에서 사용 가능한 `window.api`의 타입 정의입니다.
+렌더러 프로세스에서 사용 가능한 `window.api`의 타입 정의입니다. Task 23 완료 이후 서버 API 타입이 추가되었습니다.
 
 ```typescript
+interface ServerAPI {
+  healthCheck: () => Promise<ServerHealthResponse | ServerErrorResponse>;
+  analyzeText: (text: string) => Promise<ServerAnalyzeResponse | ServerErrorResponse>;
+  getKeywords: () => Promise<ServerKeywordsResponse | ServerErrorResponse>;
+}
+
 declare global {
   interface Window {
     api: {
@@ -115,7 +127,9 @@ declare global {
         startMonitoring: () => void;
         stopMonitoring: () => void;
         onStopMonitoring: (callback: () => void) => () => void;
+        onServerAlert: (callback: (harmful: boolean) => void) => () => void;
       };
+      server: ServerAPI;
     };
   }
 }
@@ -130,21 +144,50 @@ declare global {
 ### 4. Preload 구현
 **파일**: `electron/preload.ts`
 
-렌더러 프로세스에 노출되는 실제 API 구현입니다.
+렌더러 프로세스에 노출되는 실제 API 구현입니다. 현재 ROI/Edit Mode/Overlay API와 함께 서버 API(`healthCheck`, `analyzeText`, `getKeywords`)가 노출되어 있습니다.
 
 ```typescript
 contextBridge.exposeInMainWorld('api', {
-  // API 구현
+  // ... 기존 API ...
+  server: {
+    healthCheck: () => ipcRenderer.invoke(SERVER_CHANNELS.HEALTH_CHECK),
+    analyzeText: (text: string) => ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text),
+    getKeywords: () => ipcRenderer.invoke(SERVER_CHANNELS.GET_KEYWORDS),
+  },
 });
 ```
 
 **사용 예시**:
 - 새로운 API 추가 시: 이 파일에 API 구현 추가
-- IPC 채널 사용: `IPC_CHANNELS`에서 채널 이름 import
+- IPC 채널 사용: `IPC_CHANNELS` 또는 `SERVER_CHANNELS` 에서 채널 이름 import
 
 ---
 
-### 5. 오버레이 창 생성
+### 5. 서버 IPC 핸들러
+**파일**: `electron/ipc/serverHandlers.ts`
+
+FastAPI 서버와의 통신을 담당하는 IPC 핸들러 모듈입니다. Task 22에서 도입되었습니다.
+
+```typescript
+ipcMain.handle(SERVER_CHANNELS.HEALTH_CHECK, async () => {
+  const response = await axios.get(`${SERVER_URL}/health`, { timeout: REQUEST_TIMEOUT });
+  return response.data;
+});
+
+ipcMain.handle(SERVER_CHANNELS.ANALYZE_TEXT, async (_event, text: string) => {
+  // 빈 문자열 처리 후 FastAPI /analyze 호출
+});
+
+ipcMain.handle(SERVER_CHANNELS.GET_KEYWORDS, async () => {
+  // FastAPI /keywords 호출
+});
+```
+
+`handleServerError()`가 Axios 에러를 표준 응답(`{ error: true, message, code, status }`)으로 변환합니다. `checkServerConnection()` 유틸로 앱 시작 시 헬스 체크를 수행합니다.
+
+---
+
+### 6. 오버레이 창 생성
 **파일**: `electron/windows/createOverlayWindow.ts`
 
 투명 오버레이 창을 생성하고 관리하는 함수입니다.
@@ -161,7 +204,7 @@ contextBridge.exposeInMainWorld('api', {
 
 ---
 
-### 6. Edit Mode 상태 관리
+### 7. Edit Mode 상태 관리
 **파일**: `electron/state/editMode.ts`
 
 Edit Mode 상태를 중앙에서 관리하는 모듈입니다.
@@ -179,7 +222,7 @@ export function setTrayUpdateCallback(callback: (() => void) | null): void;
 
 ---
 
-### 7. ROI IPC 핸들러
+### 8. ROI IPC 핸들러
 **파일**: `electron/ipc/roi.ts`
 
 ROI 선택 관련 IPC 통신을 처리하는 핸들러입니다.
@@ -196,7 +239,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 8. 오버레이 React 컴포넌트
+### 9. 오버레이 React 컴포넌트
 **파일**: `renderer/src/overlay/OverlayApp.tsx`
 
 오버레이 창의 React UI 컴포넌트입니다.
@@ -213,7 +256,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 9. 저장소 (electron-store)
+### 10. 저장소 (electron-store)
 **파일**: `electron/store.ts`
 
 ROI와 모드 상태를 영속화하는 경량 래퍼입니다.
@@ -234,7 +277,7 @@ export function getStoreSnapshot(): StoreData;
 
 ---
 
-### 10. 모니터링 & OCR
+### 11. 모니터링 & OCR
 **파일**: `electron/main.ts`
 
 주요 역할:
@@ -242,19 +285,6 @@ export function getStoreSnapshot(): StoreData;
 - `tesseract.js` 기반 `performOCR()`로 텍스트 추출
 - `sendToServer()`를 통해 OCR 결과/이미지를 외부 엔드포인트로 전송
 - `START_MONITORING` / `STOP_MONITORING` IPC로 렌더러와 동기화
-
----
-
-### 11. 서버 클라이언트 스텁
-**파일**: `electron/serverClient.ts`
-
-주요 역할:
-- 테스트용 서버 알림 인터벌 생성 (`setupServerClientStub`)
-- 3초마다 `ALERT_FROM_SERVER` 채널로 `{ harmful: boolean }` 페이로드 전송
-- 정리 시 `stopServerClientStub()`로 인터벌 해제
-- 콘솔 로그: `[Server] Alert signal: 0/1`
-
-렌더러는 `overlay.onServerAlert` API로 알림을 구독한다.
 
 ---
 
