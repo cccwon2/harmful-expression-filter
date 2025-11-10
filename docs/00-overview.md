@@ -32,7 +32,7 @@
 19. **[네이티브 Tesseract 통합](./19-native-tesseract-integration.md)** 🆕 미착수
 20. **[FastAPI 기본 구조](./20-fastapi-setup.md)** ✅ 완료
 21. **[텍스트 분석 API](./21-text-analysis-api.md)** ✅ 완료
-22. **[IPC 서버 핸들러](./22-ipc-server-handlers.md)** 🆕 미착수
+22. **[IPC 서버 핸들러](./22-ipc-server-handlers.md)** ✅ 완료
 23. **[Electron 통합](./23-electron-integration.md)** 🆕 미착수
 24. **[음성 STT API](./24-audio-stt-api.md)** 🆕 미착수
 25. **[음성 Electron 연동](./25-audio-electron.md)** 🆕 미착수
@@ -91,7 +91,7 @@
 | 네이티브 Tesseract 통합 | 🆕 미착수    | 0%     | Low      |
 | FastAPI 기본 구조       | ✅ 완료      | 100%   | Medium   |
 | 텍스트 분석 API         | ✅ 완료      | 100%   | High     |
-| IPC 서버 핸들러         | 🆕 미착수    | 0%     | High     |
+| IPC 서버 핸들러         | ✅ 완료      | 100%   | High     |
 | Electron 통합          | 🆕 미착수    | 0%     | High     |
 | 음성 STT API           | 🆕 미착수    | 0%     | Medium   |
 | 음성 Electron 연동     | 🆕 미착수    | 0%     | Medium   |

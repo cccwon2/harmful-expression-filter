@@ -11,6 +11,7 @@ import * as path from 'path';
 import axios from 'axios';
 import FormData from 'form-data';
 import { createWorker, type Worker } from 'tesseract.js';
+import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
 
 const CAPTURE_INTERVAL_MS = 4000;
 const CAPTURE_FILE_NAME = 'captured.png';
@@ -36,7 +37,16 @@ type OverlayStatePayload = {
 // 헤드리스 실행: 메뉴 없음
 Menu.setApplicationMenu(null);
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  registerServerHandlers();
+
+  const serverReady = await checkServerConnection();
+  if (!serverReady) {
+    console.warn('[Main] FastAPI server가 실행 중이 아닙니다. `server` 폴더에서 `python main.py`를 실행하세요.');
+  } else {
+    console.log('[Main] FastAPI server 연결이 확인되었습니다.');
+  }
+
   // 오버레이 창 생성 (초기에는 숨김, 기본 상태는 클릭스루)
   overlayWindow = createOverlayWindow();
   

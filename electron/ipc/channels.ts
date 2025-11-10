@@ -18,3 +18,12 @@ export const IPC_CHANNELS = {
 
 export type IPCChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS];
 
+// 서버 통신 채널
+export const SERVER_CHANNELS = {
+  HEALTH_CHECK: 'server:health-check',
+  ANALYZE_TEXT: 'server:analyze-text',
+  GET_KEYWORDS: 'server:get-keywords',
+} as const;
+
+export type ServerChannel = typeof SERVER_CHANNELS[keyof typeof SERVER_CHANNELS];
+

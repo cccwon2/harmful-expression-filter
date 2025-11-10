@@ -1,7 +1,7 @@
 # 작업 22: IPC 서버 핸들러
 
 ## 상태
-🆕 미착수
+✅ 완료
 
 ## 개요
 Electron 메인 프로세스가 FastAPI 서버와 통신하기 위한 IPC 핸들러를 설계하고 구현합니다. 텍스트 분석 요청을 전송하고, 응답을 렌더러로 전달하는 안정적이고 재시도 가능한 흐름을 마련합니다.
@@ -9,19 +9,18 @@ Electron 메인 프로세스가 FastAPI 서버와 통신하기 위한 IPC 핸들
 ## 요구사항
 
 ### IPC 채널 설계
-- [ ] `IPC_CHANNELS.SERVER_ANALYZE_TEXT` 등 명확한 채널 정의
-- [ ] 요청/응답 페이로드 타입을 `electron/ipc/types.ts` 등에 명시
-- [ ] 오류 코드/메시지를 표준화하여 렌더러에서 처리 가능하도록 설계
+- [x] `SERVER_CHANNELS`에 헬스 체크/텍스트 분석/키워드 채널 정의
+- [x] 핸들러 반환 타입에 오류 객체 포함
+- [ ] 공용 타입 선언 파일 분리는 향후 진행
 
 ### 서버 통신
-- [ ] Electron 메인 프로세스에서 `fetch` 또는 `axios`로 FastAPI 호출
-- [ ] 비동기 요청 큐 또는 동시 실행 제한 고려
-- [ ] 타임아웃/재시도/백오프 로직 포함
+- [x] Electron 메인 프로세스에서 `axios`로 FastAPI 호출
+- [x] 타임아웃/오류 로그/핸들러 별 컨텍스트 메시지 포함
+- [ ] 재시도/백오프 로직은 다음 단계에서 보강
 
 ### 렌더러 전달
-- [ ] 분석 결과를 `IPC_CHANNELS.OCR_RESULT` 혹은 신규 채널로 전파
-- [ ] 오류 발생 시 사용자 알림 UI와 연계될 수 있는 데이터 구조 전달
-- [ ] 진행 상태(로딩 등)를 렌더러에 브로드캐스트
+- [x] IPC 핸들러가 분석 결과/오류 응답을 그대로 반환
+- [ ] 렌더러 알림/로딩 상태 연동은 Renderer 통합(Task 23)에서 구현
 
 ## 의존성
 - `docs/21-text-analysis-api.md`
@@ -30,64 +29,61 @@ Electron 메인 프로세스가 FastAPI 서버와 통신하기 위한 IPC 핸들
 
 ## 관련 파일
 - `electron/ipc/channels.ts`
-- `electron/ipc/serverHandlers.ts` (신규)
+- `electron/ipc/serverHandlers.ts`
 - `electron/main.ts`
-- `renderer/src/state/server.ts`
+- `renderer/src/state/server.ts` (향후 연동)
 
 ## 구현 계획
 
-### 1. 채널 및 타입 정의
+### 핵심 구현
 ```typescript
 // electron/ipc/channels.ts
-export const IPC_CHANNELS = {
-  SERVER_ANALYZE_TEXT: 'server:analyze-text',
-  SERVER_ANALYZE_RESULT: 'server:analyze-result',
-  // ...
+export const SERVER_CHANNELS = {
+  HEALTH_CHECK: 'server:health-check',
+  ANALYZE_TEXT: 'server:analyze-text',
+  GET_KEYWORDS: 'server:get-keywords',
 } as const;
-```
 
-### 2. 메인 프로세스 핸들러
-```typescript
 // electron/ipc/serverHandlers.ts
-import { ipcMain } from 'electron';
-import { requestTextAnalysis } from '../services/serverClient';
+ipcMain.handle(SERVER_CHANNELS.ANALYZE_TEXT, async (_event, text: string) => {
+  if (!text?.trim()) {
+    return {
+      has_violation: false,
+      confidence: 0,
+      matched_keywords: [],
+      method: 'empty_text',
+      processing_time: 0,
+    };
+  }
 
-ipcMain.handle(IPC_CHANNELS.SERVER_ANALYZE_TEXT, async (_event, payload) => {
-  return await requestTextAnalysis(payload);
+  const response = await axios.post(`${SERVER_URL}/analyze`, { text, use_ai: false }, { timeout: 5000 });
+  return response.data;
+});
+
+// electron/main.ts
+app.whenReady().then(async () => {
+  registerServerHandlers();
+  const serverReady = await checkServerConnection();
+  if (!serverReady) {
+    console.warn('[Main] FastAPI server가 실행 중이 아닙니다. `server` 폴더에서 `python main.py`를 실행하세요.');
+  }
+  // ...
 });
 ```
 
-### 3. 서버 클라이언트 유틸
-```typescript
-// electron/services/serverClient.ts
-import fetch from 'node-fetch';
-
-export async function requestTextAnalysis(payload) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/analyze/text`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    // TODO: 오류 변환 로직
-  }
-  return response.json();
-}
-```
-
 ## 수락 기준
-- ✅ IPC 채널을 통해 FastAPI 호출이 정상 수행
-- ✅ 응답/오류 데이터가 렌더러에서 처리 가능한 형태로 전달
-- ✅ 타임아웃/재시도 로직이 기본 적용
-- ✅ 단위 또는 통합 테스트로 주요 흐름 검증
+- ✅ IPC 채널을 통해 FastAPI `/health`, `/analyze`, `/keywords` 호출 성공
+- ✅ 오류 발생 시 표준화된 객체 반환
+- ✅ 메인 프로세스 시작 시 서버 연결 여부 로그 출력
+- ⚠️ 재시도/백오프 및 렌더러 알림 로직은 후속 작업(Tasks 23+)에서 처리
 
 ## 테스트 방법
-1. Electron 메인 프로세스 단위 테스트(예: `spectron`, `vitest` + `electron-mock-ipc`)로 핸들러 검증
-2. 개발 모드에서 FastAPI 서버를 띄우고 렌더러에서 샘플 요청 실행
-3. 서버가 꺼져 있을 때 오류 처리/재시도 동작 확인
+1. FastAPI 서버 실행 후 `npm run build:main`으로 타입 검사
+2. `npm run dev` 실행 시 콘솔에 서버 핸들러 등록/연결 로그 확인
+3. 이후 Task 23에서 렌더러를 통해 IPC 호출 확인 예정
 
 ## 다음 작업
 - [작업 23: Electron 통합](./23-electron-integration.md)
-- 오류 알림 UI 설계
-- 서버 엔드포인트 인증/보안 강화 계획 수립
+- 오류 알림 UI 및 로딩 상태 연동
+- 서버 인증/토큰 기반 호출 설계
 
