@@ -5,18 +5,16 @@ import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
 import { getROI, getMode, setMode } from './store';
-import { setupServerClientStub, stopServerClientStub } from './serverClient';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
-import FormData from 'form-data';
 import { createWorker, type Worker } from 'tesseract.js';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
 
-const CAPTURE_INTERVAL_MS = 4000;
+const CAPTURE_INTERVAL_MS = 1500;
 const CAPTURE_FILE_NAME = 'captured.png';
 const OCR_LANGUAGES = 'eng+kor';
-const SERVER_ENDPOINT = process.env.MONITORING_ENDPOINT ?? 'YOUR_API_ENDPOINT';
+const SERVER_ANALYZE_URL = 'http://127.0.0.1:8000/analyze';
 
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
@@ -125,27 +123,60 @@ app.whenReady().then(async () => {
     }
   };
 
-  const sendToServer = async (text: string, imageBuffer: Buffer) => {
-    if (!SERVER_ENDPOINT || SERVER_ENDPOINT === 'YOUR_API_ENDPOINT') {
-      console.warn('[Main] SERVER_ENDPOINT is not configured. Skipping server upload.');
-      return;
+  const analyzeText = async (
+    text: string,
+  ): Promise<{
+    harmful: boolean;
+    matched: string[];
+    processingTime: number;
+  }> => {
+    if (!text.trim()) {
+      return {
+        harmful: false,
+        matched: [],
+        processingTime: 0,
+      };
     }
+
     try {
-      const formData = new FormData();
-      formData.append('text', text);
-      formData.append('timestamp', new Date().toISOString());
-      formData.append('image', imageBuffer, {
-        filename: CAPTURE_FILE_NAME,
-        contentType: 'image/png',
+      const startedAt = Date.now();
+      const response = await axios.post(
+        SERVER_ANALYZE_URL,
+        { text, use_ai: false },
+        {
+          timeout: 3000,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+
+      const elapsed = Date.now() - startedAt;
+      const harmful = Boolean(response.data?.has_violation);
+      const matched = Array.isArray(response.data?.matched_keywords)
+        ? response.data.matched_keywords
+        : [];
+      const processingTime =
+        typeof response.data?.processing_time === 'number'
+          ? response.data.processing_time
+          : elapsed;
+
+      console.log('[Main] Server analyze response:', {
+        harmful,
+        matched,
+        processingTime,
       });
 
-      const response = await axios.post(SERVER_ENDPOINT, formData, {
-        headers: formData.getHeaders(),
-        timeout: 10000,
-      });
-      console.log('[Main] Server response:', response.data);
+      return {
+        harmful,
+        matched,
+        processingTime,
+      };
     } catch (error: any) {
-      console.error('[Main] Failed to send data to server:', error?.message ?? error);
+      console.error('[Main] Failed to analyze text:', error?.message ?? error);
+      return {
+        harmful: false,
+        matched: [],
+        processingTime: 0,
+      };
     }
   };
 
@@ -215,7 +246,22 @@ app.whenReady().then(async () => {
       const text = await performOCR(pngBuffer);
       console.log('[Main] OCR result:', text || '(empty)');
 
-      await sendToServer(text, pngBuffer);
+      const analysis = await analyzeText(text);
+      const harmful = analysis.harmful;
+      if (analysis.matched.length > 0) {
+        console.log('[Main] Matched harmful keywords:', analysis.matched);
+      }
+
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, { harmful });
+      }
+
+      const nextMode: OverlayMode = harmful ? 'alert' : 'detect';
+      pushOverlayState({
+        mode: nextMode,
+        roi: currentROI,
+        harmful,
+      });
     } catch (error) {
       console.error('[Main] Error during captureAndProcessROI:', error);
     } finally {
@@ -290,8 +336,6 @@ app.whenReady().then(async () => {
         stopMonitoring('ROI selection cancelled');
       },
     });
-
-    setupServerClientStub(overlayWindow);
   }
 
   const enterSetupMode = () => {
@@ -647,7 +691,6 @@ app.whenReady().then(async () => {
 
   app.on('before-quit', () => {
     stopMonitoring('Application quitting');
-    stopServerClientStub();
     if (ocrWorker && typeof ocrWorker.terminate === 'function') {
       ocrWorker
         .terminate()
