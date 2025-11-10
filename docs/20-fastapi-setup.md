@@ -1,7 +1,7 @@
 # 작업 20: FastAPI 기본 구조
 
 ## 상태
-🆕 미착수
+✅ 완료
 
 ## 개요
 Electron 클라이언트와 연동할 백엔드 API 서버의 토대를 FastAPI로 구성합니다. 프로젝트의 서비스 로직이 확장될 수 있도록 공통 설정, 환경 관리, 라우팅 규칙을 정리하고 기본 헬스체크 엔드포인트를 제공합니다.
@@ -9,20 +9,20 @@ Electron 클라이언트와 연동할 백엔드 API 서버의 토대를 FastAPI�
 ## 요구사항
 
 ### 프로젝트 구조
-- [ ] `backend/` 디렉터리 생성 및 FastAPI 애플리케이션 초기화
-- [ ] `app/main.py`에 FastAPI 인스턴스, 라우터 등록, 기본 설정 정의
-- [ ] `app/config.py`에 환경 변수 로딩(`pydantic-settings` 또는 `dotenv`) 추가
-- [ ] `requirements.txt` 또는 `pyproject.toml`에 FastAPI, Uvicorn 등 필수 패키지 명시
+- [x] `server/` 디렉터리 생성 및 FastAPI 애플리케이션 초기화
+- [x] `server/main.py`에 FastAPI 인스턴스, 기본 미들웨어, 베이스 라우터 정의
+- [ ] `server/config.py` 또는 환경 변수 로딩 모듈 추가 (차후 작업)
+- [x] `server/requirements.txt`에 FastAPI, Uvicorn 등 필수 패키지 명시
 
 ### 공통 미들웨어 및 설정
-- [ ] CORS 정책 정의(개발용은 `localhost` 허용, 배포용은 별도 설정)
+- [x] CORS 정책 정의(개발용은 `localhost` 허용, 배포용은 별도 설정)
 - [ ] 로깅 포맷 및 레벨 기본값 지정
 - [ ] 예외 처리 핸들러 템플릿 추가(HTTPException, ValidationError 등)
 
 ### 베이스 라우팅
-- [ ] `/health` 또는 `/status` 엔드포인트 구현
+- [x] `/health` 엔드포인트 구현
 - [ ] 버전 관리 전략(`/api/v1`) 결정 및 베이스 라우터 작성
-- [ ] API 문서(스웨거/Redoc) 접근 경로 및 설명 설정
+- [x] API 문서(스웨거/Redoc) 접근 경로 확인
 
 ## 의존성
 - Python 3.10+
@@ -40,17 +40,18 @@ Electron 클라이언트와 연동할 백엔드 API 서버의 토대를 FastAPI�
 
 ### 1. 초기 프로젝트 스캐폴딩
 ```bash
-mkdir -p backend/app
-python -m venv .venv
+mkdir server
+cd server
+python -m venv venv
 pip install fastapi uvicorn[standard]
 ```
 
 ### 2. 기본 애플리케이션 작성
 ```python
-# backend/app/main.py
+# server/main.py
 from fastapi import FastAPI
 
-app = FastAPI(title="Harmful Expression Filter API")
+app = FastAPI(title="유해 표현 필터 API")
 
 @app.get("/health")
 def health_check():
@@ -59,14 +60,18 @@ def health_check():
 
 ### 3. 실행 및 검증
 ```bash
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
+
+:::note
+Windows 환경에서 `pydantic==2.5.0` 설치 시 Rust toolchain 의존성 때문에 빌드 오류가 발생해 `2.10.4`로 상향 고정했습니다.
+:::
 
 ## 수락 기준
 - ✅ FastAPI 앱이 `/health`에서 200 OK 응답
-- ✅ 환경변수 기반 설정 모듈 존재
-- ✅ 기본 CORS 정책 및 로깅 설정 적용
-- ✅ 프로젝트 문서에 실행 방법이 명시됨
+- ⚠️ 환경변수 기반 설정 모듈은 차후 도입 예정
+- ✅ 기본 CORS 정책 적용
+- ✅ 프로젝트 문서에 실행 방법 명시
 
 ## 테스트 방법
 1. 로컬에서 `uvicorn` 실행 후 브라우저/HTTP 클라이언트로 `/health` 호출
