@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
+import time
 import json
 import os
 
@@ -27,6 +28,19 @@ class HealthResponse(BaseModel):
     keywords_loaded: int
     stt_loaded: bool = False
     ai_model_loaded: bool = False
+
+
+class AnalyzeRequest(BaseModel):
+    text: str
+    use_ai: bool = False  # 확장용 플래그
+
+
+class AnalyzeResponse(BaseModel):
+    has_violation: bool
+    confidence: float
+    matched_keywords: List[str]
+    method: str
+    processing_time: float
 
 
 # ============== 전역 변수 ==============
@@ -83,6 +97,28 @@ def load_keywords() -> None:
         print("[INFO] default bad_words.json created")
 
 
+def check_keywords(text: str) -> List[str]:
+    """
+    키워드 기반 필터링
+
+    Args:
+        text: 분석할 텍스트
+
+    Returns:
+        감지된 키워드 목록
+    """
+
+    text_lower = text.lower()
+    matched: List[str] = []
+
+    for bad_word in BAD_WORDS:
+        if bad_word.lower() in text_lower:
+            matched.append(bad_word)
+            print(f"[ALERT] keyword detected: '{bad_word}' in '{text}'")
+
+    return matched
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
     load_keywords()
@@ -121,6 +157,56 @@ async def get_keywords():
     return {
         "total": len(BAD_WORDS),
         "keywords": BAD_WORDS,
+    }
+
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def analyze_text(request: AnalyzeRequest) -> AnalyzeResponse:
+    """
+    텍스트를 분석하여 유해 표현 감지
+    """
+
+    start_time = time.perf_counter()
+
+    try:
+        text = request.text.strip()
+    except AttributeError as exc:
+        raise HTTPException(status_code=400, detail="text 필드는 문자열이어야 합니다.") from exc
+
+    if not text:
+        return AnalyzeResponse(
+            has_violation=False,
+            confidence=0.0,
+            matched_keywords=[],
+            method="no_text",
+            processing_time=0.0,
+        )
+
+    matched_keywords = check_keywords(text)
+    has_violation = len(matched_keywords) > 0
+
+    processing_time_ms = (time.perf_counter() - start_time) * 1000
+
+    return AnalyzeResponse(
+        has_violation=has_violation,
+        confidence=1.0 if has_violation else 0.0,
+        matched_keywords=matched_keywords,
+        method="keyword",
+        processing_time=processing_time_ms,
+    )
+
+
+@app.get("/test")
+async def test_text_simple(text: str):
+    """
+    GET으로 간단히 테스트하는 엔드포인트
+    """
+
+    matched = check_keywords(text)
+    return {
+        "text": text,
+        "has_violation": len(matched) > 0,
+        "matched_keywords": matched,
     }
 
 
