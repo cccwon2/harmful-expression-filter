@@ -11,7 +11,7 @@ import axios from 'axios';
 import { createWorker, type Worker } from 'tesseract.js';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
 
-const CAPTURE_INTERVAL_MS = 2500;
+const CAPTURE_INTERVAL_MS = 3000;
 const CAPTURE_FILE_NAME = 'captured.png';
 const OCR_LANGUAGES = 'eng+kor';
 const SERVER_ANALYZE_URL = 'http://127.0.0.1:8000/analyze';
@@ -159,11 +159,12 @@ app.whenReady().then(async () => {
           ? response.data.processing_time
           : elapsed;
 
-      console.log('[Main] Server analyze response:', {
-        harmful,
-        matched,
-        processingTime,
-      });
+      if (harmful) {
+        console.warn('[Main] Harmful text detected:', {
+          matched,
+          processingTime,
+        });
+      }
 
       return {
         harmful,
@@ -249,8 +250,8 @@ app.whenReady().then(async () => {
 
       const analysis = await analyzeText(text);
       const harmful = analysis.harmful;
-      if (analysis.matched.length > 0) {
-        console.log('[Main] Matched harmful keywords:', analysis.matched);
+      if (harmful && analysis.matched.length > 0) {
+        console.warn('[Main] Matched harmful keywords:', analysis.matched);
       }
 
       if (!isMonitoring || !currentROI) {
