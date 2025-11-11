@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -97,6 +98,18 @@ def load_keywords() -> None:
         print("[INFO] default bad_words.json created")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_keywords()
+    print("[INFO] FastAPI server startup complete")
+    print("[INFO] Server URL: http://127.0.0.1:8000")
+    print("[INFO] API docs: http://127.0.0.1:8000/docs")
+    yield
+
+
+app.router.lifespan_context = lifespan
+
+
 def check_keywords(text: str) -> List[str]:
     """
     키워드 기반 필터링
@@ -117,14 +130,6 @@ def check_keywords(text: str) -> List[str]:
             print(f"[ALERT] keyword detected: '{bad_word}' in '{text}'")
 
     return matched
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    load_keywords()
-    print("[INFO] FastAPI server startup complete")
-    print("[INFO] Server URL: http://127.0.0.1:8000")
-    print("[INFO] API docs: http://127.0.0.1:8000/docs")
 
 
 # ============== API 엔드포인트 ==============
