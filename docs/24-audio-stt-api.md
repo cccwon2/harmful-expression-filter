@@ -200,65 +200,43 @@ transformers==4.35.0
     print(clf.predict("욕설 예시 문장"))
     ```
 
-### Phase 4: 전체 파이프라인 통합 (WebSocket)
-
-- [ ] **4.1. 전체 파이프라인 구현**
+- [x] **4.1. 전체 파이프라인 구현**
   ```python
-  # server/main.py (업데이트)
-  from audio.buffer_manager import AudioBufferManager
-  from audio.whisper_service import WhisperSTTService
-  from nlp.harmful_classifier import HarmfulTextClassifier
+  # server/audio/pipeline.py
+  from audio.pipeline import AudioProcessingPipeline
   
-  # 전역 인스턴스 (앱 시작 시 초기화)
-  stt_service = WhisperSTTService(model_name="base")
-  classifier = HarmfulTextClassifier()
-  
-  @app.websocket("/ws/audio")
-  async def audio_stream(websocket: WebSocket):
-      await websocket.accept()
-      buffer_manager = AudioBufferManager(sample_rate=16000, chunk_duration_sec=1.0)
-      
-      try:
-          while True:
-              # 1. 오디오 청크 수신
-              audio_bytes = await websocket.receive_bytes()
-              buffer_manager.add_chunk(audio_bytes)
-              
-              # 2. 버퍼가 충분히 쌓이면 처리
-              audio_chunk = buffer_manager.get_processed_chunk()
-              if audio_chunk is not None:
-                  # 3. STT 변환
-                  text = stt_service.transcribe(audio_chunk)
-                  
-                  # 4. 유해성 판별
-                  result = classifier.predict(text)
-                  
-                  # 5. 결과 전송
-                  await websocket.send_json({
-                      "text": text,
-                      "is_harmful": result["is_harmful"],
-                      "confidence": result["confidence"],
-                      "timestamp": time.time()
-                  })
-      
-      except WebSocketDisconnect:
-          print("Client disconnected")
-      except Exception as e:
-          print(f"Error in audio_stream: {e}")
-          await websocket.close(code=1011, reason=str(e))
+  pipeline = AudioProcessingPipeline(
+      stt_service=stt_service,
+      classifier=classifier,
+      sample_rate=16_000,
+      chunk_duration_sec=1.0,
+  )
+  result = await pipeline.process_audio(audio_bytes)
   ```
+  
+  **진행 현황 (2025-11-11)**:
+  - `AudioProcessingPipeline` 신설: 버퍼 → Whisper(STT) → KoELECTRA 분류 순차 처리
+  - `asyncio.to_thread` 기반 비동기 실행으로 STT/분류 블로킹 최소화
+  - 결과 구조(`PipelineOutput`)에 처리 시간(ms), 청크 길이(sec) 포함
+  - `server/main.py`의 `/ws/audio` 엔드포인트가 파이프라인을 이용해 JSON 응답 전송
+  - Whisper/KoELECTRA 초기화 실패 시 WebSocket에 에러 메시지를 반환
+  
+  **검증 방법**:
+  - 단위 테스트: `server/tests/test_audio_pipeline.py`
+    ```bash
+    cd server
+    venv\Scripts\python.exe -m pytest tests/test_audio_pipeline.py
+    # ✅ 버퍼 임계치/유해·비유해 분기 검증
+    ```
+  - 통합 확인: Python 3.11 환경에서 Whisper/Torch 설치 후 `wscat`으로 바이너리 전송
+  
+  > ⚠️ **주의**: Whisper/Torch 실측 시 `server/venv311`(Python 3.11) 가상환경을 사용하고,
+  > `pip install openai-whisper torch torchaudio pydub` 설치 후 실행하세요.
 
 - [ ] **4.2. 성능 최적화 검토**
-  - [ ] Whisper 모델 크기 조정 (tiny, base, small 중 선택)
-  - [ ] GPU 사용 가능 여부 확인 및 설정
-  - [ ] 비동기 처리 (ThreadPoolExecutor) 고려
-  
-  ```python
-  # GPU 설정 예시
-  import torch
-  device = "cuda" if torch.cuda.is_available() else "cpu"
-  self.model.to(device)
-  ```
+  - Whisper 모델 크기 조정 (tiny, base, small 중 선택)
+  - GPU 사용 가능 여부 확인 및 설정
+  - 비동기 처리 (ThreadPoolExecutor) 고려
 
 ### Phase 5: 통합 테스트 및 지연율 측정
 
@@ -308,6 +286,7 @@ transformers==4.35.0
 ### 생성할 파일
 - `server/audio/buffer_manager.py` - 오디오 버퍼 관리
 - `server/audio/whisper_service.py` - Whisper STT 서비스
+- `server/audio/pipeline.py` - 버퍼/STT/분류 파이프라인
 - `server/nlp/harmful_classifier.py` - KoELECTRA 유해성 분류기
 - `server/main.py` - WebSocket 엔드포인트 추가
 - `server/tests/test_ws_audio.py` - WebSocket 엔드포인트 단위 테스트
@@ -361,6 +340,7 @@ transformers==4.35.0
 - 2025-11-11: `WhisperSTTService` 구현 및 테스트 작성, Whisper/Torch 조건부 의존성 추가
 - 2025-11-11: 실제 오디오 테스트(`tests/test_whisper_real.py`) 추가 및 샘플 음성 준비 가이드 업데이트
 - 2025-11-11: `HarmfulTextClassifier` 구현 및 단위 테스트 작성, Phase 3 체크리스트 갱신
+- 2025-11-11: `AudioProcessingPipeline` 도입 및 `/ws/audio` 파이프라인 통합, 통합 테스트 추가
 
 ## 🔄 다음 작업
 

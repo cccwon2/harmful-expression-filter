@@ -1,11 +1,18 @@
 from contextlib import asynccontextmanager
+from typing import List, Optional
+import asyncio
+import json
+import logging
+import os
+import time
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
-import time
-import json
-import os
+
+from audio.pipeline import AudioProcessingPipeline, PipelineOutput
+from audio.whisper_service import WhisperSTTService, WhisperNotAvailableError
+from nlp.harmful_classifier import HarmfulTextClassifier, TransformersNotAvailableError
 
 app = FastAPI(
     title="유해 표현 필터 API",
@@ -46,6 +53,10 @@ class AnalyzeResponse(BaseModel):
 
 # ============== 전역 변수 ==============
 BAD_WORDS: List[str] = []
+STT_SERVICE: Optional[WhisperSTTService] = None
+CLASSIFIER: Optional[HarmfulTextClassifier] = None
+LOGGER = logging.getLogger("harmful-filter")
+logging.basicConfig(level=logging.INFO)
 
 
 def load_keywords() -> None:
@@ -100,10 +111,25 @@ def load_keywords() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global STT_SERVICE, CLASSIFIER  # pylint: disable=global-statement
+
     load_keywords()
-    print("[INFO] FastAPI server startup complete")
-    print("[INFO] Server URL: http://127.0.0.1:8000")
-    print("[INFO] API docs: http://127.0.0.1:8000/docs")
+
+    try:
+        STT_SERVICE = WhisperSTTService(model_name="base")
+    except WhisperNotAvailableError as exc:
+        LOGGER.warning("[WARN] Whisper STT 초기화 실패: %s", exc)
+        STT_SERVICE = None
+
+    try:
+        CLASSIFIER = HarmfulTextClassifier()
+    except TransformersNotAvailableError as exc:
+        LOGGER.warning("[WARN] KoELECTRA 분류기 초기화 실패: %s", exc)
+        CLASSIFIER = None
+
+    LOGGER.info("[INFO] FastAPI server startup complete")
+    LOGGER.info("[INFO] Server URL: http://127.0.0.1:8000")
+    LOGGER.info("[INFO] API docs: http://127.0.0.1:8000/docs")
     yield
 
 
@@ -152,8 +178,8 @@ async def health_check() -> HealthResponse:
     return HealthResponse(
         status="ok",
         keywords_loaded=len(BAD_WORDS),
-        stt_loaded=False,
-        ai_model_loaded=False,
+        stt_loaded=STT_SERVICE is not None,
+        ai_model_loaded=CLASSIFIER is not None,
     )
 
 
@@ -216,20 +242,35 @@ async def test_text_simple(text: str):
 
 
 # [Server: server/main.py]
-# Phase 1: WebSocket 엔드포인트 구축
+# Phase 1 & 4: WebSocket 엔드포인트 (파이프라인 통합)
 @app.websocket("/ws/audio")
 async def audio_stream(websocket: WebSocket) -> None:
     """
-    오디오 바이너리 데이터를 수신하고 에코 형태로 응답을 반환하는 테스트용 WebSocket 엔드포인트.
+    오디오 바이너리 데이터를 수신하여 버퍼링/STT/유해성 분류 결과를 반환하는 WebSocket 엔드포인트.
     """
 
-    # 1) 클라이언트 연결 수락
     await websocket.accept()
     await websocket.send_text("Connected")
 
+    if STT_SERVICE is None or CLASSIFIER is None:
+        await websocket.send_json(
+            {
+                "status": "error",
+                "detail": "STT 또는 분류기 서비스가 초기화되지 않았습니다. 서버 로그를 확인하세요.",
+            }
+        )
+        await websocket.close(code=1011)
+        return
+
+    pipeline = AudioProcessingPipeline(
+        stt_service=STT_SERVICE,
+        classifier=CLASSIFIER,
+        sample_rate=16_000,
+        chunk_duration_sec=1.0,
+    )
+
     try:
         while True:
-            # 2) 클라이언트로부터 메시지 수신 (바이너리/텍스트 모두 처리)
             message = await websocket.receive()
 
             if message["type"] == "websocket.disconnect":
@@ -237,7 +278,6 @@ async def audio_stream(websocket: WebSocket) -> None:
 
             audio_bytes = message.get("bytes")
             if audio_bytes is None:
-                # 텍스트 메시지가 도착한 경우 에러 메시지 반환
                 await websocket.send_json(
                     {
                         "status": "error",
@@ -247,20 +287,36 @@ async def audio_stream(websocket: WebSocket) -> None:
                 )
                 continue
 
-            # 3) 수신한 바이너리 데이터 크기 정보 반환 (에코 테스트)
-            await websocket.send_json(
-                {
-                    "status": "received",
-                    "size": len(audio_bytes),
-                }
-            )
+            result = await pipeline.process_audio(audio_bytes)
+            if result is None:
+                await websocket.send_json({"status": "buffering", "size": len(audio_bytes)})
+                continue
+
+            await websocket.send_json(_serialize_pipeline_output(result))
 
     except WebSocketDisconnect:
-        print("[INFO] WebSocket client disconnected: /ws/audio")
+        LOGGER.info("[INFO] WebSocket client disconnected: /ws/audio")
     except Exception as exc:  # pylint: disable=broad-except
-        print(f"[ERROR] audio_stream 처리 중 오류: {exc}")
+        LOGGER.error("audio_stream 처리 중 오류: %s", exc, exc_info=True)
         await websocket.close(code=1011, reason="audio_stream internal error")
 
+
+def _serialize_pipeline_output(result: PipelineOutput) -> dict:
+    """
+    파이프라인 처리 결과를 WebSocket 응답용 딕셔너리로 변환.
+    """
+
+    classification = result.classification
+    return {
+        "status": "ok",
+        "text": result.text,
+        "is_harmful": int(classification.is_harmful),
+        "confidence": classification.confidence,
+        "raw_text": classification.text,
+        "audio_duration_sec": result.audio_duration_sec,
+        "processing_time_ms": result.processing_time_ms,
+        "timestamp": time.time(),
+    }
 
 
 if __name__ == "__main__":
