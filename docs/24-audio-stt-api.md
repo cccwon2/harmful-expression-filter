@@ -26,7 +26,7 @@ openai-whisper==20231117  # 또는 faster-whisper 검토
 torch==2.1.0
 torchaudio==2.1.0
 transformers==4.35.0
-numpy==1.24.3
+numpy==2.1.2  # Python 3.13 호환 가능한 최신 버전 사용
 pydub==0.25.1  # 오디오 전처리용
 ```
 
@@ -79,7 +79,7 @@ pydub==0.25.1  # 오디오 전처리용
   # 바이너리 데이터 전송 테스트
   ```
 
-- [ ] **1.2. 오디오 버퍼 관리 클래스 구현**
+- [x] **1.2. 오디오 버퍼 관리 클래스 구현**
   ```python
   # server/audio/buffer_manager.py
   import numpy as np
@@ -104,24 +104,18 @@ pydub==0.25.1  # 오디오 전처리용
           return None
   ```
   
-  **테스트 방법**:
-  ```python
-  # server/test_buffer.py
-  from audio.buffer_manager import AudioBufferManager
-  import numpy as np
-  
-  manager = AudioBufferManager(sample_rate=16000, chunk_duration_sec=1.0)
-  
-  # 더미 오디오 데이터 추가
-  dummy_audio = (np.random.randint(-32768, 32767, 16000, dtype=np.int16)).tobytes()
-  manager.add_chunk(dummy_audio)
-  
-  chunk = manager.get_processed_chunk()
-  assert chunk is not None
-  assert chunk.shape == (16000,)
-  assert chunk.dtype == np.float32
-  print("✅ Buffer test passed!")
-  ```
+  **진행 현황 (2025-11-11)**:
+  - `server/audio/buffer_manager.py` 생성 및 `AudioBufferManager` 구현
+  - 1초(혹은 설정된 길이) 단위 청크 정규화(float32) 반환 기능 완료
+  - 입력 검증(샘플레이트/청크 길이)과 버퍼 초기화 메서드 제공
+
+  **검증 방법**:
+  - 단위 테스트: `server/tests/test_audio_buffer_manager.py`
+    ```bash
+    cd server
+    venv\Scripts\python.exe -m pytest tests/test_audio_buffer_manager.py
+    # ✅ 4 passed
+    ```
 
 ### Phase 2: Whisper STT 통합 (단위 테스트)
 
@@ -410,6 +404,7 @@ pydub==0.25.1  # 오디오 전처리용
 ## 🗒️ 업데이트 로그
 
 - 2025-11-11: Phase 1 `/ws/audio` 엔드포인트 및 단위 테스트 구축, 문서 갱신
+- 2025-11-11: `AudioBufferManager` 구현 및 테스트 추가, `numpy==2.1.2`로 요구사항 업데이트
 
 ## 🔄 다음 작업
 
