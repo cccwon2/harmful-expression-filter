@@ -13,7 +13,8 @@ import { registerServerHandlers, checkServerConnection } from './ipc/serverHandl
 
 const CAPTURE_INTERVAL_MS = 3000;
 const CAPTURE_FILE_NAME = 'captured.png';
-const OCR_LANGUAGES = 'eng+kor';
+//const OCR_LANGUAGES = 'kor+eng'; // (기존)
+const OCR_LANGUAGES = 'kor';  // 한국어만 지원
 const SERVER_ANALYZE_URL = 'http://127.0.0.1:8000/analyze';
 
 let overlayWindow: BrowserWindow | null = null;
