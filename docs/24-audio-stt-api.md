@@ -1,6 +1,6 @@
 # Task 24: 음성 STT API 구현 (FastAPI)
 
-## ⚠️ 상태: 초안 (Draft)
+## ⚠️ 상태: 진행 중 (Phase 1 완료)
 
 ## 📋 작업 개요
 
@@ -34,7 +34,7 @@ pydub==0.25.1  # 오디오 전처리용
 
 ### Phase 1: WebSocket 엔드포인트 구축 (테스트 가능)
 
-- [ ] **1.1. WebSocket 엔드포인트 추가**
+- [x] **1.1. WebSocket 엔드포인트 추가**
   ```python
   # server/main.py
   from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -51,6 +51,21 @@ pydub==0.25.1  # 오디오 전처리용
       except WebSocketDisconnect:
           print("Client disconnected")
   ```
+  
+  **진행 현황 (2025-11-11)**:
+  - `/ws/audio` WebSocket 엔드포인트 구현 완료
+  - 연결 직후 `"Connected"` 텍스트 전송 및 바이너리/텍스트 입력 분기 처리
+  - 바이너리 수신 시 `{"status": "received", "size": ...}` JSON 응답 반환
+  - 예외 처리(`WebSocketDisconnect`, 그 외 오류`)와 서버 로그 메시지 추가
+
+  **검증 방법**:
+  - 단위 테스트: `server/tests/test_ws_audio.py`
+    ```bash
+    cd server
+    venv\Scripts\python.exe -m pytest tests/test_ws_audio.py
+    # ✅ 1 passed
+    ```
+  - 수동 테스트: `wscat -c ws://localhost:8000/ws/audio -b`
   
   **테스트 방법**:
   ```bash
@@ -351,9 +366,10 @@ pydub==0.25.1  # 오디오 전처리용
 - `server/audio/whisper_service.py` - Whisper STT 서비스
 - `server/nlp/harmful_classifier.py` - KoELECTRA 유해성 분류기
 - `server/main.py` - WebSocket 엔드포인트 추가
+- `server/tests/test_ws_audio.py` - WebSocket 엔드포인트 단위 테스트
 
 ### 수정할 파일
-- `server/requirements.txt` - 의존성 추가
+- `server/requirements.txt` - 의존성 추가 (`pytest`, `httpx` 반영)
 - `server/README.md` - API 문서 업데이트
 
 ## 📊 테스트 계획
@@ -390,6 +406,10 @@ pydub==0.25.1  # 오디오 전처리용
 - [Whisper GitHub](https://github.com/openai/whisper)
 - [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/)
 - [KoELECTRA Hugging Face](https://huggingface.co/monologg/koelectra-base-v3-discriminator)
+
+## 🗒️ 업데이트 로그
+
+- 2025-11-11: Phase 1 `/ws/audio` 엔드포인트 및 단위 테스트 구축, 문서 갱신
 
 ## 🔄 다음 작업
 

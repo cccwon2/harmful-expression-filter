@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
@@ -213,6 +213,54 @@ async def test_text_simple(text: str):
         "has_violation": len(matched) > 0,
         "matched_keywords": matched,
     }
+
+
+# [Server: server/main.py]
+# Phase 1: WebSocket 엔드포인트 구축
+@app.websocket("/ws/audio")
+async def audio_stream(websocket: WebSocket) -> None:
+    """
+    오디오 바이너리 데이터를 수신하고 에코 형태로 응답을 반환하는 테스트용 WebSocket 엔드포인트.
+    """
+
+    # 1) 클라이언트 연결 수락
+    await websocket.accept()
+    await websocket.send_text("Connected")
+
+    try:
+        while True:
+            # 2) 클라이언트로부터 메시지 수신 (바이너리/텍스트 모두 처리)
+            message = await websocket.receive()
+
+            if message["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect()
+
+            audio_bytes = message.get("bytes")
+            if audio_bytes is None:
+                # 텍스트 메시지가 도착한 경우 에러 메시지 반환
+                await websocket.send_json(
+                    {
+                        "status": "error",
+                        "detail": "binary audio data required",
+                        "received_type": "text",
+                    }
+                )
+                continue
+
+            # 3) 수신한 바이너리 데이터 크기 정보 반환 (에코 테스트)
+            await websocket.send_json(
+                {
+                    "status": "received",
+                    "size": len(audio_bytes),
+                }
+            )
+
+    except WebSocketDisconnect:
+        print("[INFO] WebSocket client disconnected: /ws/audio")
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"[ERROR] audio_stream 처리 중 오류: {exc}")
+        await websocket.close(code=1011, reason="audio_stream internal error")
+
 
 
 if __name__ == "__main__":

@@ -34,7 +34,7 @@
 21. **[텍스트 분석 API](./21-text-analysis-api.md)** ✅ 완료
 22. **[IPC 서버 핸들러](./22-ipc-server-handlers.md)** ✅ 완료
 23. **[Electron 통합](./23-electron-integration.md)** ✅ 완료
-24. **[음성 STT API](./24-audio-stt-api.md)** 🆕 미착수
+24. **[음성 STT API](./24-audio-stt-api.md)** 🚧 진행 중 (Phase 1 완료)
 25. **[음성 Electron 연동](./25-audio-electron-integration.md)** 🆕 미착수
 
 ## 작업 의존성 그래프
@@ -93,7 +93,7 @@
 | 텍스트 분석 API         | ✅ 완료      | 100%   | High     |
 | IPC 서버 핸들러         | ✅ 완료      | 100%   | High     |
 | Electron 통합          | ✅ 완료      | 100%   | High     |
-| 음성 STT API           | 🆕 미착수    | 0%     | Medium   |
+| 음성 STT API           | 🚧 진행 중   | 20%    | Medium   |
 | 음성 Electron 연동     | 🆕 미착수    | 0%     | Medium   |
 
 ## 다음 단계
