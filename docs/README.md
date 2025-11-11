@@ -36,7 +36,7 @@
 22. [IPC 서버 핸들러](./22-ipc-server-handlers.md) - Electron ↔ FastAPI IPC 브리지
 23. [Electron 통합](./23-electron-integration.md) - Preload/Renderer 통합 및 테스트 UI
 24. [음성 STT API](./24-audio-stt-api.md) - 음성 인식 백엔드 (예정)
-25. [음성 Electron 연동](./25-audio-electron.md) - 음성 입력/IPC 연동 (예정)
+25. [음성 Electron 연동](./25-audio-electron-integration.md) - 음성 입력/IPC 연동 (예정)
 
 ## 작업 문서 사용법
 

@@ -35,7 +35,7 @@
 22. **[IPC 서버 핸들러](./22-ipc-server-handlers.md)** ✅ 완료
 23. **[Electron 통합](./23-electron-integration.md)** ✅ 완료
 24. **[음성 STT API](./24-audio-stt-api.md)** 🆕 미착수
-25. **[음성 Electron 연동](./25-audio-electron.md)** 🆕 미착수
+25. **[음성 Electron 연동](./25-audio-electron-integration.md)** 🆕 미착수
 
 ## 작업 의존성 그래프
 
