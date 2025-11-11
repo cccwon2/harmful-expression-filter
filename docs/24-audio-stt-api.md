@@ -22,13 +22,18 @@ Windows 시스템 오디오(디스코드, 브라우저 등)에서 캡처한 실�
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 websockets==12.0
-openai-whisper==20231117  # 또는 faster-whisper 검토
+numpy==2.1.2  # Python 3.13 호환 가능한 최신 버전 사용
+pydub==0.25.1  # 오디오 전처리용
+# 아래 패키지는 Python 3.12 미만 환경에서 자동 설치
+openai-whisper==20231117
 torch==2.1.0
 torchaudio==2.1.0
 transformers==4.35.0
-numpy==2.1.2  # Python 3.13 호환 가능한 최신 버전 사용
-pydub==0.25.1  # 오디오 전처리용
 ```
+
+> ℹ️ **주의**: 현재 개발 환경(Py 3.13)에서는 Whisper/Torch/Transformers의 공식 휠이 제공되지 않아
+> `python_version < "3.12"` 조건으로 설치를 건너뛰도록 구성했습니다.  
+> 실제 배포 환경에서는 Python 3.11 기반 venv를 사용하거나, 수동으로 호환 버전을 설치해야 합니다.
 
 ## 📝 작업 체크리스트
 
@@ -117,51 +122,28 @@ pydub==0.25.1  # 오디오 전처리용
     # ✅ 4 passed
     ```
 
-### Phase 2: Whisper STT 통합 (단위 테스트)
-
-- [ ] **2.1. Whisper 모델 로더 구현**
+- [x] **2.1. Whisper 모델 로더 구현**
   ```python
   # server/audio/whisper_service.py
-  import whisper
-  import numpy as np
-  
-  class WhisperSTTService:
-      def __init__(self, model_name="base"):  # base, small, medium 중 선택
-          print(f"Loading Whisper model: {model_name}...")
-          self.model = whisper.load_model(model_name)
-          print("✅ Whisper model loaded!")
-      
-      def transcribe(self, audio_np: np.ndarray) -> str:
-          """
-          Args:
-              audio_np: numpy array, shape=(samples,), dtype=float32, range=[-1, 1]
-          Returns:
-              transcribed text (Korean)
-          """
-          # Whisper는 16kHz float32 array를 입력으로 받음
-          result = self.model.transcribe(
-              audio_np,
-              language="ko",
-              fp16=False  # CPU 사용 시 False
-          )
-          return result["text"].strip()
-  ```
-  
-  **테스트 방법**:
-  ```python
-  # server/test_whisper.py
   from audio.whisper_service import WhisperSTTService
-  import numpy as np
   
-  stt_service = WhisperSTTService(model_name="base")
-  
-  # 더미 오디오 (1초, 16kHz)
-  dummy_audio = np.random.randn(16000).astype(np.float32) * 0.1
-  
-  text = stt_service.transcribe(dummy_audio)
-  print(f"Transcribed: {text}")
-  print("✅ Whisper test passed!")
+  service = WhisperSTTService(model_name="base")
+  text = service.transcribe(audio_chunk_np)
   ```
+  
+  **진행 현황 (2025-11-11)**:
+  - `WhisperSTTService` 클래스 구현 (`model_loader` 주입 지원, 입력 검증 포함)
+  - Whisper 미설치 시 사용자 친화적인 에러 메시지 제공
+  - CPU 환경 기본값(`fp16=False`) 설정 및 로깅 추가
+  
+  **검증 방법**:
+  - 단위 테스트: `server/tests/test_whisper_service.py`  
+    (가짜 Whisper 모듈을 주입하여 빠르게 검증)
+    ```bash
+    cd server
+    venv\Scripts\python.exe -m pytest tests/test_whisper_service.py
+    # ✅ 3 passed
+    ```
 
 - [ ] **2.2. 실제 오디오 파일로 테스트**
   ```bash
@@ -361,9 +343,10 @@ pydub==0.25.1  # 오디오 전처리용
 - `server/nlp/harmful_classifier.py` - KoELECTRA 유해성 분류기
 - `server/main.py` - WebSocket 엔드포인트 추가
 - `server/tests/test_ws_audio.py` - WebSocket 엔드포인트 단위 테스트
+- `server/tests/test_whisper_service.py` - Whisper 서비스 단위 테스트
 
 ### 수정할 파일
-- `server/requirements.txt` - 의존성 추가 (`pytest`, `httpx` 반영)
+- `server/requirements.txt` - 의존성 추가 (`pytest`, `httpx`, `numpy`, `pydub`, Whisper 계열 조건부 설치)
 - `server/README.md` - API 문서 업데이트
 
 ## 📊 테스트 계획
@@ -405,6 +388,7 @@ pydub==0.25.1  # 오디오 전처리용
 
 - 2025-11-11: Phase 1 `/ws/audio` 엔드포인트 및 단위 테스트 구축, 문서 갱신
 - 2025-11-11: `AudioBufferManager` 구현 및 테스트 추가, `numpy==2.1.2`로 요구사항 업데이트
+- 2025-11-11: `WhisperSTTService` 구현 및 테스트 작성, Whisper/Torch 조건부 의존성 추가
 
 ## 🔄 다음 작업
 

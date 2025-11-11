@@ -5,4 +5,10 @@ python-multipart==0.0.6
 pytest==7.4.3
 httpx==0.25.2
 numpy==2.1.2
+transformers==4.35.0; python_version < "3.12"
+pydub==0.25.1
+# Whisper & Torch 계열 패키지는 Python 3.12 미만 환경에서 설치 가능
+openai-whisper==20231117; python_version < "3.12"
+torch==2.1.0; python_version < "3.12"
+torchaudio==2.1.0; python_version < "3.12"
 

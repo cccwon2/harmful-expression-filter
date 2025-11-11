@@ -93,7 +93,7 @@
 | 텍스트 분석 API         | ✅ 완료      | 100%   | High     |
 | IPC 서버 핸들러         | ✅ 완료      | 100%   | High     |
 | Electron 통합          | ✅ 완료      | 100%   | High     |
-| 음성 STT API           | 🚧 진행 중   | 30%    | Medium   |
+| 음성 STT API           | 🚧 진행 중   | 40%    | Medium   |
 | 음성 Electron 연동     | 🆕 미착수    | 0%     | Medium   |
 
 ## 다음 단계
