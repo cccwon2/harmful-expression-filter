@@ -145,24 +145,28 @@ transformers==4.35.0
     # ✅ 3 passed
     ```
 
-- [ ] **2.2. 실제 오디오 파일로 테스트**
+- [x] **2.2. 실제 오디오 파일로 테스트**
   ```bash
-  # 한국어 음성 샘플 다운로드 (예: YouTube 또는 녹음)
-  # test_audio.wav 파일을 server/ 디렉토리에 준비
+  # Python 3.11 이하 환경 권장
+  # Whisper/Torch 설치 필요 (openai-whisper, torch, torchaudio)
+  # server/tests/data/sample_ko.wav (1초 내외 한국어 샘플) 준비
   
-  # test_whisper_real.py
-  import whisper
-  import numpy as np
-  from pydub import AudioSegment
-  
-  audio = AudioSegment.from_file("test_audio.wav")
-  audio = audio.set_frame_rate(16000).set_channels(1)
-  audio_np = np.array(audio.get_array_of_samples(), dtype=np.float32) / 32768.0
-  
-  model = whisper.load_model("base")
-  result = model.transcribe(audio_np, language="ko")
-  print(f"✅ Transcribed: {result['text']}")
+  cd server
+  venv\Scripts\python.exe -m pytest tests/test_whisper_real.py
   ```
+  
+  **진행 현황 (2025-11-11)**:
+  - `tests/test_whisper_real.py` 추가: 실제 Whisper 모델로 음성 → 텍스트 검증
+  - 실행 조건
+    - Python < 3.12
+    - `openai-whisper`, `torch`, `torchaudio`, `pydub` 설치 후 실행
+    - `tests/data/sample_ko.wav` 존재 (예: “안녕하세요” 1초 샘플)
+  - 조건 미충족 시 pytest가 자동으로 스킵하며 안내 메시지 출력
+  
+  **샘플 준비 가이드**:
+  1. 팀 공유 음성 또는 직접 녹음 파일을 `server/tests/data/sample_ko.wav`로 저장
+  2. 16kHz, mono, 16-bit PCM 형식 추천 (테스트 스크립트에서 자동 변환 수행)
+  3. Whisper 결과 텍스트가 비어 있지 않은지 확인 (필요 시 예상 문장 비교로 확장)
 
 ### Phase 3: KoELECTRA 유해성 판별 통합
 
@@ -344,6 +348,7 @@ transformers==4.35.0
 - `server/main.py` - WebSocket 엔드포인트 추가
 - `server/tests/test_ws_audio.py` - WebSocket 엔드포인트 단위 테스트
 - `server/tests/test_whisper_service.py` - Whisper 서비스 단위 테스트
+- `server/tests/test_whisper_real.py` - Whisper 실제 오디오 검증 테스트 (조건부 실행)
 
 ### 수정할 파일
 - `server/requirements.txt` - 의존성 추가 (`pytest`, `httpx`, `numpy`, `pydub`, Whisper 계열 조건부 설치)
@@ -389,6 +394,7 @@ transformers==4.35.0
 - 2025-11-11: Phase 1 `/ws/audio` 엔드포인트 및 단위 테스트 구축, 문서 갱신
 - 2025-11-11: `AudioBufferManager` 구현 및 테스트 추가, `numpy==2.1.2`로 요구사항 업데이트
 - 2025-11-11: `WhisperSTTService` 구현 및 테스트 작성, Whisper/Torch 조건부 의존성 추가
+- 2025-11-11: 실제 오디오 테스트(`tests/test_whisper_real.py`) 추가 및 샘플 음성 준비 가이드 업데이트
 
 ## 🔄 다음 작업
 
