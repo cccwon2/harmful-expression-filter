@@ -170,71 +170,35 @@ transformers==4.35.0
 
 ### Phase 3: KoELECTRA 유해성 판별 통합
 
-- [ ] **3.1. KoELECTRA 분류기 구현**
+- [x] **3.1. KoELECTRA 분류기 구현**
   ```python
   # server/nlp/harmful_classifier.py
-  from transformers import AutoTokenizer, AutoModelForSequenceClassification
-  import torch
-  
-  class HarmfulTextClassifier:
-      def __init__(self, model_name="monologg/koelectra-base-v3-discriminator"):
-          print(f"Loading KoELECTRA model: {model_name}...")
-          self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-          self.model = AutoModelForSequenceClassification.from_pretrained(
-              model_name,
-              num_labels=2  # 0: 정상, 1: 유해
-          )
-          # TODO: Fine-tuned 모델로 교체 (팀원 손찬우, 신동석)
-          print("✅ KoELECTRA model loaded!")
-      
-      def predict(self, text: str) -> dict:
-          """
-          Returns:
-              {
-                  "is_harmful": bool (0 or 1),
-                  "confidence": float (0.0 ~ 1.0),
-                  "text": str
-              }
-          """
-          if not text.strip():
-              return {"is_harmful": False, "confidence": 0.0, "text": ""}
-          
-          inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-          with torch.no_grad():
-              outputs = self.model(**inputs)
-              probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-              predicted_class = torch.argmax(probs, dim=-1).item()
-              confidence = probs[0][predicted_class].item()
-          
-          return {
-              "is_harmful": bool(predicted_class),
-              "confidence": confidence,
-              "text": text
-          }
-  ```
-  
-  **테스트 방법**:
-  ```python
-  # server/test_classifier.py
   from nlp.harmful_classifier import HarmfulTextClassifier
   
   classifier = HarmfulTextClassifier()
-  
-  # 테스트 케이스
-  test_cases = [
-      "안녕하세요, 좋은 하루 되세요!",
-      "욕설 테스트 문장",  # 실제 욕설로 교체
-      "너 정말 바보 같아",
-  ]
-  
-  for text in test_cases:
-      result = classifier.predict(text)
-      print(f"Text: {text}")
-      print(f"Result: {result}")
-      print("-" * 50)
-  
-  print("✅ Classifier test passed!")
+  result = classifier.predict("안녕하세요")
   ```
+  
+  **진행 현황 (2025-11-11)**:
+  - `HarmfulTextClassifier` 구현 (토크나이저/모델/torch 모듈 주입 지원)
+  - Torch/Transformers 미설치 시 `TransformersNotAvailableError`로 명확한 안내
+  - CUDA 가용성 감지 및 `eval()`, `to(device)` 호출로 추론 준비
+  
+  **검증 방법**:
+  - 단위 테스트: `server/tests/test_harmful_classifier.py`
+    - numpy 기반 torch 스텁으로 빠른 검증 수행
+    - 주요 시나리오: 유해 문장, 정상 문장, 빈 입력, 의존성 누락
+    ```bash
+    cd server
+    venv\Scripts\python.exe -m pytest tests/test_harmful_classifier.py
+    # ✅ 4 passed
+    ```
+  - 실제 KoELECTRA 추론: Python 3.11 환경에서 `pip install torch transformers` 후
+    ```python
+    from nlp.harmful_classifier import HarmfulTextClassifier
+    clf = HarmfulTextClassifier()
+    print(clf.predict("욕설 예시 문장"))
+    ```
 
 ### Phase 4: 전체 파이프라인 통합 (WebSocket)
 
@@ -349,6 +313,7 @@ transformers==4.35.0
 - `server/tests/test_ws_audio.py` - WebSocket 엔드포인트 단위 테스트
 - `server/tests/test_whisper_service.py` - Whisper 서비스 단위 테스트
 - `server/tests/test_whisper_real.py` - Whisper 실제 오디오 검증 테스트 (조건부 실행)
+- `server/tests/test_harmful_classifier.py` - KoELECTRA 분류기 단위 테스트
 
 ### 수정할 파일
 - `server/requirements.txt` - 의존성 추가 (`pytest`, `httpx`, `numpy`, `pydub`, Whisper 계열 조건부 설치)
@@ -395,6 +360,7 @@ transformers==4.35.0
 - 2025-11-11: `AudioBufferManager` 구현 및 테스트 추가, `numpy==2.1.2`로 요구사항 업데이트
 - 2025-11-11: `WhisperSTTService` 구현 및 테스트 작성, Whisper/Torch 조건부 의존성 추가
 - 2025-11-11: 실제 오디오 테스트(`tests/test_whisper_real.py`) 추가 및 샘플 음성 준비 가이드 업데이트
+- 2025-11-11: `HarmfulTextClassifier` 구현 및 단위 테스트 작성, Phase 3 체크리스트 갱신
 
 ## 🔄 다음 작업
 
