@@ -21,7 +21,7 @@ interface HarmfulEvent {
 export function AudioMonitor() {
   const [status, setStatus] = useState<AudioStatus>({
     isMonitoring: false,
-    volumeLevel: 5,
+    volumeLevel: 1,
     beepEnabled: false
   });
   const [harmfulEvents, setHarmfulEvents] = useState<HarmfulEvent[]>([]);

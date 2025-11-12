@@ -16,7 +16,7 @@ export class AudioService {
   private audioIn: any = null;
   private processor: AudioProcessor;
   private streamClient: AudioStreamClient;
-  private volumeLevel = 5; // 0~10, 기본값 5
+  private volumeLevel = 1; // 0~10, 기본값 1 (1단계 볼륨)
   private beepEnabled = false;
   private volumeController: VolumeController;
   
@@ -145,7 +145,7 @@ export class AudioService {
       return;
     }
 
-    await this.adjustVolume(1);
+    await this.adjustVolume(this.volumeLevel);
   }
   
   private async adjustVolume(level: number): Promise<void> {
