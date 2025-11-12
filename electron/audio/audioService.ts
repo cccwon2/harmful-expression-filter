@@ -55,12 +55,13 @@ export class AudioService {
       
       // 오디오 캡처 시작
       const devices = naudiodon.getDevices();
+      // Loopback 디바이스 찾기 (스테레오 믹스 우선)
       const loopbackDevice = devices.find(d => 
-        d.name.includes('Speakers') || 
-        d.name.includes('Output') ||
-        d.name.includes('스피커') ||
-        d.name.includes('출력')
-      );
+        (d.name.includes('스테레오 믹스') || d.name.includes('Stereo Mix')) ||
+        (d.name.includes('스피커') && d.maxInputChannels >= 2) ||
+        (d.name.includes('Speakers') && d.maxInputChannels >= 2) ||
+        (d.name.includes('Output') && d.maxInputChannels >= 2)
+      ) || devices.find(d => d.maxInputChannels >= 2 && !d.name.includes('Microphone') && !d.name.includes('마이크'));
       
       if (!loopbackDevice) {
         throw new Error('No loopback device found');

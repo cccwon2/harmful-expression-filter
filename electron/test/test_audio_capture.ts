@@ -19,15 +19,15 @@ function testAudioCapture() {
     console.log(`  ${index + 1}. [${device.id}] ${device.name} (${device.maxInputChannels} input channels)`);
   });
   
-  // Loopback 디바이스 찾기 (Windows는 보통 첫 번째가 기본 출력)
-  // 한국어 시스템에서는 "스피커", "출력" 등도 포함
+  // Loopback 디바이스 찾기
+  // Windows에서는 출력 디바이스가 Loopback으로 사용 가능
+  // 스테레오 믹스나 실제 출력 디바이스를 찾아야 함
   const loopbackDevice = devices.find(d => 
-    d.name.includes('Speakers') || 
-    d.name.includes('Output') ||
-    d.name.includes('스피커') ||
-    d.name.includes('출력') ||
-    (d.maxInputChannels > 0 && d.name.toLowerCase().includes('loopback'))
-  );
+    (d.name.includes('스테레오 믹스') || d.name.includes('Stereo Mix')) ||
+    (d.name.includes('스피커') && d.maxInputChannels >= 2) ||
+    (d.name.includes('Speakers') && d.maxInputChannels >= 2) ||
+    (d.name.includes('Output') && d.maxInputChannels >= 2)
+  ) || devices.find(d => d.maxInputChannels >= 2 && !d.name.includes('Microphone') && !d.name.includes('마이크'));
   
   if (!loopbackDevice) {
     console.error('\n❌ No loopback device found!');
