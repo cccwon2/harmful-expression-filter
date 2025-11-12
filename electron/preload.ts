@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ROI } from './ipc/roi';
-import { SERVER_CHANNELS } from './ipc/channels';
+import { SERVER_CHANNELS, AUDIO_CHANNELS, IPC_CHANNELS } from './ipc/channels';
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
@@ -207,6 +207,21 @@ try {
       analyzeText: (text: string) => ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text),
       getKeywords: () => ipcRenderer.invoke(SERVER_CHANNELS.GET_KEYWORDS),
     } as ServerAPI,
+    // 오디오 모니터링 API
+    audio: {
+      startMonitoring: () => ipcRenderer.invoke(AUDIO_CHANNELS.START_MONITORING),
+      stopMonitoring: () => ipcRenderer.invoke(AUDIO_CHANNELS.STOP_MONITORING),
+      getStatus: () => ipcRenderer.invoke(AUDIO_CHANNELS.GET_STATUS),
+      setVolumeLevel: (level: number) => ipcRenderer.invoke(AUDIO_CHANNELS.SET_VOLUME_LEVEL, level),
+      setBeepEnabled: (enabled: boolean) => ipcRenderer.invoke(AUDIO_CHANNELS.SET_BEEP_ENABLED, enabled),
+      // 이벤트 리스너
+      onStatusChange: (callback: (status: any) => void) => {
+        ipcRenderer.on(IPC_CHANNELS.AUDIO_STATUS, (_, status) => callback(status));
+      },
+      onHarmfulDetected: (callback: (data: any) => void) => {
+        ipcRenderer.on(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, (_, data) => callback(data));
+      },
+    },
   });
   
   console.log('[Preload] api exposed successfully');
@@ -241,6 +256,19 @@ declare global {
         onServerAlert: (callback: (harmful: boolean) => void) => () => void;
       };
       server: ServerAPI;
+      audio: {
+        startMonitoring: () => Promise<{ success: boolean; error?: string }>;
+        stopMonitoring: () => Promise<{ success: boolean }>;
+        getStatus: () => Promise<{
+          isMonitoring: boolean;
+          volumeLevel: number;
+          beepEnabled: boolean;
+        }>;
+        setVolumeLevel: (level: number) => Promise<{ success: boolean }>;
+        setBeepEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+        onStatusChange: (callback: (status: any) => void) => void;
+        onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
     };
   }
 }

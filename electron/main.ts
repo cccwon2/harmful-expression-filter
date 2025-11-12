@@ -10,6 +10,7 @@ import * as path from 'path';
 import axios from 'axios';
 import { createWorker, type Worker } from 'tesseract.js';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
+import { registerAudioHandlers } from './ipc/audioHandlers';
 
 const CAPTURE_INTERVAL_MS = 3000;
 const CAPTURE_FILE_NAME = 'captured.png';
@@ -52,6 +53,8 @@ app.whenReady().then(async () => {
   // Edit Mode 상태 관리에 오버레이 창 등록
   if (overlayWindow) {
     setOverlayWindow(overlayWindow);
+    // 오디오 핸들러 등록
+    registerAudioHandlers(overlayWindow);
   }
   
   const sendOverlayMode = (mode: OverlayMode) => {

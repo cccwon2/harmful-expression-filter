@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ServerTest } from './components/ServerTest';
+import { AudioMonitor } from './components/AudioMonitor';
 
 export const App: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string>('');
@@ -45,12 +46,30 @@ export const App: React.FC = () => {
 
       <main
         style={{
-          background: '#ffffff',
-          borderRadius: 12,
-          boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '32px',
         }}
       >
-        <ServerTest />
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)',
+          }}
+        >
+          <ServerTest />
+        </div>
+        
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)',
+          }}
+        >
+          <AudioMonitor />
+        </div>
       </main>
     </div>
   );

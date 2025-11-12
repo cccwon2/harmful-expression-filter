@@ -68,6 +68,19 @@ declare global {
         onServerAlert: (callback: (harmful: boolean) => void) => () => void;
       };
       server: ServerAPI;
+      audio: {
+        startMonitoring: () => Promise<{ success: boolean; error?: string }>;
+        stopMonitoring: () => Promise<{ success: boolean }>;
+        getStatus: () => Promise<{
+          isMonitoring: boolean;
+          volumeLevel: number;
+          beepEnabled: boolean;
+        }>;
+        setVolumeLevel: (level: number) => Promise<{ success: boolean }>;
+        setBeepEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+        onStatusChange: (callback: (status: any) => void) => void;
+        onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
     };
   }
 }

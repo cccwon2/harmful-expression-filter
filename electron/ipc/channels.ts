@@ -14,6 +14,9 @@ export const IPC_CHANNELS = {
   OCR_START: 'ocr:start',
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',
+  // 오디오 모니터링 채널
+  AUDIO_STATUS: 'audio:status',
+  AUDIO_HARMFUL_DETECTED: 'audio:harmful-detected',
 } as const;
 
 export type IPCChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS];
@@ -26,4 +29,15 @@ export const SERVER_CHANNELS = {
 } as const;
 
 export type ServerChannel = typeof SERVER_CHANNELS[keyof typeof SERVER_CHANNELS];
+
+// 오디오 모니터링 IPC 채널
+export const AUDIO_CHANNELS = {
+  START_MONITORING: 'audio:start-monitoring',
+  STOP_MONITORING: 'audio:stop-monitoring',
+  GET_STATUS: 'audio:get-status',
+  SET_VOLUME_LEVEL: 'audio:set-volume-level',     // 볼륨 레벨 설정 (0~10)
+  SET_BEEP_ENABLED: 'audio:set-beep-enabled',     // 비프음 활성화
+} as const;
+
+export type AudioChannel = typeof AUDIO_CHANNELS[keyof typeof AUDIO_CHANNELS];
 
