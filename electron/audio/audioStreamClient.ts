@@ -8,10 +8,15 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 
 export interface AudioStreamResponse {
-  text: string;
-  is_harmful: boolean;
-  confidence: number;
-  timestamp: number;
+  status?: string;
+  text?: string;
+  is_harmful?: boolean | number; // 서버는 int로 보냄 (0 또는 1)
+  confidence?: number;
+  timestamp?: number;
+  raw_text?: string;
+  audio_duration_sec?: number;
+  processing_time_ms?: number;
+  detail?: string; // 에러 메시지
 }
 
 export class AudioStreamClient extends EventEmitter {
@@ -41,10 +46,17 @@ export class AudioStreamClient extends EventEmitter {
         
         this.ws.on('message', (data: Buffer) => {
           try {
-            const response: AudioStreamResponse = JSON.parse(data.toString());
+            const text = data.toString();
+            // 서버가 연결 시 "Connected" 텍스트를 보낼 수 있음
+            if (text === 'Connected' || text.trim() === 'Connected') {
+              console.log('[AudioStreamClient] Server connection confirmed');
+              return;
+            }
+            const response: AudioStreamResponse = JSON.parse(text);
             this.emit('response', response);
           } catch (err) {
             console.error('Failed to parse server response:', err);
+            console.error('Raw data:', data.toString().substring(0, 100));
           }
         });
         

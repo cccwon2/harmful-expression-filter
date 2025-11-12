@@ -14,10 +14,52 @@ from audio.pipeline import AudioProcessingPipeline, PipelineOutput
 from audio.whisper_service import WhisperSTTService, WhisperNotAvailableError
 from nlp.harmful_classifier import HarmfulTextClassifier, TransformersNotAvailableError
 
+# ============== 전역 변수 ==============
+BAD_WORDS: List[str] = []
+STT_SERVICE: Optional[WhisperSTTService] = None
+CLASSIFIER: Optional[HarmfulTextClassifier] = None
+LOGGER = logging.getLogger("harmful-filter")
+logging.basicConfig(level=logging.INFO)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global STT_SERVICE, CLASSIFIER  # pylint: disable=global-statement
+
+    load_keywords()
+
+    try:
+        STT_SERVICE = WhisperSTTService(model_name="base")
+        LOGGER.info("[INFO] ✅ Whisper STT Service initialized successfully")
+    except WhisperNotAvailableError as exc:
+        LOGGER.warning("[WARN] Whisper STT 초기화 실패: %s", exc)
+        STT_SERVICE = None
+    except Exception as exc:  # pylint: disable=broad-except
+        LOGGER.error("[ERROR] Whisper STT 초기화 중 예상치 못한 오류: %s", exc, exc_info=True)
+        STT_SERVICE = None
+
+    try:
+        CLASSIFIER = HarmfulTextClassifier()
+        LOGGER.info("[INFO] ✅ Harmful Text Classifier initialized successfully")
+    except TransformersNotAvailableError as exc:
+        LOGGER.warning("[WARN] KoELECTRA 분류기 초기화 실패: %s", exc)
+        CLASSIFIER = None
+    except Exception as exc:  # pylint: disable=broad-except
+        LOGGER.error("[ERROR] Classifier 초기화 중 예상치 못한 오류: %s", exc, exc_info=True)
+        CLASSIFIER = None
+
+    LOGGER.info("[INFO] FastAPI server startup complete")
+    LOGGER.info("[INFO] Server URL: http://127.0.0.1:8000")
+    LOGGER.info("[INFO] API docs: http://127.0.0.1:8000/docs")
+    LOGGER.info("[INFO] STT Service: %s", "✅ Loaded" if STT_SERVICE is not None else "❌ Not loaded")
+    LOGGER.info("[INFO] Classifier: %s", "✅ Loaded" if CLASSIFIER is not None else "❌ Not loaded")
+    yield
+
+
 app = FastAPI(
     title="유해 표현 필터 API",
     version="1.0.0",
     description="텍스트 및 음성 기반 유해 표현 감지 시스템",
+    lifespan=lifespan,
 )
 
 # CORS 설정
@@ -49,15 +91,6 @@ class AnalyzeResponse(BaseModel):
     matched_keywords: List[str]
     method: str
     processing_time: float
-
-
-# ============== 전역 변수 ==============
-BAD_WORDS: List[str] = []
-STT_SERVICE: Optional[WhisperSTTService] = None
-CLASSIFIER: Optional[HarmfulTextClassifier] = None
-LOGGER = logging.getLogger("harmful-filter")
-logging.basicConfig(level=logging.INFO)
-
 
 def load_keywords() -> None:
     """키워드 파일 로드"""
@@ -109,31 +142,6 @@ def load_keywords() -> None:
         print("[INFO] default bad_words.json created")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global STT_SERVICE, CLASSIFIER  # pylint: disable=global-statement
-
-    load_keywords()
-
-    try:
-        STT_SERVICE = WhisperSTTService(model_name="base")
-    except WhisperNotAvailableError as exc:
-        LOGGER.warning("[WARN] Whisper STT 초기화 실패: %s", exc)
-        STT_SERVICE = None
-
-    try:
-        CLASSIFIER = HarmfulTextClassifier()
-    except TransformersNotAvailableError as exc:
-        LOGGER.warning("[WARN] KoELECTRA 분류기 초기화 실패: %s", exc)
-        CLASSIFIER = None
-
-    LOGGER.info("[INFO] FastAPI server startup complete")
-    LOGGER.info("[INFO] Server URL: http://127.0.0.1:8000")
-    LOGGER.info("[INFO] API docs: http://127.0.0.1:8000/docs")
-    yield
-
-
-app.router.lifespan_context = lifespan
 
 
 def check_keywords(text: str) -> List[str]:
@@ -252,15 +260,20 @@ async def audio_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     await websocket.send_text("Connected")
 
-    if STT_SERVICE is None or CLASSIFIER is None:
+    # STT 서비스가 없으면 에러 반환
+    if STT_SERVICE is None:
         await websocket.send_json(
             {
                 "status": "error",
-                "detail": "STT 또는 분류기 서비스가 초기화되지 않았습니다. 서버 로그를 확인하세요.",
+                "detail": "STT 서비스가 초기화되지 않았습니다. 서버 로그를 확인하세요.",
             }
         )
         await websocket.close(code=1011)
         return
+    
+    # Classifier가 없으면 키워드 기반 분류만 사용
+    if CLASSIFIER is None:
+        LOGGER.warning("[WARN] Classifier가 없어 키워드 기반 분류만 사용합니다.")
 
     pipeline = AudioProcessingPipeline(
         stt_service=STT_SERVICE,

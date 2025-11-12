@@ -25,13 +25,31 @@ async function testStreaming() {
   // 서버 응답 리스너
   client.on('response', (response) => {
     console.log('\n📨 Server response:');
-    console.log(`   Text: ${response.text}`);
-    console.log(`   Is harmful: ${response.is_harmful}`);
-    console.log(`   Confidence: ${(response.confidence * 100).toFixed(1)}%`);
-    console.log(`   Timestamp: ${new Date(response.timestamp).toISOString()}`);
+    console.log(`   Status: ${response.status || 'unknown'}`);
+    console.log(`   Text: ${response.text || '(empty)'}`);
     
-    if (response.is_harmful) {
+    // is_harmful는 서버에서 int (0 또는 1)로 올 수 있음
+    const isHarmful = response.is_harmful === true || response.is_harmful === 1;
+    console.log(`   Is harmful: ${isHarmful}`);
+    
+    if (response.confidence !== undefined) {
+      console.log(`   Confidence: ${(response.confidence * 100).toFixed(1)}%`);
+    }
+    
+    if (response.timestamp) {
+      console.log(`   Timestamp: ${new Date(response.timestamp * 1000).toISOString()}`);
+    }
+    
+    if (response.processing_time_ms) {
+      console.log(`   Processing time: ${response.processing_time_ms.toFixed(1)}ms`);
+    }
+    
+    if (isHarmful) {
       console.log('\n⚠️  HARMFUL CONTENT DETECTED!');
+    }
+    
+    if (response.detail) {
+      console.log(`   Detail: ${response.detail}`);
     }
   });
   

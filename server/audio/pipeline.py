@@ -38,18 +38,16 @@ class AudioProcessingPipeline:
     def __init__(
         self,
         stt_service: WhisperSTTService,
-        classifier: HarmfulTextClassifier,
+        classifier: Optional[HarmfulTextClassifier],
         *,
         sample_rate: int = 16_000,
         chunk_duration_sec: float = 1.0,
     ) -> None:
         if stt_service is None:
             raise WhisperNotAvailableError("Whisper STT 서비스가 초기화되지 않았습니다.")
-        if classifier is None:
-            raise TransformersNotAvailableError("유해성 분류기가 초기화되지 않았습니다.")
-
+        
         self.stt_service = stt_service
-        self.classifier = classifier
+        self.classifier = classifier  # None일 수 있음 (키워드 기반 분류만 사용)
         self.buffer_manager = AudioBufferManager(
             sample_rate=sample_rate, chunk_duration_sec=chunk_duration_sec
         )
@@ -71,7 +69,25 @@ class AudioProcessingPipeline:
         loop = asyncio.get_running_loop()
 
         text = await asyncio.to_thread(self.stt_service.transcribe, audio_chunk)
-        classification = await asyncio.to_thread(self.classifier.predict, text)
+        
+        # Classifier가 있으면 사용, 없으면 키워드 기반 분류 사용
+        if self.classifier is not None:
+            classification = await asyncio.to_thread(self.classifier.predict, text)
+        else:
+            # 키워드 기반 분류 (간단한 구현)
+            # 기본 키워드 목록
+            bad_words = [
+                "욕설", "비방", "혐오", "ㅅㅂ", "ㅂㅅ", "시발", "씨발",
+                "개새", "ㄱㅅㄲ", "병신", "ㅄ", "fuck", "shit"
+            ]
+            text_lower = text.lower()
+            matched_keywords = [word for word in bad_words if word.lower() in text_lower]
+            is_harmful = len(matched_keywords) > 0
+            classification = ClassificationResult(
+                is_harmful=is_harmful,
+                confidence=1.0 if is_harmful else 0.0,
+                text=text
+            )
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
 
