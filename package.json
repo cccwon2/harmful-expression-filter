@@ -1,7 +1,7 @@
 {
   "name": "harmful-expression-filter",
   "version": "1.0.0",
-  "description": "라이브 플랫폼 유해 표현 필터링, 마스킹, 비프음, 볼륨 조절",
+  "description": "?�이�??�랫???�해 ?�현 ?�터�? 마스?? 비프?? 볼륨 조절",
   "main": "./dist-electron/main.js",
   "scripts": {
     "build:main": "tsc -p electron/tsconfig.json",
@@ -23,6 +23,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "form-data": "^4.0.0",
+    "loudness": "^0.4.2",
     "naudiodon2": "^2.5.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

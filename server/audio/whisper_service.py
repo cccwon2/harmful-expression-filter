@@ -50,11 +50,20 @@ class WhisperSTTService:
         if model_loader is None:
             try:
                 import whisper  # type: ignore
+                # whisper 모듈이 있지만 load_model 함수가 없을 수 있음
+                if not hasattr(whisper, 'load_model'):
+                    raise WhisperNotAvailableError(
+                        "whisper 모듈은 있지만 load_model 함수를 찾을 수 없습니다. "
+                        "올바른 whisper 패키지가 설치되었는지 확인하세요."
+                    )
             except ImportError as exc:  # pragma: no cover - 실제 환경에서만 발생
                 raise WhisperNotAvailableError(
                     "openai-whisper 패키지가 설치되어 있지 않습니다. "
-                    "Python 3.12 미만 환경에서 `pip install openai-whisper` "
-                    "및 torch/torchaudio 패키지를 설치한 뒤 다시 시도하세요."
+                    "`pip install openai-whisper` 및 torch/torchaudio 패키지를 설치한 뒤 다시 시도하세요."
+                ) from exc
+            except Exception as exc:  # 다른 예외도 처리
+                raise WhisperNotAvailableError(
+                    f"whisper 모듈 import 중 오류 발생: {exc}"
                 ) from exc
 
             model_loader = whisper.load_model

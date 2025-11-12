@@ -9,6 +9,7 @@ import naudiodon from 'naudiodon2';
 import { AudioProcessor } from './audioProcessor';
 import { AudioStreamClient, AudioStreamResponse } from './audioStreamClient';
 import { IPC_CHANNELS } from '../ipc/channels';
+import { VolumeController } from './volumeController';
 
 export class AudioService {
   private isMonitoring = false;
@@ -17,14 +18,16 @@ export class AudioService {
   private streamClient: AudioStreamClient;
   private volumeLevel = 5; // 0~10, 기본값 5
   private beepEnabled = false;
+  private volumeController: VolumeController;
   
   constructor(private mainWindow: BrowserWindow | null) {
     this.processor = new AudioProcessor(48000, 16000);
     this.streamClient = new AudioStreamClient('ws://localhost:8000/ws/audio');
+    this.volumeController = new VolumeController();
     
     // 서버 응답 리스너
     this.streamClient.on('response', (response: AudioStreamResponse) => {
-      this.handleServerResponse(response);
+      void this.handleServerResponse(response);
     });
     
     this.streamClient.on('error', (err) => {
@@ -115,36 +118,43 @@ export class AudioService {
     this.isMonitoring = false;
     console.log('[AudioService] ✅ Audio monitoring stopped');
     
+    void this.volumeController.restoreVolume();
     this.broadcastStatus();
   }
   
-  private handleServerResponse(response: AudioStreamResponse): void {
+  private async handleServerResponse(response: AudioStreamResponse): Promise<void> {
     console.log('[AudioService] Server response:', response);
-    
-    if (response.is_harmful) {
-      console.log(`[AudioService] ⚠️ HARMFUL AUDIO DETECTED: ${response.text}`);
-      
-      // 렌더러에 유해 감지 이벤트 전송
-      if (this.mainWindow) {
-        this.mainWindow.webContents.send(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, {
-          text: response.text,
-          confidence: response.confidence,
-          timestamp: response.timestamp
-        });
-      }
-      
-      // 볼륨 조절 또는 비프음 재생
-      if (this.beepEnabled) {
-        this.playBeep();
-      } else {
-        this.adjustVolume();
-      }
+
+    const isHarmful = response.is_harmful === true || response.is_harmful === 1;
+    if (!isHarmful) {
+      return;
     }
+
+    console.log(`[AudioService] ⚠️ HARMFUL AUDIO DETECTED: ${response.text}`);
+
+    if (this.mainWindow) {
+      this.mainWindow.webContents.send(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, {
+        text: response.text,
+        confidence: response.confidence,
+        timestamp: response.timestamp
+      });
+    }
+
+    if (this.beepEnabled) {
+      this.playBeep();
+      return;
+    }
+
+    await this.adjustVolume(1);
   }
   
-  private adjustVolume(): void {
-    // TODO: Windows 볼륨 API 호출 (Phase 5에서 구현)
-    console.log(`[AudioService] 🔊 Adjusting volume to level: ${this.volumeLevel}`);
+  private async adjustVolume(level: number): Promise<void> {
+    try {
+      await this.volumeController.adjustVolume(level);
+      console.log(`[AudioService] 🔊 Volume adjusted to level ${level}`);
+    } catch (error) {
+      console.error('[AudioService] Failed to adjust volume:', error);
+    }
   }
   
   private playBeep(): void {
