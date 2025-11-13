@@ -16,8 +16,10 @@ Windows 시스템 오디오(디스코드, 브라우저, 게임 등)를 실시간
 
 - Windows 전역 오디오 캡처 (모든 앱의 소리)
 - 실시간 WebSocket 스트리밍 (16kHz, mono, PCM 16-bit)
-- 서버 응답 기반 볼륨 제어 (0~10 단계)
+- 서버 응답 기반 볼륨 제어 (앱별 음소거, T26으로 마이그레이션됨)
 - **지연율 3초 이내** 유지
+- **ROI 영역 캡처와 독립적으로 동작** (오디오 모니터링은 ROI 선택 없이도 사용 가능)
+- **시스템 트레이에 상태 표시** (트레이 아이콘 색상 변경 및 메뉴 통합)
 
 ## 📦 필수 의존성
 
@@ -971,7 +973,10 @@ contextBridge.exposeInMainWorld('api', {
 - ✅ `electron/ipc/channels.ts` - 오디오 IPC 채널 추가
 - ✅ `electron/preload.ts` - 오디오 API 노출
 - ✅ `renderer/src/global.d.ts` - 타입 정의 추가
-- ✅ `electron/main.ts` - 메인 윈도우 생성 및 오디오 핸들러 등록
+- ✅ `electron/main.ts` - 메인 윈도우 생성 및 오디오 핸들러 등록, ROI와 오디오 모니터링 독립성 구현
+- ✅ `electron/tray.ts` - 오디오 모니터링 상태 표시 및 메뉴 통합
+- ✅ `electron/audio/audioService.ts` - 트레이 업데이트 콜백 통합
+- ✅ `renderer/src/overlay/OverlayApp.tsx` - 사용 안내 메시지 개선
 - ✅ `package.json` - 의존성 추가 (naudiodon2, ws, native-sound-mixer)
 - ✅ `renderer/src/App.tsx` - AudioMonitor 컴포넌트 추가
 
@@ -985,6 +990,8 @@ contextBridge.exposeInMainWorld('api', {
 | 4 | 서버 응답 | 유해성 판별 결과 수신 | High |
 | 5 | 볼륨 조절 | 유해 감지 시 볼륨 변경 (T26으로 마이그레이션됨) | High |
 | 6 | 전체 파이프라인 | E2E 지연율 3초 이내 | Critical |
+| 7 | ROI 독립성 | ROI 선택 없이 오디오 모니터링 시작 가능 | High |
+| 8 | 트레이 통합 | 트레이 아이콘 색상 변경 및 메뉴 상태 표시 | High |
 
 ## ⚠️ 주의사항
 
