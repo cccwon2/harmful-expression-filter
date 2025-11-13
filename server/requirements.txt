@@ -13,4 +13,6 @@ torch==2.1.0; python_version < "3.12"
 torchaudio==2.1.0; python_version < "3.12"
 # Deepgram STT SDK
 deepgram-sdk==3.5.0
+# Environment variable management
+python-dotenv==1.0.0
 

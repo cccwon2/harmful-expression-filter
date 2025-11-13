@@ -5,7 +5,9 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,12 +17,31 @@ from audio.whisper_service import WhisperSTTService, WhisperNotAvailableError
 from audio.deepgram_service import DeepgramSTTService, DeepgramNotAvailableError
 from nlp.harmful_classifier import HarmfulTextClassifier, TransformersNotAvailableError
 
+# .env 파일 로드 (server 디렉토리 또는 상위 디렉토리에서 찾기)
+LOGGER = logging.getLogger("harmful-filter")
+logging.basicConfig(level=logging.INFO)
+
+# .env 파일 위치 확인 및 로드
+server_env_path = Path(__file__).parent / '.env'
+parent_env_path = Path(__file__).parent.parent / '.env'
+
+if server_env_path.exists():
+    load_dotenv(dotenv_path=server_env_path)
+    LOGGER.info("[INFO] ✅ .env file loaded from: %s", server_env_path)
+elif parent_env_path.exists():
+    load_dotenv(dotenv_path=parent_env_path)
+    LOGGER.info("[INFO] ✅ .env file loaded from: %s", parent_env_path)
+else:
+    # 환경변수에서 직접 읽기 시도
+    load_dotenv()
+    LOGGER.warning("[WARN] ⚠️ .env file not found in server/ or parent directory.")
+    LOGGER.warning("[WARN] ⚠️ Looking for .env in: %s or %s", server_env_path, parent_env_path)
+    LOGGER.warning("[WARN] ⚠️ Using environment variables or system defaults.")
+
 # ============== 전역 변수 ==============
 BAD_WORDS: List[str] = []
 STT_SERVICE: Optional[STTServiceProtocol] = None  # DeepgramSTTService 또는 WhisperSTTService
 CLASSIFIER: Optional[HarmfulTextClassifier] = None
-LOGGER = logging.getLogger("harmful-filter")
-logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
