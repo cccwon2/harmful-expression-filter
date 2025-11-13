@@ -47,16 +47,26 @@ export class AudioStreamClient extends EventEmitter {
         this.ws.on('message', (data: Buffer) => {
           try {
             const text = data.toString();
-            // 서버가 연결 시 "Connected" 텍스트를 보낼 수 있음
-            if (text === 'Connected' || text.trim() === 'Connected') {
-              console.log('[AudioStreamClient] Server connection confirmed');
+            const response: AudioStreamResponse = JSON.parse(text);
+            
+            // 연결 확인 메시지 처리
+            if (response.status === 'connected') {
+              console.log('[AudioStreamClient] Server connection confirmed:', response.message || 'Connected');
               return;
             }
-            const response: AudioStreamResponse = JSON.parse(text);
+            
+            // 일반 응답 처리
             this.emit('response', response);
           } catch (err) {
+            // JSON 파싱 실패 시 에러 로그 출력
+            const text = data.toString();
+            // 텍스트 메시지인 경우 (이전 버전 호환성)
+            if (text.trim().startsWith('Connected')) {
+              console.log('[AudioStreamClient] Server connection confirmed (text message):', text.trim());
+              return;
+            }
             console.error('Failed to parse server response:', err);
-            console.error('Raw data:', data.toString().substring(0, 100));
+            console.error('Raw data:', text.substring(0, 100));
           }
         });
         

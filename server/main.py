@@ -130,9 +130,6 @@ def load_keywords() -> None:
     keywords_path = os.path.join(os.path.dirname(__file__), "data", "bad_words.json")
 
     default_keywords = [
-        "욕설",
-        "비방",
-        "혐오",
         "ㅅㅂ",
         "ㅂㅅ",
         "시발",
@@ -149,7 +146,6 @@ def load_keywords() -> None:
         "새 끼",
         "간나",
         "간 나",
-        "가 나",
         "개놈",
         "개 놈",
         "미친",
@@ -331,7 +327,12 @@ async def audio_stream(websocket: WebSocket) -> None:
     """
 
     await websocket.accept()
-    await websocket.send_text("Connected (Deepgram STT)")
+    # 연결 확인 메시지를 JSON 형식으로 전송
+    await websocket.send_json({
+        "status": "connected",
+        "message": "Connected (Deepgram STT)",
+        "stt_service": "Deepgram" if STT_SERVICE else "None"
+    })
 
     # STT 서비스가 없으면 에러 반환
     if STT_SERVICE is None:

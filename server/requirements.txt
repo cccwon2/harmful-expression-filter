@@ -11,8 +11,8 @@ pydub==0.25.1
 openai-whisper==20231117; python_version < "3.12"
 torch==2.1.0; python_version < "3.12"
 torchaudio==2.1.0; python_version < "3.12"
-# Deepgram STT SDK
-deepgram-sdk==3.5.0
+# Deepgram STT SDK (v5 - latest version)
+deepgram-sdk>=5.3.0
 # Environment variable management
 python-dotenv==1.0.0
 
