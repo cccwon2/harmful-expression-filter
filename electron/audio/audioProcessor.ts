@@ -60,8 +60,27 @@ export class AudioProcessor {
    * 전체 파이프라인: 스테레오 48kHz → 모노 16kHz
    */
   process(stereoBuffer: Buffer): Buffer {
+    if (!stereoBuffer || stereoBuffer.length === 0) {
+      console.warn('[AudioProcessor] ⚠️ Empty input buffer');
+      return Buffer.alloc(0);
+    }
+    
+    if (stereoBuffer.length % 4 !== 0) {
+      console.warn(`[AudioProcessor] ⚠️ Invalid buffer size: ${stereoBuffer.length} (expected multiple of 4 for stereo 16-bit)`);
+    }
+    
     const monoBuffer = this.stereoToMono(stereoBuffer);
+    if (monoBuffer.length === 0) {
+      console.warn('[AudioProcessor] ⚠️ Empty mono buffer after conversion');
+      return Buffer.alloc(0);
+    }
+    
     const resampledBuffer = this.resample(monoBuffer);
+    if (resampledBuffer.length === 0) {
+      console.warn('[AudioProcessor] ⚠️ Empty resampled buffer');
+      return Buffer.alloc(0);
+    }
+    
     return resampledBuffer;
   }
 }

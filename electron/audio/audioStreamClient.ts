@@ -27,7 +27,7 @@ export class AudioStreamClient extends EventEmitter {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // 1초
   
-  constructor(serverUrl = 'ws://localhost:8000/ws/audio') {
+  constructor(serverUrl = 'ws://127.0.0.1:8000/ws/audio') {
     super();
     this.serverUrl = serverUrl;
   }
@@ -68,18 +68,23 @@ export class AudioStreamClient extends EventEmitter {
           }
         });
         
-        this.ws.on('close', () => {
-          console.log('WebSocket closed');
+        this.ws.on('close', (code: number, reason: Buffer) => {
+          const reasonStr = reason ? reason.toString() : 'Unknown';
+          console.log(`[AudioStreamClient] WebSocket closed: code=${code}, reason=${reasonStr}`);
           this.isConnected = false;
           this.emit('close');
           
-          // 자동 재연결 시도
-          if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          // 자동 재연결 시도 (정상 종료가 아닌 경우만)
+          // 1000 = Normal Closure, 1001 = Going Away, 1005 = No Status
+          if (code !== 1000 && code !== 1001 && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            console.log(`[AudioStreamClient] Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
             setTimeout(() => {
               this.connect().catch(console.error);
             }, this.reconnectDelay * this.reconnectAttempts);
+          } else if (code === 1000 || code === 1001) {
+            console.log('[AudioStreamClient] WebSocket closed normally, not reconnecting');
+            this.reconnectAttempts = 0; // 재연결 카운터 리셋
           }
         });
       } catch (err) {
@@ -90,17 +95,45 @@ export class AudioStreamClient extends EventEmitter {
   
   sendAudioChunk(audioBuffer: Buffer): void {
     if (this.ws && this.isConnected && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(audioBuffer);
+      try {
+        // 오디오 버퍼 크기 확인 (디버깅)
+        if (audioBuffer.length === 0) {
+          console.warn('[AudioStreamClient] ⚠️ Attempted to send empty audio buffer');
+          return;
+        }
+        
+        this.ws.send(audioBuffer);
+      } catch (err) {
+        console.error('[AudioStreamClient] Error sending audio chunk:', err);
+        // 연결이 끊어진 경우 상태 업데이트
+        if (this.ws.readyState !== WebSocket.OPEN) {
+          this.isConnected = false;
+          this.emit('close');
+        }
+      }
     } else {
-      console.warn('WebSocket not connected, cannot send audio');
+      // 연결이 끊어진 경우 경고만 출력 (너무 많은 로그 방지)
+      if (this.ws?.readyState === WebSocket.CLOSING || this.ws?.readyState === WebSocket.CLOSED) {
+        this.isConnected = false;
+      }
     }
   }
   
   disconnect(): void {
     if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-      this.isConnected = false;
+      try {
+        // 정상적인 close 프레임 전송
+        if (this.ws.readyState === WebSocket.OPEN) {
+          this.ws.close(1000, 'Client disconnect'); // 1000 = Normal Closure
+        } else {
+          this.ws.terminate(); // 강제 종료
+        }
+      } catch (err) {
+        console.error('[AudioStreamClient] Error during disconnect:', err);
+      } finally {
+        this.ws = null;
+        this.isConnected = false;
+      }
     }
   }
   

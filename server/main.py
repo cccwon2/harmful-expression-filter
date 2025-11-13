@@ -105,10 +105,26 @@ def load_keywords() -> None:
         "ㅂㅅ",
         "시발",
         "씨발",
+        "시 발",
+        "씨 발",
         "개새",
+        "개 새",
         "ㄱㅅㄲ",
         "병신",
+        "병 신",
         "ㅄ",
+        "새끼",
+        "새 끼",
+        "간나",
+        "간 나",
+        "가 나",
+        "개놈",
+        "개 놈",
+        "미친",
+        "미 친",
+        "미친놈",
+        "미친 놈",
+        "미 친 놈",
         "fuck",
         "shit",
     ]
@@ -274,44 +290,89 @@ async def audio_stream(websocket: WebSocket) -> None:
     # Classifier가 없으면 키워드 기반 분류만 사용
     if CLASSIFIER is None:
         LOGGER.warning("[WARN] Classifier가 없어 키워드 기반 분류만 사용합니다.")
+    
+    # 키워드 목록 확인 및 로그
+    LOGGER.info("[INFO] Creating pipeline with %d keywords", len(BAD_WORDS))
+    if not BAD_WORDS:
+        LOGGER.error("[ERROR] BAD_WORDS is empty! Keywords will not be checked.")
 
     pipeline = AudioProcessingPipeline(
         stt_service=STT_SERVICE,
         classifier=CLASSIFIER,
         sample_rate=16_000,
         chunk_duration_sec=1.0,
+        keywords=BAD_WORDS,  # 전역 키워드 목록 전달
     )
 
     try:
         while True:
-            message = await websocket.receive()
+            try:
+                message = await websocket.receive()
+            except Exception as receive_err:
+                # 연결이 끊어진 경우
+                LOGGER.info("[INFO] WebSocket receive error (connection closed): %s", receive_err)
+                break
 
             if message["type"] == "websocket.disconnect":
-                raise WebSocketDisconnect()
+                LOGGER.info("[INFO] WebSocket client disconnected: /ws/audio")
+                break
 
             audio_bytes = message.get("bytes")
             if audio_bytes is None:
-                await websocket.send_json(
-                    {
-                        "status": "error",
-                        "detail": "binary audio data required",
-                        "received_type": "text",
-                    }
-                )
+                try:
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "detail": "binary audio data required",
+                            "received_type": "text",
+                        }
+                    )
+                except Exception as send_err:
+                    LOGGER.warning("[WARN] Failed to send error message (connection may be closed): %s", send_err)
+                    break
                 continue
 
-            result = await pipeline.process_audio(audio_bytes)
-            if result is None:
-                await websocket.send_json({"status": "buffering", "size": len(audio_bytes)})
-                continue
+            try:
+                result = await pipeline.process_audio(audio_bytes)
+                if result is None:
+                    try:
+                        await websocket.send_json({"status": "buffering", "size": len(audio_bytes)})
+                    except Exception as send_err:
+                        LOGGER.warning("[WARN] Failed to send buffering status (connection may be closed): %s", send_err)
+                        break
+                    continue
 
-            await websocket.send_json(_serialize_pipeline_output(result))
+                # 메시지 전송 전 연결 상태 확인
+                try:
+                    await websocket.send_json(_serialize_pipeline_output(result))
+                except Exception as send_err:
+                    # 연결이 끊어진 경우 - 정상적인 종료로 처리
+                    LOGGER.info("[INFO] WebSocket connection closed while sending result: %s", send_err)
+                    break
+            except Exception as process_err:
+                LOGGER.error("[ERROR] Error processing audio: %s", process_err, exc_info=True)
+                try:
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "detail": f"Audio processing error: {str(process_err)}",
+                        }
+                    )
+                except Exception:
+                    # 연결이 끊어진 경우 - 더 이상 메시지를 보낼 수 없음
+                    LOGGER.info("[INFO] WebSocket connection closed, cannot send error message")
+                    break
 
     except WebSocketDisconnect:
         LOGGER.info("[INFO] WebSocket client disconnected: /ws/audio")
     except Exception as exc:  # pylint: disable=broad-except
-        LOGGER.error("audio_stream 처리 중 오류: %s", exc, exc_info=True)
-        await websocket.close(code=1011, reason="audio_stream internal error")
+        # 예상치 못한 오류
+        LOGGER.error("[ERROR] audio_stream 처리 중 오류: %s", exc, exc_info=True)
+        try:
+            await websocket.close(code=1011, reason="audio_stream internal error")
+        except Exception:
+            # 이미 연결이 끊어진 경우 무시
+            pass
 
 
 def _serialize_pipeline_output(result: PipelineOutput) -> dict:
@@ -320,16 +381,27 @@ def _serialize_pipeline_output(result: PipelineOutput) -> dict:
     """
 
     classification = result.classification
-    return {
+    
+    # 디버깅: 직렬화 전 결과 확인
+    LOGGER.info(
+        "[DEBUG] Serializing result: text='%s', is_harmful=%s, confidence=%.2f",
+        result.text[:50] if result.text else "(empty)",
+        classification.is_harmful,
+        classification.confidence
+    )
+    
+    response = {
         "status": "ok",
-        "text": result.text,
+        "text": result.text or "",  # None이면 빈 문자열
         "is_harmful": int(classification.is_harmful),
-        "confidence": classification.confidence,
-        "raw_text": classification.text,
-        "audio_duration_sec": result.audio_duration_sec,
-        "processing_time_ms": result.processing_time_ms,
+        "confidence": float(classification.confidence),
+        "raw_text": classification.text or "",  # None이면 빈 문자열
+        "audio_duration_sec": float(result.audio_duration_sec),
+        "processing_time_ms": float(result.processing_time_ms),
         "timestamp": time.time(),
     }
+    
+    return response
 
 
 if __name__ == "__main__":

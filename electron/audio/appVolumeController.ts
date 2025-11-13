@@ -33,6 +33,7 @@ export class AppVolumeController {
       
       if (this.defaultDevice) {
         console.log(`[AppVolumeController] ✅ Default audio device: ${this.defaultDevice.name}`);
+        console.log(`[AppVolumeController] Initial sessions count: ${this.defaultDevice.sessions?.length || 0}`);
       } else {
         console.error('[AppVolumeController] ❌ No default output device found');
       }
@@ -152,42 +153,97 @@ export class AppVolumeController {
   
   /**
    * 모든 활성 앱 음소거 (폴백 방식)
+   * @param restoreDelayMs - 복원 대기 시간 (밀리초), 0이면 자동 복원 안함
    */
-  async muteAllApps(): Promise<void> {
+  async muteAllApps(restoreDelayMs: number = this.DEFAULT_RESTORE_DELAY_MS): Promise<void> {
     if (!this.defaultDevice) {
       console.warn('[AppVolumeController] Default device not initialized');
       return;
+    }
+    
+    // 디바이스 세션 새로고침 (최신 세션 목록 가져오기)
+    try {
+      // defaultDevice.sessions는 실시간으로 업데이트되므로 재조회
+      this.defaultDevice = soundMixer.getDefaultDevice(DeviceType.RENDER);
+      if (!this.defaultDevice) {
+        console.error('[AppVolumeController] Failed to refresh default device');
+        return;
+      }
+    } catch (err) {
+      console.error('[AppVolumeController] Failed to refresh device:', err);
     }
     
     const sessions = this.getAudioSessions();
     
     if (sessions.length === 0) {
       console.warn('[AppVolumeController] No active audio sessions to mute');
+      console.log('[AppVolumeController] Available sessions:', this.defaultDevice.sessions.map(s => `${s.name} (${s.appName}, state: ${s.state})`).join(', '));
       return;
     }
     
+    console.log(`[AppVolumeController] 🔍 Found ${sessions.length} active audio sessions:`);
+    sessions.forEach(s => {
+      console.log(`   - ${s.name} (${s.appName}): ${Math.round(s.volume * 100)}%`);
+    });
+    
+    // 기존 복원 타이머 취소 (새로운 mute 요청 시)
+    if (this.restoreTimer) {
+      clearTimeout(this.restoreTimer);
+      this.restoreTimer = null;
+    }
+    
     const deviceSessions = this.defaultDevice.sessions;
+    let mutedCount = 0;
+    let failedCount = 0;
     
     sessions.forEach(sessionInfo => {
       const session = deviceSessions.find(s => 
         s.name === sessionInfo.name && s.appName === sessionInfo.appName
       );
       
-      if (session) {
-        const sessionKey = sessionInfo.id;
-        if (!this.originalVolumes.has(sessionKey)) {
-          this.originalVolumes.set(sessionKey, session.volume);
-        }
+      if (!session) {
+        console.warn(`[AppVolumeController] ⚠️ Session object not found for ${sessionInfo.name}`);
+        failedCount++;
+        return;
+      }
+      
+      const sessionKey = sessionInfo.id;
+      const originalVolume = session.volume;
+      
+      // 원래 볼륨 저장 (복원용)
+      if (!this.originalVolumes.has(sessionKey)) {
+        this.originalVolumes.set(sessionKey, originalVolume);
+        console.log(`[AppVolumeController] 💾 Saved original volume for ${sessionInfo.name}: ${Math.round(originalVolume * 100)}%`);
+      }
+      
+      try {
+        // 볼륨을 0으로 설정
+        session.volume = 0;
         
-        try {
-          session.volume = 0;
-        } catch (err) {
-          console.error(`[AppVolumeController] Failed to mute ${sessionInfo.name}:`, err);
+        // 설정 후 확인
+        const currentVolume = session.volume;
+        if (currentVolume === 0) {
+          console.log(`[AppVolumeController] ✅ Muted ${sessionInfo.name}: ${Math.round(originalVolume * 100)}% → 0%`);
+          mutedCount++;
+        } else {
+          console.warn(`[AppVolumeController] ⚠️ Volume setting may have failed for ${sessionInfo.name}: current volume is ${Math.round(currentVolume * 100)}%`);
+          failedCount++;
         }
+      } catch (err) {
+        console.error(`[AppVolumeController] ❌ Failed to mute ${sessionInfo.name}:`, err);
+        failedCount++;
       }
     });
     
-    console.log(`[AppVolumeController] 🔇 Muted ${sessions.length} apps`);
+    console.log(`[AppVolumeController] 🔇 Muted ${mutedCount} apps (${failedCount} failed)`);
+    
+    // 자동 복원 타이머 설정
+    if (restoreDelayMs > 0) {
+      this.restoreTimer = setTimeout(() => {
+        void this.restoreVolume();
+        console.log(`[AppVolumeController] ✅ Auto-restored volumes after ${restoreDelayMs}ms`);
+      }, restoreDelayMs);
+    }
   }
   
   /**

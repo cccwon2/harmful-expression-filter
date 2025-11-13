@@ -86,8 +86,24 @@ class WhisperSTTService:
         if audio.size == 0:
             raise ValueError("audio_np는 비어있을 수 없습니다.")
 
+        # 오디오 통계 로깅
+        audio_mean = float(np.mean(np.abs(audio)))
+        audio_max = float(np.max(np.abs(audio)))
+        logger.info("[INFO] Whisper transcribe: audio_size=%d, mean_abs=%.4f, max_abs=%.4f", 
+                   audio.size, audio_mean, audio_max)
+        
+        # 오디오가 너무 조용하면 로깅
+        if audio_mean < 0.001:
+            logger.warning("[WARN] Audio signal is very quiet (mean_abs=%.4f). STT may fail.", audio_mean)
+
         result = self.model.transcribe(audio, language=self.language, fp16=self.use_fp16)
         text = (result.get("text") if isinstance(result, dict) else "") or ""
+        
+        # STT 결과 로깅
+        if text and text.strip():
+            logger.info("[INFO] Whisper transcription: '%s'", text)
+        else:
+            logger.warning("[WARN] Whisper transcription returned empty text. Audio may not contain speech.")
 
         return text.strip()
 

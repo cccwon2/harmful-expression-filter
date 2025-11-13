@@ -50,9 +50,17 @@ app.whenReady().then(async () => {
   }
 
   // 메인 윈도우 생성 (AudioMonitor UI용 - 개발/디버깅 목적으로만 사용, 기본적으로 숨김)
-  mainWindow = createMainWindow();
-  // 메인 윈도우는 기본적으로 숨김 (오버레이 창이 메인 UI)
-  // 개발 시 필요하면 트레이 메뉴에서 "Show Main Window"로 표시 가능
+  // 메인 윈도우는 Vite 개발 서버가 실행 중일 때만 유용하므로,
+  // 오류가 발생해도 앱이 계속 실행되도록 처리
+  try {
+    mainWindow = createMainWindow();
+    // 메인 윈도우는 기본적으로 숨김 (오버레이 창이 메인 UI)
+    // 개발 시 필요하면 트레이 메뉴에서 "Show Main Window"로 표시 가능
+  } catch (err) {
+    // 메인 윈도우 생성 실패 시 조용히 처리 (선택적 기능)
+    console.warn('[Main] Failed to create main window (non-critical):', err);
+    mainWindow = null;
+  }
   
   // 오버레이 창 생성 (초기에는 숨김, 로드 완료 후 설정 모드로 표시)
   overlayWindow = createOverlayWindow();
@@ -62,9 +70,19 @@ app.whenReady().then(async () => {
     setOverlayWindow(overlayWindow);
   }
   
-  // 오디오 핸들러 등록 (메인 윈도우에 등록하여 AudioMonitor에서 사용)
-  if (mainWindow) {
-    registerAudioHandlers(mainWindow);
+  // 오디오 핸들러 등록 (전역 단일 인스턴스)
+  // 메인 윈도우와 오버레이 창 모두에 등록하여 어느 윈도우에서든 오디오 모니터링 가능
+  try {
+    if (mainWindow) {
+      registerAudioHandlers(mainWindow);
+      console.log('[Main] Audio handlers registered on main window');
+    }
+    if (overlayWindow) {
+      registerAudioHandlers(overlayWindow);
+      console.log('[Main] Audio handlers registered on overlay window');
+    }
+  } catch (err) {
+    console.warn('[Main] Failed to register audio handlers (non-critical):', err);
   }
   
   const sendOverlayMode = (mode: OverlayMode) => {
@@ -312,6 +330,14 @@ app.whenReady().then(async () => {
     pushOverlayState({ mode: 'setup' });
     setEditModeState(true);
 
+    // 오디오 모니터링도 중지
+    const { getAudioService } = require('./ipc/audioHandlers');
+    const audioService = getAudioService();
+    if (audioService) {
+      audioService.stopMonitoring();
+      console.log('[Main] Audio monitoring stopped');
+    }
+
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       try {
         overlayWindow.setIgnoreMouseEvents(false);
@@ -361,9 +387,31 @@ app.whenReady().then(async () => {
       onROISelected: (roi) => {
         currentROI = roi;
         console.log('[Main] Current ROI updated:', roi);
+        
+        // ROI 선택 후 OCR 모니터링 시작
+        startMonitoring();
+        
+        // 오디오 모니터링도 자동으로 시작
+        const { getAudioService } = require('./ipc/audioHandlers');
+        const audioService = getAudioService();
+        if (audioService) {
+          audioService.startMonitoring().catch((err: any) => {
+            console.error('[Main] Failed to start audio monitoring after ROI selection:', err);
+            // 오디오 모니터링 실패는 치명적이지 않으므로 경고만 출력
+          });
+        } else {
+          console.warn('[Main] AudioService is not available - audio monitoring will not start');
+        }
       },
       onROICancelled: () => {
         stopMonitoring('ROI selection cancelled');
+        
+        // 오디오 모니터링도 중지
+        const { getAudioService } = require('./ipc/audioHandlers');
+        const audioService = getAudioService();
+        if (audioService) {
+          audioService.stopMonitoring();
+        }
       },
     });
   }
@@ -708,6 +756,18 @@ app.whenReady().then(async () => {
         });
 
         startMonitoring();
+        
+        // 저장된 상태 복원 시 오디오 모니터링도 자동 시작
+        const { getAudioService } = require('./ipc/audioHandlers');
+        const audioService = getAudioService();
+        if (audioService) {
+          audioService.startMonitoring().catch((err: any) => {
+            console.error('[Main] Failed to start audio monitoring after state restore:', err);
+            // 오디오 모니터링 실패는 치명적이지 않으므로 경고만 출력
+          });
+        } else {
+          console.warn('[Main] AudioService is not available - audio monitoring will not start');
+        }
       } else {
         console.log('[Main] Starting in setup mode (no saved state)');
         enterSetupMode();
