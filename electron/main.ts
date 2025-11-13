@@ -14,7 +14,7 @@ import { registerServerHandlers, checkServerConnection } from './ipc/serverHandl
 import { registerAudioHandlers, getAudioService } from './ipc/audioHandlers';
 import { setTrayAudioUpdateCallback } from './tray';
 
-const CAPTURE_INTERVAL_MS = 3000;
+const CAPTURE_INTERVAL_MS = 1000; // 1.0초 간격
 const CAPTURE_FILE_NAME = 'captured.png';
 //const OCR_LANGUAGES = 'kor+eng'; // (기존)
 const OCR_LANGUAGES = 'kor';  // 한국어만 지원
@@ -283,8 +283,19 @@ app.whenReady().then(async () => {
 
       const analysis = await analyzeText(text);
       const harmful = analysis.harmful;
-      if (harmful && analysis.matched.length > 0) {
-        console.warn('[Main] Matched harmful keywords:', analysis.matched);
+      
+      // 상세한 로그 출력
+      if (harmful) {
+        if (analysis.matched.length > 0) {
+          console.warn('[Main] ⚠️ HARMFUL DETECTED - Matched keywords:', analysis.matched);
+        } else {
+          console.warn('[Main] ⚠️ HARMFUL DETECTED - No keywords matched (AI classifier detected)');
+        }
+      } else {
+        console.log('[Main] ✅ No harmful content - Text:', text);
+        if (analysis.matched.length > 0) {
+          console.warn('[Main] ⚠️ WARNING: Matched keywords but harmful=false:', analysis.matched);
+        }
       }
 
       if (!isMonitoring || !currentROI) {
@@ -293,10 +304,12 @@ app.whenReady().then(async () => {
       }
 
       if (overlayWindow && !overlayWindow.isDestroyed()) {
+        console.log('[Main] Sending ALERT_FROM_SERVER: harmful=', harmful);
         overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, { harmful });
       }
 
       const nextMode: OverlayMode = harmful ? 'alert' : 'detect';
+      console.log('[Main] Pushing overlay state: mode=', nextMode, 'harmful=', harmful);
       pushOverlayState({
         mode: nextMode,
         roi: currentROI,

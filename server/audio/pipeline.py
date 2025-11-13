@@ -1,5 +1,8 @@
 """
 Phase 4: 오디오 → STT → 유해성 분류 파이프라인.
+
+이 파이프라인은 WhisperSTTService 또는 DeepgramSTTService와 호환됩니다.
+두 서비스 모두 transcribe(audio_chunk: np.ndarray) -> str 인터페이스를 제공합니다.
 """
 
 from __future__ import annotations
@@ -8,10 +11,13 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol
+
+import numpy as np
 
 from .buffer_manager import AudioBufferManager
 from .whisper_service import WhisperSTTService, WhisperNotAvailableError
+from .deepgram_service import DeepgramSTTService, DeepgramNotAvailableError
 from nlp.harmful_classifier import (
     HarmfulTextClassifier,
     ClassificationResult,
@@ -19,6 +25,14 @@ from nlp.harmful_classifier import (
 )
 
 LOGGER = logging.getLogger("harmful-filter")
+
+
+class STTServiceProtocol(Protocol):
+    """STT 서비스 프로토콜 (WhisperSTTService 또는 DeepgramSTTService와 호환)."""
+    
+    def transcribe(self, audio_np: np.ndarray) -> str:
+        """오디오 배열을 텍스트로 변환."""
+        ...
 
 
 
@@ -37,11 +51,14 @@ class PipelineOutput:
 class AudioProcessingPipeline:
     """
     WebSocket으로 수신된 오디오 스트림을 버퍼링하고 STT → 분류를 수행한다.
+    
+    STT 서비스는 WhisperSTTService 또는 DeepgramSTTService를 사용할 수 있습니다.
+    두 서비스 모두 transcribe(audio_chunk: np.ndarray) -> str 인터페이스를 제공합니다.
     """
 
     def __init__(
         self,
-        stt_service: WhisperSTTService,
+        stt_service: STTServiceProtocol,  # WhisperSTTService 또는 DeepgramSTTService
         classifier: Optional[HarmfulTextClassifier],
         *,
         sample_rate: int = 16_000,
@@ -49,7 +66,7 @@ class AudioProcessingPipeline:
         keywords: Optional[list[str]] = None,
     ) -> None:
         if stt_service is None:
-            raise WhisperNotAvailableError("Whisper STT 서비스가 초기화되지 않았습니다.")
+            raise ValueError("STT 서비스가 초기화되지 않았습니다.")
         
         self.stt_service = stt_service
         self.classifier = classifier  # None일 수 있음 (키워드 기반 분류만 사용)

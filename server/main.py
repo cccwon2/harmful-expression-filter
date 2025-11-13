@@ -10,13 +10,14 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from audio.pipeline import AudioProcessingPipeline, PipelineOutput
+from audio.pipeline import AudioProcessingPipeline, PipelineOutput, STTServiceProtocol
 from audio.whisper_service import WhisperSTTService, WhisperNotAvailableError
+from audio.deepgram_service import DeepgramSTTService, DeepgramNotAvailableError
 from nlp.harmful_classifier import HarmfulTextClassifier, TransformersNotAvailableError
 
 # ============== 전역 변수 ==============
 BAD_WORDS: List[str] = []
-STT_SERVICE: Optional[WhisperSTTService] = None
+STT_SERVICE: Optional[STTServiceProtocol] = None  # DeepgramSTTService 또는 WhisperSTTService
 CLASSIFIER: Optional[HarmfulTextClassifier] = None
 LOGGER = logging.getLogger("harmful-filter")
 logging.basicConfig(level=logging.INFO)
@@ -28,13 +29,23 @@ async def lifespan(app: FastAPI):
     load_keywords()
 
     try:
-        STT_SERVICE = WhisperSTTService(model_name="base")
-        LOGGER.info("[INFO] ✅ Whisper STT Service initialized successfully")
-    except WhisperNotAvailableError as exc:
-        LOGGER.warning("[WARN] Whisper STT 초기화 실패: %s", exc)
-        STT_SERVICE = None
+        # Deepgram STT 서비스 초기화
+        STT_SERVICE = DeepgramSTTService(language="ko", model="nova-2")
+        LOGGER.info("[INFO] ✅ Deepgram STT Service initialized successfully")
+    except DeepgramNotAvailableError as exc:
+        LOGGER.warning("[WARN] Deepgram STT 초기화 실패: %s", exc)
+        LOGGER.warning("[WARN] Whisper STT로 대체 시도...")
+        try:
+            STT_SERVICE = WhisperSTTService(model_name="base")
+            LOGGER.info("[INFO] ✅ Whisper STT Service initialized successfully (fallback)")
+        except WhisperNotAvailableError as whisper_exc:
+            LOGGER.warning("[WARN] Whisper STT 초기화 실패: %s", whisper_exc)
+            STT_SERVICE = None
+        except Exception as whisper_exc:  # pylint: disable=broad-except
+            LOGGER.error("[ERROR] Whisper STT 초기화 중 예상치 못한 오류: %s", whisper_exc, exc_info=True)
+            STT_SERVICE = None
     except Exception as exc:  # pylint: disable=broad-except
-        LOGGER.error("[ERROR] Whisper STT 초기화 중 예상치 못한 오류: %s", exc, exc_info=True)
+        LOGGER.error("[ERROR] Deepgram STT 초기화 중 예상치 못한 오류: %s", exc, exc_info=True)
         STT_SERVICE = None
 
     try:
@@ -125,8 +136,6 @@ def load_keywords() -> None:
         "미친놈",
         "미친 놈",
         "미 친 놈",
-        "fuck",
-        "shit",
     ]
 
     if os.path.exists(keywords_path):
@@ -162,7 +171,7 @@ def load_keywords() -> None:
 
 def check_keywords(text: str) -> List[str]:
     """
-    키워드 기반 필터링
+    키워드 기반 필터링 (단어 단위 매칭)
 
     Args:
         text: 분석할 텍스트
@@ -170,14 +179,33 @@ def check_keywords(text: str) -> List[str]:
     Returns:
         감지된 키워드 목록
     """
+    import re
+    
+    if not text or not text.strip():
+        return []
 
     text_lower = text.lower()
     matched: List[str] = []
 
     for bad_word in BAD_WORDS:
-        if bad_word.lower() in text_lower:
+        bad_word_lower = bad_word.lower().strip()
+        if not bad_word_lower:
+            continue
+        
+        # 단어 단위 매칭을 위해 정규식 사용
+        # 공백이나 특수문자, 문자열 시작/끝으로 구분된 키워드만 매칭
+        # 한글의 경우 단어 경계가 제대로 작동하지 않을 수 있으므로
+        # 공백이나 특수문자, 문자열 시작/끝으로 구분된 키워드만 매칭
+        # \W는 단어 문자가 아닌 문자 (공백, 특수문자 등)
+        word_boundary_pattern = r'(^|[\s\W])' + re.escape(bad_word_lower) + r'([\s\W]|$)'
+        
+        if re.search(word_boundary_pattern, text_lower):
             matched.append(bad_word)
-            print(f"[ALERT] keyword detected: '{bad_word}' in '{text}'")
+            LOGGER.warning("[ALERT] Keyword detected: '%s' in '%s'", bad_word, text)
+        # 키워드가 전체 텍스트와 정확히 일치하는 경우
+        elif bad_word_lower == text_lower.strip():
+            matched.append(bad_word)
+            LOGGER.warning("[ALERT] Keyword detected (exact match): '%s' in '%s'", bad_word, text)
 
     return matched
 
@@ -239,6 +267,14 @@ async def analyze_text(request: AnalyzeRequest) -> AnalyzeResponse:
 
     matched_keywords = check_keywords(text)
     has_violation = len(matched_keywords) > 0
+    
+    # 상세한 디버깅 로그 추가
+    if has_violation:
+        LOGGER.warning("[ALERT] ⚠️ HARMFUL DETECTED - Text: '%s', Matched keywords: %s", 
+                      text, matched_keywords)
+    else:
+        LOGGER.info("[INFO] ✅ No harmful content - Text: '%s', Matched keywords: %s", 
+                   text, matched_keywords)
 
     processing_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -274,7 +310,7 @@ async def audio_stream(websocket: WebSocket) -> None:
     """
 
     await websocket.accept()
-    await websocket.send_text("Connected")
+    await websocket.send_text("Connected (Deepgram STT)")
 
     # STT 서비스가 없으면 에러 반환
     if STT_SERVICE is None:

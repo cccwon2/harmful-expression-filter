@@ -8,6 +8,10 @@ export const OverlayApp: React.FC = () => {
   const [harmful, setHarmful] = useState<boolean>(false);
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
   
+  // 블라인드 자동 해제 타이머 (3초)
+  const blindTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const BLIND_DURATION_MS = 3000; // 3초
+  
   // 전역 변수로 상태를 window에 노출 (개발자 도구에서 접근 가능하도록)
   useEffect(() => {
     (window as any).__overlayState = { mode, roi, harmful };
@@ -18,11 +22,15 @@ export const OverlayApp: React.FC = () => {
   const [isSelectionComplete, setIsSelectionComplete] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   
-  // 상태 변경 로그 출력
+  // 상태 변경 로그 출력 (디버깅용)
   useEffect(() => {
+    const state: OverlayState = { mode, roi, harmful };
     if (harmful) {
-      const state: OverlayState = { mode, roi, harmful };
-      console.warn('[Overlay] state changed (harmful):', JSON.stringify(state, null, 2));
+      console.warn('[Overlay] ⚠️ State changed (harmful=true):', JSON.stringify(state, null, 2));
+    } else if (mode === 'alert') {
+      console.log('[Overlay] 📊 State changed (harmful=false, mode=alert):', JSON.stringify(state, null, 2));
+    } else {
+      console.log('[Overlay] 📊 State changed:', JSON.stringify(state, null, 2));
     }
   }, [mode, roi, harmful]);
 
@@ -126,6 +134,11 @@ export const OverlayApp: React.FC = () => {
     }
 
     if (mode === 'setup') {
+      // setup 모드로 전환 시 타이머 취소 및 유해 상태 해제
+      if (blindTimerRef.current) {
+        clearTimeout(blindTimerRef.current);
+        blindTimerRef.current = null;
+      }
       setHarmful(false);
     }
 
@@ -218,12 +231,11 @@ export const OverlayApp: React.FC = () => {
           if (state.harmful) {
             console.warn('[Overlay] State push received from main process (harmful):', state);
           }
-          if (state.mode) {
-            setMode(state.mode);
-          }
-          if (typeof state.harmful === 'boolean') {
-            setHarmful(state.harmful);
-          }
+          
+          // mode와 harmful은 onServerAlert에서 관리하므로 여기서는 무시
+          // (onServerAlert가 먼저 처리되고, 블라인드 상태를 관리하므로)
+          // 단, ROI는 업데이트
+          
           if (state.roi) {
             setRoi(state.roi);
           }
@@ -238,6 +250,11 @@ export const OverlayApp: React.FC = () => {
       (onStopMonitoring) =>
         onStopMonitoring(() => {
           console.log('[Overlay] Stop monitoring signal received from main process');
+          // 타이머 취소
+          if (blindTimerRef.current) {
+            clearTimeout(blindTimerRef.current);
+            blindTimerRef.current = null;
+          }
           setIsMonitoring(false);
           setIsSelectionComplete(false);
           setSelectionState(null);
@@ -249,32 +266,168 @@ export const OverlayApp: React.FC = () => {
     );
   }, [createOverlayApiWaiter]);
 
+  // 현재 상태를 ref로 추적 (타이머 콜백에서 최신 상태 접근)
+  const currentHarmfulRef = useRef<boolean>(false);
+  const currentModeRef = useRef<OverlayMode>('setup');
+  const currentIsMonitoringRef = useRef<boolean>(false);
+  const currentRoiRef = useRef<ROI | undefined>(undefined);
+
+  // 상태를 ref에 동기화
+  useEffect(() => {
+    currentHarmfulRef.current = harmful;
+    currentModeRef.current = mode;
+    currentIsMonitoringRef.current = isMonitoring;
+    currentRoiRef.current = roi;
+  }, [harmful, mode, isMonitoring, roi]);
+
+  // 유해 단어 감지 시 블라인드 유지, 비유해 상태가 3초 지속되면 해제
+  // harmful 상태 변경을 추적하여 타이머 관리
+  const prevHarmfulRef = useRef<boolean>(false);
+  const prevModeRef = useRef<OverlayMode>('setup');
+
+  useEffect(() => {
+    // 감시 모드가 아니거나 ROI가 없으면 타이머 취소
+    if (!isMonitoring || !roi) {
+      if (blindTimerRef.current) {
+        clearTimeout(blindTimerRef.current);
+        blindTimerRef.current = null;
+        console.log('[Overlay] Monitoring stopped or ROI removed, clearing timer');
+      }
+      prevHarmfulRef.current = harmful;
+      prevModeRef.current = mode;
+      return;
+    }
+
+    // 유해 단어가 감지되면 타이머 취소 (블라인드 유지)
+    if (harmful && mode === 'alert') {
+      // 이전에 비유해 상태였다가 유해 상태로 변경된 경우에만 타이머 취소
+      if (blindTimerRef.current) {
+        clearTimeout(blindTimerRef.current);
+        blindTimerRef.current = null;
+        console.log('[Overlay] Harmful content detected, canceling auto-clear timer (keeping blind)');
+      }
+      prevHarmfulRef.current = harmful;
+      prevModeRef.current = mode;
+      return;
+    }
+
+    // 비유해 상태이고 alert 모드이면 타이머 시작 (3초 후 해제)
+    // 이전에 유해 상태였다가 비유해 상태로 변경된 경우에만 타이머 시작
+    if (!harmful && mode === 'alert' && prevHarmfulRef.current === true) {
+      // 기존 타이머가 이미 실행 중이면 취소하고 새로 시작 (리셋)
+      if (blindTimerRef.current) {
+        clearTimeout(blindTimerRef.current);
+        console.log('[Overlay] Resetting existing auto-clear timer');
+      }
+      
+      console.log('[Overlay] No harmful content detected, starting 3-second auto-clear timer');
+      blindTimerRef.current = setTimeout(() => {
+        // 타이머 콜백에서 최신 상태 확인
+        console.log('[Overlay] Auto-clear timer expired, checking current state...');
+        console.log('[Overlay] Current state - harmful:', currentHarmfulRef.current, 'mode:', currentModeRef.current, 'isMonitoring:', currentIsMonitoringRef.current);
+        
+        // 현재 상태가 여전히 비유해이고 alert 모드이면 detect 모드로 전환
+        if (!currentHarmfulRef.current && currentModeRef.current === 'alert' && currentIsMonitoringRef.current && currentRoiRef.current) {
+          console.log('[Overlay] Auto-clear timer expired, returning to detect mode');
+          setMode('detect');
+          setHarmful(false);
+        } else {
+          console.log('[Overlay] Auto-clear timer expired but state changed, ignoring');
+        }
+        blindTimerRef.current = null;
+      }, BLIND_DURATION_MS);
+    }
+
+    // 이전 상태 업데이트
+    prevHarmfulRef.current = harmful;
+    prevModeRef.current = mode;
+  }, [harmful, isMonitoring, roi, mode]);
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (blindTimerRef.current) {
+        clearTimeout(blindTimerRef.current);
+        blindTimerRef.current = null;
+        console.log('[Overlay] Component unmounting, clearing blind timer');
+      }
+    };
+  }, []);
+
   useEffect(() => {
     return createOverlayApiWaiter(
       (api) => api.onServerAlert,
-      (onServerAlert) =>
-        onServerAlert((nextHarmful: boolean) => {
+      (onServerAlert) => {
+        const handler = (nextHarmful: boolean) => {
+          // 현재 상태는 ref를 통해 최신값으로 확인
+          console.log('[Overlay] onServerAlert received - nextHarmful:', nextHarmful);
+          console.log('[Overlay] Current state - isMonitoring:', isMonitoring, 'hasRoi:', !!roi);
+          
           if (nextHarmful) {
-            console.warn('[Overlay] Server alert received (harmful)');
+            console.warn('[Overlay] ⚠️ Server alert received (harmful=true)');
+          } else {
+            console.log('[Overlay] ✅ Server alert received (harmful=false)');
           }
+          
           if (!isMonitoring || !roi) {
             console.log(
               '[Overlay] Ignoring server alert because monitoring is inactive or ROI is undefined',
               { isMonitoring, hasRoi: !!roi },
             );
-            setHarmful(false);
-            if (mode !== 'setup') {
-              setMode('setup');
+            // 타이머가 있으면 취소
+            if (blindTimerRef.current) {
+              clearTimeout(blindTimerRef.current);
+              blindTimerRef.current = null;
             }
+            setHarmful(false);
+            // 상태 확인 후 mode 설정
+            setMode((currentMode) => {
+              if (currentMode !== 'setup') {
+                console.log('[Overlay] Changing mode from', currentMode, 'to setup');
+                return 'setup';
+              }
+              return currentMode;
+            });
             return;
           }
 
-          setHarmful(nextHarmful);
-          setMode(nextHarmful ? 'alert' : 'detect');
-        }),
+          // 유해 단어 감지 시 즉시 alert 모드로 전환하고 블라인드 유지
+          if (nextHarmful) {
+            console.log('[Overlay] Setting harmful=true and mode=alert (will keep blind until no harmful content for 3 seconds)');
+            // 타이머가 실행 중이면 취소 (유해 단어가 다시 감지되면 블라인드 유지)
+            if (blindTimerRef.current) {
+              clearTimeout(blindTimerRef.current);
+              blindTimerRef.current = null;
+              console.log('[Overlay] Canceled existing auto-clear timer due to new harmful content');
+            }
+            setHarmful(true);
+            setMode('alert');
+          } else {
+            // 유해하지 않으면 harmful만 false로 설정 (블라인드는 유지)
+            // mode는 alert로 유지 (블라인드가 표시된 상태)
+            // useEffect에서 3초 후 자동 해제 타이머 시작
+            console.log('[Overlay] ✅ No harmful content, will auto-clear blind in 3 seconds if no more harmful content');
+            setHarmful((currentHarmful) => {
+              console.log('[Overlay] Current harmful state:', currentHarmful, '-> setting to false');
+              return false;
+            });
+            // mode는 alert로 유지 (블라인드가 표시된 상태)
+            // useEffect에서 타이머가 시작되어 3초 후 detect 모드로 전환
+            setMode((currentMode) => {
+              if (currentMode !== 'alert') {
+                console.log('[Overlay] Warning: mode is', currentMode, 'but should be alert. Keeping current mode.');
+              }
+              return currentMode; // alert 모드 유지
+            });
+            console.log('[Overlay] State updated - harmful set to false, mode remains alert');
+          }
+        };
+        
+        return onServerAlert(handler);
+      },
       'onServerAlert',
     );
-  }, [createOverlayApiWaiter, isMonitoring, roi, mode]);
+  }, [createOverlayApiWaiter, isMonitoring, roi]);
 
   // 키보드 단축키 처리
   useEffect(() => {
@@ -332,6 +485,12 @@ export const OverlayApp: React.FC = () => {
           }
         } catch (error) {
           console.error('[Overlay] Failed to disable click-through via ESC:', error);
+        }
+        
+        // 타이머 취소
+        if (blindTimerRef.current) {
+          clearTimeout(blindTimerRef.current);
+          blindTimerRef.current = null;
         }
         
         setIsMonitoring(false);
@@ -646,7 +805,8 @@ export const OverlayApp: React.FC = () => {
         </div>
       )}
 
-      {isMonitoring && roi && (
+      {/* 감시 중 HUD (alert 모드가 아닐 때만 표시) */}
+      {isMonitoring && roi && mode !== 'alert' && (
         <div
           style={{
             position: 'absolute',
@@ -686,7 +846,8 @@ export const OverlayApp: React.FC = () => {
         </div>
       )}
 
-      {mode === 'alert' && roi && harmful && (
+      {/* 블라인드 (alert 모드일 때 표시, harmful 상태와 무관하게 유지) */}
+      {mode === 'alert' && roi && (
         <div
           style={{
             position: 'absolute',
