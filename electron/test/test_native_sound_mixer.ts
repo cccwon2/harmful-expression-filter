@@ -5,29 +5,33 @@
  *   npx tsx electron/test/test_native_sound_mixer.ts
  */
 
-import * as soundMixer from 'native-sound-mixer';
+import soundMixer, { DeviceType } from 'native-sound-mixer';
+import { AppVolumeController } from '../audio/appVolumeController';
 
 function testInstallation() {
   console.log('🔍 Testing native-sound-mixer installation...\n');
   
   try {
-    const devices = soundMixer.getDevices();
-    console.log(`✅ Found ${devices.length} audio devices`);
+    // 기본 출력 디바이스 가져오기
+    const defaultDevice = soundMixer.getDefaultDevice(DeviceType.RENDER);
     
-    const defaultOutput = devices.find((d: any) => d.type === 'render' && d.isDefault);
-    if (defaultOutput) {
-      console.log(`✅ Default output: ${defaultOutput.name}`);
+    if (defaultDevice) {
+      console.log(`✅ Default output device: ${defaultDevice.name}`);
       
-      const sessions = soundMixer.getAudioSessions(defaultOutput.id);
+      // AppVolumeController를 사용하여 오디오 세션 조회
+      const volumeController = new AppVolumeController();
+      const sessions = volumeController.getAudioSessions();
+      
       console.log(`✅ Active audio sessions: ${sessions.length}`);
-      sessions.forEach((s: any) => {
-        console.log(`   - ${s.name} (Vol: ${Math.round(s.volume * 100)}%)`);
+      sessions.forEach((s) => {
+        console.log(`   - ${s.name} (${s.appName}) - Vol: ${Math.round(s.volume * 100)}%`);
       });
+      
+      console.log('\n✅ Installation test passed!');
     } else {
       console.warn('⚠️ No default output device found');
+      process.exit(1);
     }
-    
-    console.log('\n✅ Installation test passed!');
   } catch (err) {
     console.error('❌ Installation test failed:', err);
     console.log('\n🔧 Troubleshooting:');

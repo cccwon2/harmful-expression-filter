@@ -49,10 +49,12 @@ app.whenReady().then(async () => {
     console.log('[Main] FastAPI server 연결이 확인되었습니다.');
   }
 
-  // 메인 윈도우 생성 (AudioMonitor UI용)
+  // 메인 윈도우 생성 (AudioMonitor UI용 - 개발/디버깅 목적으로만 사용, 기본적으로 숨김)
   mainWindow = createMainWindow();
+  // 메인 윈도우는 기본적으로 숨김 (오버레이 창이 메인 UI)
+  // 개발 시 필요하면 트레이 메뉴에서 "Show Main Window"로 표시 가능
   
-  // 오버레이 창 생성 (초기에는 숨김, 기본 상태는 클릭스루)
+  // 오버레이 창 생성 (초기에는 숨김, 로드 완료 후 설정 모드로 표시)
   overlayWindow = createOverlayWindow();
   
   // Edit Mode 상태 관리에 오버레이 창 등록
