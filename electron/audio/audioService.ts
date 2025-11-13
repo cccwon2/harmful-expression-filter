@@ -466,9 +466,9 @@ export class AudioService {
   
   private async adjustVolume(level: number): Promise<void> {
     try {
-      // 유해 표현 감지 시 항상 모든 앱 음소거 (3초 후 자동 복원)
-      console.log(`[AudioService] 🔇 Muting all apps for 3 seconds due to harmful content`);
-      await this.volumeController.muteAllApps(3000); // 3초 후 자동 복원
+      // 유해 표현 감지 시 모든 앱 음소거 (자동 복원 없음)
+      console.log(`[AudioService] 🔇 Muting all apps due to harmful content (no auto-restore)`);
+      await this.volumeController.muteAllApps(0); // 자동 복원 없음 (0 = 복원 안함)
     } catch (error) {
       console.error('[AudioService] Failed to mute apps:', error);
     }
@@ -514,6 +514,19 @@ export class AudioService {
         }
       }
     });
+    
+    // 트레이 메뉴 업데이트는 main.ts에서 주기적으로 처리 (순환 의존성 방지)
+    // 또는 getTrayAudioUpdateCallback을 통해 간접적으로 호출
+    try {
+      const { getTrayAudioUpdateCallback } = require('../tray');
+      const trayUpdateCallback = getTrayAudioUpdateCallback();
+      if (trayUpdateCallback && typeof trayUpdateCallback === 'function') {
+        trayUpdateCallback();
+      }
+    } catch (err) {
+      // 트레이 업데이트 실패는 치명적이지 않음 (순환 의존성 방지)
+      // console.error('[AudioService] Failed to update tray menu:', err);
+    }
   }
 }
 

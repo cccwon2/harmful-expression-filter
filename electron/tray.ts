@@ -3,22 +3,40 @@ import type { NativeImage } from 'electron';
 import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
 import { IPC_CHANNELS } from './ipc/channels';
+import { getAudioService } from './ipc/audioHandlers';
 
 let tray: Tray | null = null;
+let trayUpdateCallback: (() => void) | null = null;
 
 type TrayHandlers = {
   enterSetupMode: () => void;
   resetToSetupMode?: () => void;
 };
 
-function createTrayIcon(): NativeImage {
+/**
+ * 트레이 메뉴 업데이트 콜백 설정
+ */
+export function setTrayAudioUpdateCallback(callback: (() => void) | null): void {
+  trayUpdateCallback = callback;
+}
+
+/**
+ * 트레이 메뉴 업데이트 콜백 가져오기
+ */
+export function getTrayAudioUpdateCallback(): (() => void) | null {
+  return trayUpdateCallback;
+}
+
+function createTrayIcon(isMonitoring: boolean = false): NativeImage {
   // 32x32 픽셀 버퍼 생성 (트레이 아이콘용)
   const size = 32;
   const bytesPerPixel = 4; // RGBA
   const buffer = Buffer.alloc(size * size * bytesPerPixel);
   
-  // 파란색 배경 (#2563eb)
-  const bgR = 0x25, bgG = 0x63, bgB = 0xeb;
+  // 모니터링 중이면 초록색 배경 (#10b981), 중지면 파란색 배경 (#2563eb)
+  const bgR = isMonitoring ? 0x10 : 0x25;
+  const bgG = isMonitoring ? 0xb9 : 0x63;
+  const bgB = isMonitoring ? 0x81 : 0xeb;
   // 흰색 텍스트
   const textR = 255, textG = 255, textB = 255;
   
@@ -79,8 +97,8 @@ function createTrayIcon(): NativeImage {
 }
 
 export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers): Tray {
-  // 트레이 아이콘 생성
-  const icon = createTrayIcon();
+  // 트레이 아이콘 생성 (초기에는 모니터링 중지 상태)
+  const icon = createTrayIcon(false);
   
   tray = new Tray(icon);
   
@@ -91,6 +109,22 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
   const updateContextMenu = () => {
     const isOverlayVisible = overlayWindow.isVisible();
     const isEditMode = getEditModeState();
+    
+    // 오디오 모니터링 상태 가져오기
+    const audioService = getAudioService();
+    const audioStatus = audioService ? audioService.getStatus() : null;
+    const isAudioMonitoring = audioStatus?.isMonitoring || false;
+    
+    // 트레이 아이콘 업데이트 (모니터링 상태에 따라 색상 변경)
+    const newIcon = createTrayIcon(isAudioMonitoring);
+    trayInstance.setImage(newIcon);
+    
+    // 트레이 툴팁 업데이트
+    const tooltip = isAudioMonitoring 
+      ? 'Harmful Expression Filter - 오디오 모니터링 중'
+      : 'Harmful Expression Filter - 오디오 모니터링 중지';
+    trayInstance.setToolTip(tooltip);
+    
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '영역 지정 (Select Region)',
@@ -266,6 +300,43 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'separator',
       },
       {
+        label: '--- 오디오 모니터링 ---',
+        enabled: false,
+      },
+      {
+        label: isAudioMonitoring ? '🟢 오디오 모니터링 중' : '⚪ 오디오 모니터링 중지',
+        enabled: false,
+      },
+      {
+        label: isAudioMonitoring ? '⏸️ 오디오 모니터링 중지' : '▶️ 오디오 모니터링 시작',
+        type: 'normal',
+        click: async () => {
+          const audioService = getAudioService();
+          if (audioService) {
+            try {
+              if (isAudioMonitoring) {
+                audioService.stopMonitoring();
+                console.log('[Tray] Audio monitoring stopped');
+              } else {
+                await audioService.startMonitoring();
+                console.log('[Tray] Audio monitoring started');
+              }
+              // 메뉴 업데이트 (상태 변경 후)
+              setTimeout(() => {
+                updateContextMenu();
+              }, 100);
+            } catch (err) {
+              console.error('[Tray] Failed to toggle audio monitoring:', err);
+            }
+          } else {
+            console.warn('[Tray] AudioService is not available');
+          }
+        },
+      },
+      {
+        type: 'separator',
+      },
+      {
         label: 'Quit',
         type: 'normal',
         click: () => {
@@ -279,8 +350,6 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
 
   // 초기 메뉴 설정
   updateContextMenu();
-
-  tray.setToolTip('Harmful Expression Filter');
 
   // 트레이 아이콘 더블클릭 시 오버레이 창 표시/숨김
   tray.on('double-click', () => {

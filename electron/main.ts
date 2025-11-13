@@ -11,7 +11,8 @@ import * as path from 'path';
 import axios from 'axios';
 import { createWorker, type Worker } from 'tesseract.js';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
-import { registerAudioHandlers } from './ipc/audioHandlers';
+import { registerAudioHandlers, getAudioService } from './ipc/audioHandlers';
+import { setTrayAudioUpdateCallback } from './tray';
 
 const CAPTURE_INTERVAL_MS = 3000;
 const CAPTURE_FILE_NAME = 'captured.png';
@@ -725,6 +726,9 @@ app.whenReady().then(async () => {
     // 오버레이 창에서도 트레이 업데이트 콜백 사용 가능하도록 설정
     const { setOverlayTrayUpdateCallback } = require('./windows/createOverlayWindow');
     setOverlayTrayUpdateCallback(trayUpdateFn);
+    
+    // 오디오 모니터링 상태 변경 시 트레이 메뉴 업데이트 콜백 등록
+    setTrayAudioUpdateCallback(trayUpdateFn);
     
     // 오버레이 창이 로드 완료되면 저장된 상태를 복원하거나 설정 모드 진입
     overlayWindow.webContents.once('did-finish-load', () => {

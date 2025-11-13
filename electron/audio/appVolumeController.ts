@@ -208,12 +208,21 @@ export class AppVolumeController {
       }
       
       const sessionKey = sessionInfo.id;
-      const originalVolume = session.volume;
+      const currentVolume = session.volume;
       
-      // 원래 볼륨 저장 (복원용)
+      // 이미 음소거된 상태면 스킵 (중복 mute 방지)
+      if (currentVolume === 0) {
+        console.log(`[AppVolumeController] ⏭️  ${sessionInfo.name} is already muted, skipping`);
+        mutedCount++;
+        // 원래 볼륨이 저장되지 않았으면 현재 볼륨(0)을 저장하지 않음
+        // (이미 mute된 경우 원래 볼륨 정보가 없을 수 있음)
+        return;
+      }
+      
+      // 원래 볼륨 저장 (복원용) - mute 전에만 저장
       if (!this.originalVolumes.has(sessionKey)) {
-        this.originalVolumes.set(sessionKey, originalVolume);
-        console.log(`[AppVolumeController] 💾 Saved original volume for ${sessionInfo.name}: ${Math.round(originalVolume * 100)}%`);
+        this.originalVolumes.set(sessionKey, currentVolume);
+        console.log(`[AppVolumeController] 💾 Saved original volume for ${sessionInfo.name}: ${Math.round(currentVolume * 100)}%`);
       }
       
       try {
@@ -221,12 +230,12 @@ export class AppVolumeController {
         session.volume = 0;
         
         // 설정 후 확인
-        const currentVolume = session.volume;
-        if (currentVolume === 0) {
-          console.log(`[AppVolumeController] ✅ Muted ${sessionInfo.name}: ${Math.round(originalVolume * 100)}% → 0%`);
+        const newVolume = session.volume;
+        if (newVolume === 0) {
+          console.log(`[AppVolumeController] ✅ Muted ${sessionInfo.name}: ${Math.round(currentVolume * 100)}% → 0%`);
           mutedCount++;
         } else {
-          console.warn(`[AppVolumeController] ⚠️ Volume setting may have failed for ${sessionInfo.name}: current volume is ${Math.round(currentVolume * 100)}%`);
+          console.warn(`[AppVolumeController] ⚠️ Volume setting may have failed for ${sessionInfo.name}: current volume is ${Math.round(newVolume * 100)}%`);
           failedCount++;
         }
       } catch (err) {
