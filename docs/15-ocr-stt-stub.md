@@ -135,6 +135,6 @@ ipcMain.emit(IPC_CHANNELS.OCR_STOP);
 - [작업 16: 서버 알림 수신 및 블라인드 표시](./16-server-alert-blind.md)
 
 ## 참조
-- [INTERFACES.md](../INTERFACES.md): 핵심 인터페이스 문서
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md): 프로젝트 명세서
+- [INTERFACES.md](./INTERFACES.md): 핵심 인터페이스 문서
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md): 프로젝트 명세서
 

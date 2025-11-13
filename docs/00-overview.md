@@ -6,8 +6,8 @@
 
 작업을 시작하기 전에 다음 문서를 반드시 확인하세요:
 
-- **[PROJECT_SPEC.md](../PROJECT_SPEC.md)**: 전체 프로젝트 명세서 및 요구사항
-- **[INTERFACES.md](../INTERFACES.md)**: 핵심 인터페이스 및 연결부 코드 (⚠️ 매우 중요)
+- **[PROJECT_SPEC.md](./PROJECT_SPEC.md)**: 전체 프로젝트 명세서 및 요구사항
+- **[INTERFACES.md](./INTERFACES.md)**: 핵심 인터페이스 및 연결부 코드 (⚠️ 매우 중요)
 
 ## 작업 목록
 
@@ -34,8 +34,9 @@
 21. **[텍스트 분석 API](./21-text-analysis-api.md)** ✅ 완료
 22. **[IPC 서버 핸들러](./22-ipc-server-handlers.md)** ✅ 완료
 23. **[Electron 통합](./23-electron-integration.md)** ✅ 완료
-24. **[음성 STT API](./24-audio-stt-api.md)** 🚧 진행 중 (Phase 1 완료)
-25. **[음성 Electron 연동](./25-audio-electron-integration.md)** 🆕 미착수
+24. **[음성 STT API](./24-audio-stt-api.md)** ✅ 완료
+25. **[음성 Electron 연동](./25-audio-electron-integration.md)** ✅ 완료
+26. **[앱별 볼륨 조절 마이그레이션](./26-app-volume-migration.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -64,6 +65,13 @@
         ├─ 16-server-alert-blind
         ├─ 17-escape-tray-resetup
         └─ 18-persistence-boot-restore
+20-fastapi-setup
+    ├─ 21-text-analysis-api
+    ├─ 22-ipc-server-handlers
+    │   └─ 23-electron-integration
+    └─ 24-audio-stt-api
+        └─ 25-audio-electron-integration
+            └─ 26-app-volume-migration
 ```
 
 ## 작업 상태
@@ -94,7 +102,8 @@
 | IPC 서버 핸들러         | ✅ 완료      | 100%   | High     |
 | Electron 통합          | ✅ 완료      | 100%   | High     |
 | 음성 STT API           | ✅ 완료      | 100%   | Medium   |
-| 음성 Electron 연동     | 🆕 미착수    | 0%     | Medium   |
+| 음성 Electron 연동     | ✅ 완료      | 100%   | High     |
+| 앱별 볼륨 조절 마이그레이션 | ✅ 완료 | 100%   | High     |
 
 ## 다음 단계
 

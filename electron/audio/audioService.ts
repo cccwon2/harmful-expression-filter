@@ -9,7 +9,7 @@ import naudiodon from 'naudiodon2';
 import { AudioProcessor } from './audioProcessor';
 import { AudioStreamClient, AudioStreamResponse } from './audioStreamClient';
 import { IPC_CHANNELS } from '../ipc/channels';
-import { VolumeController } from './volumeController';
+import { AppVolumeController } from './appVolumeController';
 
 export class AudioService {
   private isMonitoring = false;
@@ -18,12 +18,13 @@ export class AudioService {
   private streamClient: AudioStreamClient;
   private volumeLevel = 1; // 0~10, 기본값 1 (1단계 볼륨)
   private beepEnabled = false;
-  private volumeController: VolumeController;
+  private volumeController: AppVolumeController;
+  private targetAppName: string | null = null; // 모니터링할 앱 이름 (null이면 모든 앱)
   
   constructor(private mainWindow: BrowserWindow | null) {
     this.processor = new AudioProcessor(48000, 16000);
     this.streamClient = new AudioStreamClient('ws://localhost:8000/ws/audio');
-    this.volumeController = new VolumeController();
+    this.volumeController = new AppVolumeController();
     
     // 서버 응답 리스너
     this.streamClient.on('response', (response: AudioStreamResponse) => {
@@ -122,6 +123,21 @@ export class AudioService {
     this.broadcastStatus();
   }
   
+  /**
+   * 모니터링할 앱 설정 (null이면 모든 앱)
+   */
+  setTargetApp(appName: string | null): void {
+    this.targetAppName = appName;
+    console.log(`[AudioService] Target app set to: ${appName || 'all apps'}`);
+  }
+  
+  /**
+   * 현재 실행 중인 오디오 세션 조회
+   */
+  getAudioSessions() {
+    return this.volumeController.getAudioSessions();
+  }
+  
   private async handleServerResponse(response: AudioStreamResponse): Promise<void> {
     console.log('[AudioService] Server response:', response);
 
@@ -150,8 +166,27 @@ export class AudioService {
   
   private async adjustVolume(level: number): Promise<void> {
     try {
-      await this.volumeController.adjustVolume(level);
-      console.log(`[AudioService] 🔊 Volume adjusted to level ${level}`);
+      if (this.targetAppName) {
+        // 특정 앱만 볼륨 조절
+        const success = await this.volumeController.setAppVolume(this.targetAppName, level);
+        if (success) {
+          console.log(`[AudioService] 🔊 Volume adjusted for ${this.targetAppName} to level ${level}`);
+        } else {
+          // 앱을 찾을 수 없으면 모든 앱 음소거 (폴백)
+          console.warn(`[AudioService] ⚠️ Target app ${this.targetAppName} not found, muting all apps`);
+          await this.volumeController.muteAllApps();
+        }
+      } else {
+        // 모든 앱 음소거 (폴백 방식)
+        if (level === 0) {
+          await this.volumeController.muteAllApps();
+          console.log(`[AudioService] 🔇 Muted all apps`);
+        } else {
+          // level > 0이면 모든 앱 볼륨 조절 (현재는 음소거만 지원)
+          await this.volumeController.muteAllApps();
+          console.log(`[AudioService] 🔇 Muted all apps (volume level ${level} not yet supported for all apps)`);
+        }
+      }
     } catch (error) {
       console.error('[AudioService] Failed to adjust volume:', error);
     }
@@ -178,7 +213,9 @@ export class AudioService {
     return {
       isMonitoring: this.isMonitoring,
       volumeLevel: this.volumeLevel,
-      beepEnabled: this.beepEnabled
+      beepEnabled: this.beepEnabled,
+      targetAppName: this.targetAppName,
+      audioSessions: this.getAudioSessions()
     };
   }
   

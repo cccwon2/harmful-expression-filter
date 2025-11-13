@@ -115,5 +115,5 @@ useEffect(() => {
 
 ## 참조
 
-- [INTERFACES.md](../INTERFACES.md): 핵심 인터페이스 문서
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md): 프로젝트 명세서
+- [INTERFACES.md](./INTERFACES.md): 핵심 인터페이스 문서
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md): 프로젝트 명세서

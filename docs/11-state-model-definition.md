@@ -81,6 +81,6 @@ const applyModeEffects = useCallback((newMode: OverlayMode) => {
 - [작업 14: 감시 모니터링 & HUD/OCR](./14-monitoring-ocr.md)
 
 ## 참조
-- [INTERFACES.md](../INTERFACES.md): 핵심 인터페이스 문서
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md): 프로젝트 명세서
+- [INTERFACES.md](./INTERFACES.md): 핵심 인터페이스 문서
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md): 프로젝트 명세서
 

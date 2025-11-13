@@ -1,6 +1,8 @@
 # Task 25: 음성 Electron 연동 (Windows 오디오 캡처 및 서버 연동)
 
-## ⚠️ 상태: 초안 (Draft)
+## ✅ 상태: 완료 (Completed)
+
+**참고**: Phase 5 (Windows 볼륨 제어)는 T26으로 이동하여 앱별 볼륨 조절로 마이그레이션되었습니다.
 
 ## 📋 작업 개요
 
@@ -47,7 +49,7 @@ npm install --global node-gyp
 
 ### Phase 1: Windows 오디오 캡처 테스트 (독립 스크립트)
 
-- [ ] **1.1. naudiodon2 설치 및 테스트**
+- [x] **1.1. naudiodon2 설치 및 테스트** ✅ 완료
   ```bash
   npm install naudiodon2
   ```
@@ -120,7 +122,7 @@ npm install --global node-gyp
   # 실패 시: 에러 메시지 확인 및 디바이스 목록 점검
   ```
 
-- [ ] **1.2. 오디오 리샘플링 및 모노 변환 구현**
+- [x] **1.2. 오디오 리샘플링 및 모노 변환 구현** ✅ 완료
   ```typescript
   // electron/audio/audioProcessor.ts
   export class AudioProcessor {
@@ -212,7 +214,7 @@ npm install --global node-gyp
 
 ### Phase 2: WebSocket 클라이언트 구현 (서버 연결)
 
-- [ ] **2.1. WebSocket 오디오 스트리밍 클래스**
+- [x] **2.1. WebSocket 오디오 스트리밍 클래스** ✅ 완료
   ```typescript
   // electron/audio/audioStreamClient.ts
   import WebSocket from 'ws';
@@ -286,7 +288,7 @@ npm install --global node-gyp
   }
   ```
 
-- [ ] **2.2. 통합 테스트 (캡처 → WebSocket)**
+- [x] **2.2. 통합 테스트 (캡처 → WebSocket)** ✅ 완료
   ```typescript
   // electron/test/test_streaming.ts
   import naudiodon from 'naudiodon2';
@@ -361,7 +363,7 @@ npm install --global node-gyp
 
 ### Phase 3: IPC 및 Preload API 통합
 
-- [ ] **3.1. IPC 채널 추가**
+- [x] **3.1. IPC 채널 추가** ✅ 완료
   ```typescript
   // electron/ipc/channels.ts (업데이트)
   export const IPC_CHANNELS = {
@@ -381,7 +383,7 @@ npm install --global node-gyp
   } as const;
   ```
 
-- [ ] **3.2. 오디오 서비스 구현 (메인 프로세스)**
+- [x] **3.2. 오디오 서비스 구현 (메인 프로세스)** ✅ 완료
   ```typescript
   // electron/audio/audioService.ts
   import { BrowserWindow } from 'electron';
@@ -535,7 +537,7 @@ npm install --global node-gyp
   }
   ```
 
-- [ ] **3.3. IPC 핸들러 등록**
+- [x] **3.3. IPC 핸들러 등록** ✅ 완료
   ```typescript
   // electron/ipc/audioHandlers.ts
   import { ipcMain, BrowserWindow } from 'electron';
@@ -589,7 +591,7 @@ npm install --global node-gyp
   });
   ```
 
-- [ ] **3.4. Preload API 확장**
+- [x] **3.4. Preload API 확장** ✅ 완료
   ```typescript
   // electron/preload.ts (업데이트)
   import { AUDIO_CHANNELS, IPC_CHANNELS } from './ipc/channels';
@@ -641,7 +643,7 @@ npm install --global node-gyp
 
 ### Phase 4: UI 컴포넌트 구현 (테스트 및 설정)
 
-- [ ] **4.1. 오디오 모니터링 제어 UI**
+- [x] **4.1. 오디오 모니터링 제어 UI** ✅ 완료
   ```tsx
   // renderer/src/components/AudioMonitor.tsx
   import React, { useState, useEffect } from 'react';
@@ -749,7 +751,7 @@ npm install --global node-gyp
   }
   ```
 
-- [ ] **4.2. 메인 앱에 AudioMonitor 추가**
+- [x] **4.2. 메인 앱에 AudioMonitor 추가** ✅ 완료
   ```tsx
   // renderer/src/App.tsx (업데이트)
   import { AudioMonitor } from './components/AudioMonitor';
@@ -764,69 +766,143 @@ npm install --global node-gyp
   }
   ```
 
-### Phase 5: Windows 볼륨 제어 구현 (선택)
+### Phase 5: Windows 볼륨 제어 구현
 
-- [ ] **5.1. loudness 패키지 설치 (Windows 볼륨 API)**
-  ```bash
-  npm install loudness
-  ```
-  
-  ```typescript
-  // electron/audio/volumeController.ts
-  import loudness from 'loudness';
-  
-  export class VolumeController {
-    private originalVolume: number = 50;
-    private isAdjusted: boolean = false;
-    
-    async saveCurrentVolume(): Promise<void> {
-      this.originalVolume = await loudness.getVolume();
-      console.log(`📊 Current volume saved: ${this.originalVolume}`);
-    }
-    
-    async adjustVolume(level: number): Promise<void> {
-      // level: 0~10 → volume: 0~100
-      const targetVolume = level * 10;
-      await this.saveCurrentVolume();
-      await loudness.setVolume(targetVolume);
-      this.isAdjusted = true;
-      console.log(`🔊 Volume adjusted to: ${targetVolume}`);
-      
-      // 3초 후 원래 볼륨으로 복원
-      setTimeout(async () => {
-        await this.restoreVolume();
-      }, 3000);
-    }
-    
-    async restoreVolume(): Promise<void> {
-      if (this.isAdjusted) {
-        await loudness.setVolume(this.originalVolume);
-        this.isAdjusted = false;
-        console.log(`🔊 Volume restored to: ${this.originalVolume}`);
-      }
-    }
-  }
-  ```
-  
-  ```typescript
-  // electron/audio/audioService.ts (업데이트)
-  import { VolumeController } from './volumeController';
-  
-  export class AudioService {
-    private volumeController: VolumeController;
-    
-    constructor(private mainWindow: BrowserWindow | null) {
-      // ...
-      this.volumeController = new VolumeController();
-    }
-    
-    private async adjustVolume(): Promise<void> {
-      await this.volumeController.adjustVolume(this.volumeLevel);
-    }
-  }
-  ```
+✅ **완료: T26으로 마이그레이션됨**
 
-- [ ] **5.2. 비프음 재생 구현**
+이 Phase는 **Task 26: 앱별 볼륨 조절 마이그레이션**으로 이동하여 완료되었습니다.
+- 기존 `loudness` 패키지 제거
+- `native-sound-mixer` 패키지로 마이그레이션
+- `AppVolumeController` 구현 완료
+- `AudioService` 마이그레이션 완료
+
+**자세한 내용**: `@docs/26-app-volume-migration.md` 참조
+
+#### 프로세스 아키텍처 이해
+
+**왜 Renderer에서 직접 볼륨 제어가 불가능한가?**
+
+```
+[콘솔 테스트 - ✅ 작동]
+Node.js 프로세스 → 네이티브 모듈 직접 호출 → 시스템 볼륨 제어
+
+[Electron 앱 - ❌ 작동 안 함]
+Renderer Process (샌드박스)
+  ↓ Context Isolation: true
+  ↓ Node Integration: false
+  ↓ Sandbox: true
+  ❌ 네이티브 시스템 API 접근 불가
+  
+  ↓ 해결: IPC 통신
+  
+Main Process
+  ↓ 네이티브 모듈 호출 가능
+  ✅ 시스템 볼륨 제어
+```
+
+**보안 요구사항 (PROJECT_SPEC.md 참조)**:
+- Context Isolation: `true` - 렌더러와 Node.js 환경 분리
+- Node Integration: `false` - 렌더러에서 Node.js API 사용 불가
+- Sandbox: `true` - 시스템 리소스 접근 제한
+
+#### 시스템 전체 볼륨 제어 (deprecated)
+
+⚠️ **이 방식의 문제점**:
+- Chrome에서 유해 음성 감지 시 → **모든 앱(Discord, 게임 등)** 볼륨도 조절됨
+- 기획서 요구사항: "음성이 발생한 프로그램 오디오 크기 조절" 불만족
+- 사용자 경험 저하 (게임 중 갑자기 모든 소리가 사라짐)
+
+<details>
+<summary>참고: 시스템 볼륨 제어 코드 (사용하지 마세요)</summary>
+
+```typescript
+// ❌ 사용 금지: 시스템 전체 볼륨 조절 (문제 있음)
+// electron/audio/volumeController.ts
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+export class SystemVolumeController {
+  async setMasterVolume(volume: number): Promise<void> {
+    const normalizedVolume = Math.max(0, Math.min(100, volume));
+    const psScript = `
+      Add-Type -AssemblyName System.Windows.Forms
+      $wshell = new-object -com wscript.shell
+      1..50 | % { $wshell.SendKeys([char]174) }  # Volume down
+    `;
+    
+    await execAsync(`powershell -Command "${psScript}"`);
+  }
+}
+```
+
+**IPC 통신 구조**:
+```typescript
+// electron/ipc/channels.ts
+export const IPC_CHANNELS = {
+  AUDIO_SET_VOLUME: 'audio:setVolume',
+} as const;
+
+// electron/ipc/audioHandlers.ts
+ipcMain.handle(IPC_CHANNELS.AUDIO_SET_VOLUME, async (_event, volume: number) => {
+  await volumeController.setMasterVolume(volume);
+  return { success: true };
+});
+
+// electron/preload.ts
+contextBridge.exposeInMainWorld('api', {
+  audio: {
+    setVolume: (volume: number) => 
+      ipcRenderer.invoke(IPC_CHANNELS.AUDIO_SET_VOLUME, volume),
+  },
+});
+```
+</details>
+
+#### 올바른 접근 방법
+
+✅ **Task 26: 앱별 볼륨 조절 마이그레이션**을 진행하세요:
+- `native-sound-mixer` 패키지 사용
+- 특정 앱(Chrome, Discord 등)만 볼륨 조절
+- 기획서 요구사항 충족: "음성이 발생한 프로그램 오디오 크기 조절"
+
+**마이그레이션 가이드**: `@docs/26-app-volume-migration.md` 참조
+
+#### 프로세스 아키텍처 핵심 포인트
+
+**메인 프로세스에서 볼륨 제어를 해야 하는 이유**:
+
+1. **보안 제약** - Renderer는 샌드박스 환경에서 실행
+2. **네이티브 API 접근** - 시스템 볼륨은 네이티브 API 필요
+3. **IPC 통신** - 안전한 브리지 역할
+
+```
+┌─────────────────────────────────────────────────┐
+│  Renderer Process (React UI)                    │
+│  - 샌드박스 환경 (Context Isolation)             │
+│  - 네이티브 API 접근 불가                        │
+│                                                   │
+│  window.api.audio.setVolume(5) 호출              │
+└────────────────┬────────────────────────────────┘
+                 │ IPC (invoke)
+                 ↓
+┌─────────────────────────────────────────────────┐
+│  Main Process (Electron)                        │
+│  - 네이티브 모듈 호출 가능                       │
+│  - 시스템 API 접근 가능                          │
+│                                                   │
+│  ipcMain.handle('audio:setVolume', ...)         │
+│    ↓                                              │
+│  volumeController.setVolume(5)                   │
+│    ↓                                              │
+│  [네이티브 모듈: native-sound-mixer]              │
+│    ↓                                              │
+│  Windows Audio Session API (WASAPI)              │
+└─────────────────────────────────────────────────┘
+```
+
+- [ ] **5.2. 비프음 재생 구현** ⏸️ 보류 (선택 사항)
   ```typescript
   // electron/audio/beepPlayer.ts
   import { Howl } from 'howler';
@@ -850,6 +926,8 @@ npm install --global node-gyp
   ```
 
 ### Phase 6: 통합 테스트 및 성능 최적화
+
+⏳ **T26 완료 후 진행 예정**
 
 - [ ] **6.1. End-to-End 테스트**
   ```typescript
@@ -875,21 +953,27 @@ npm install --global node-gyp
 
 ## 🔗 관련 파일
 
-### 생성할 파일
-- `electron/audio/audioProcessor.ts` - 오디오 리샘플링/모노 변환
-- `electron/audio/audioStreamClient.ts` - WebSocket 클라이언트
-- `electron/audio/audioService.ts` - 오디오 모니터링 서비스
-- `electron/audio/volumeController.ts` - Windows 볼륨 제어
-- `electron/audio/beepPlayer.ts` - 비프음 재생
-- `electron/ipc/audioHandlers.ts` - IPC 핸들러
-- `renderer/src/components/AudioMonitor.tsx` - UI 컴포넌트
+### 생성된 파일
+- ✅ `electron/audio/audioProcessor.ts` - 오디오 리샘플링/모노 변환
+- ✅ `electron/audio/audioStreamClient.ts` - WebSocket 클라이언트
+- ✅ `electron/audio/audioService.ts` - 오디오 모니터링 서비스
+- ✅ `electron/audio/appVolumeController.ts` - 앱별 볼륨 제어 (T26 마이그레이션)
+- ✅ `electron/audio/volumeController.ts.backup` - 기존 볼륨 제어 백업
+- ✅ `electron/audio/beepPlayer.ts` - 비프음 재생 (스텁)
+- ✅ `electron/ipc/audioHandlers.ts` - IPC 핸들러
+- ✅ `renderer/src/components/AudioMonitor.tsx` - UI 컴포넌트
+- ✅ `electron/test/test_audio_capture.ts` - 오디오 캡처 테스트
+- ✅ `electron/test/test_audio_processor.ts` - 오디오 프로세서 테스트
+- ✅ `electron/test/test_streaming.ts` - 스트리밍 테스트
+- ✅ `electron/test/test_native_sound_mixer.ts` - native-sound-mixer 테스트
 
-### 수정할 파일
-- `electron/ipc/channels.ts` - 오디오 IPC 채널 추가
-- `electron/preload.ts` - 오디오 API 노출
-- `renderer/src/global.d.ts` - 타입 정의 추가
-- `electron/main.ts` - 오디오 핸들러 등록
-- `package.json` - 의존성 추가
+### 수정된 파일
+- ✅ `electron/ipc/channels.ts` - 오디오 IPC 채널 추가
+- ✅ `electron/preload.ts` - 오디오 API 노출
+- ✅ `renderer/src/global.d.ts` - 타입 정의 추가
+- ✅ `electron/main.ts` - 메인 윈도우 생성 및 오디오 핸들러 등록
+- ✅ `package.json` - 의존성 추가 (naudiodon2, ws, native-sound-mixer)
+- ✅ `renderer/src/App.tsx` - AudioMonitor 컴포넌트 추가
 
 ## 📊 테스트 계획
 
@@ -899,7 +983,7 @@ npm install --global node-gyp
 | 2 | 리샘플링 | 48kHz → 16kHz 변환 확인 | High |
 | 3 | WebSocket 전송 | 서버에서 오디오 수신 확인 | High |
 | 4 | 서버 응답 | 유해성 판별 결과 수신 | High |
-| 5 | 볼륨 조절 | 유해 감지 시 볼륨 변경 | High |
+| 5 | 볼륨 조절 | 유해 감지 시 볼륨 변경 (T26으로 마이그레이션됨) | High |
 | 6 | 전체 파이프라인 | E2E 지연율 3초 이내 | Critical |
 
 ## ⚠️ 주의사항
@@ -932,7 +1016,9 @@ npm install --global node-gyp
 ## 🔄 다음 작업
 
 이 작업 완료 후:
-- **T16: 서버 알림 수신 및 블라인드 표시** 연동
+- ✅ **T26: 앱별 볼륨 조절 마이그레이션** 완료
+- ⏳ **Phase 6: 통합 테스트 및 성능 최적화** 진행 예정
+- ⏳ **T16: 서버 알림 수신 및 블라인드 표시** 연동
   - 오디오와 텍스트(OCR) 유해성 감지 통합
   - 통합 알림 시스템 구축
 
@@ -945,7 +1031,7 @@ npm install --global node-gyp
 
 1. **사전 준비**
    - T24 (음성 STT API) 완료 및 서버 실행 확인
-   - @PROJECT_SPEC.md에서 T25 요구사항 확인
+   - @docs/PROJECT_SPEC.md에서 T25 요구사항 확인
    - @AISPNLP_종합_프로젝트_계획서.pdf의 "음성 필터 흐름도" 참조
 
 2. **이 문서 참조**

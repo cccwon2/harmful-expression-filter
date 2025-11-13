@@ -7,8 +7,8 @@
 ### 필수 문서
 새로운 작업을 시작하기 전에 **반드시** 다음 문서를 확인하세요:
 
-1. **[PROJECT_SPEC.md](./PROJECT_SPEC.md)**: 전체 프로젝트 명세서 및 요구사항
-2. **[INTERFACES.md](./INTERFACES.md)**: 핵심 인터페이스 및 연결부 코드 (⚠️ 매우 중요)
+1. **[docs/PROJECT_SPEC.md](./docs/PROJECT_SPEC.md)**: 전체 프로젝트 명세서 및 요구사항
+2. **[docs/INTERFACES.md](./docs/INTERFACES.md)**: 핵심 인터페이스 및 연결부 코드 (⚠️ 매우 중요)
 3. **[docs/TASK_WORKFLOW.md](./docs/TASK_WORKFLOW.md)**: 작업 워크플로우 가이드
 4. **[docs/00-overview.md](./docs/00-overview.md)**: 현재 작업 현황 및 상태 요약
 
@@ -44,9 +44,11 @@ npm start
 
 ```
 harmful-expression-filter/
-├── PROJECT_SPEC.md          # 마스터 플랜 (전체 프로젝트 명세서)
-├── INTERFACES.md            # 핵심 인터페이스 및 연결부 코드
-├── docs/                    # 작업/문서 모음 (Task 00~25)
+├── README.md                # 프로젝트 개요 및 빠른 시작 가이드
+├── docs/                    # 작업/문서 모음 (Task 00~26)
+│   ├── PROJECT_SPEC.md      # 마스터 플랜 (전체 프로젝트 명세서)
+│   ├── INTERFACES.md        # 핵심 인터페이스 및 연결부 코드
+│   └── ...                  # 각 작업 문서 (01~26)
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```
@@ -63,7 +65,7 @@ harmful-expression-filter/
 - `electron/windows/createOverlayWindow.ts` – 오버레이 창 생성
 - `electron/state/editMode.ts` – Edit Mode 상태 관리
 
-자세한 내용은 [INTERFACES.md](./INTERFACES.md)와 각 Task 문서를 참조하세요.
+자세한 내용은 [docs/INTERFACES.md](./docs/INTERFACES.md)와 각 Task 문서를 참조하세요.
 
 ## 📝 작업 추가하기
 

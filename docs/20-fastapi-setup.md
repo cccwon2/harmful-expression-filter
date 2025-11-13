@@ -28,7 +28,7 @@ Electron 클라이언트와 연동할 백엔드 API 서버의 토대를 FastAPI�
 - Python 3.10+
 - FastAPI, Uvicorn
 - pydantic, python-dotenv (선택)
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md)의 서버 아키텍처 섹션
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md)의 서버 아키텍처 섹션
 
 ## 관련 파일
 - `backend/app/main.py`

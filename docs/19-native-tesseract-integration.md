@@ -33,7 +33,7 @@
 ## 의존성
 - [작업 15: OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md)
 - [작업 18: ROI/모드 영속화 및 부팅 시 복원](./18-persistence-boot-restore.md)
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md)의 OCR 파이프라인 요구사항
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md)의 OCR 파이프라인 요구사항
 
 ## 관련 파일
 - `electron/main.ts` – OCR 시작 IPC 처리 지점
@@ -111,5 +111,5 @@ ipcMain.on(IPC_CHANNELS.OCR_START, async (_event, roiPayload) => {
 ## 참조
 - [Tesseract OCR 공식 문서](https://tesseract-ocr.github.io/)
 - [Electron `child_process.execFile` 문서](https://nodejs.org/api/child_process.html#child_processexecfilefile-args-options-callback)
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md)
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md)
 

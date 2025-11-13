@@ -41,12 +41,22 @@ export const IPC_CHANNELS = {
   OCR_START: 'ocr:start',
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',
+  AUDIO_STATUS: 'audio:status',
+  AUDIO_HARMFUL_DETECTED: 'audio:harmful-detected',
 } as const;
 
 export const SERVER_CHANNELS = {
   HEALTH_CHECK: 'server:health-check',
   ANALYZE_TEXT: 'server:analyze-text',
   GET_KEYWORDS: 'server:get-keywords',
+} as const;
+
+export const AUDIO_CHANNELS = {
+  START_MONITORING: 'audio:start-monitoring',
+  STOP_MONITORING: 'audio:stop-monitoring',
+  GET_STATUS: 'audio:get-status',
+  SET_VOLUME_LEVEL: 'audio:set-volume-level',
+  SET_BEEP_ENABLED: 'audio:set-beep-enabled',
 } as const;
 ```
 
@@ -95,7 +105,7 @@ export interface SelectionState {
 ### 3. Preload API 타입
 **파일**: `renderer/src/global.d.ts`
 
-렌더러 프로세스에서 사용 가능한 `window.api`의 타입 정의입니다. Task 23 완료 이후 서버 API 타입이 추가되었습니다.
+렌더러 프로세스에서 사용 가능한 `window.api`의 타입 정의입니다. Task 23 완료 이후 서버 API 타입이 추가되었고, Task 25 완료 이후 오디오 API 타입이 추가되었습니다.
 
 ```typescript
 interface ServerAPI {
@@ -130,6 +140,19 @@ declare global {
         onServerAlert: (callback: (harmful: boolean) => void) => () => void;
       };
       server: ServerAPI;
+      audio: {
+        startMonitoring: () => Promise<{ success: boolean; error?: string }>;
+        stopMonitoring: () => Promise<{ success: boolean }>;
+        getStatus: () => Promise<{
+          isMonitoring: boolean;
+          volumeLevel: number;
+          beepEnabled: boolean;
+        }>;
+        setVolumeLevel: (level: number) => Promise<{ success: boolean }>;
+        setBeepEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+        onStatusChange: (callback: (status: any) => void) => void;
+        onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
     };
   }
 }
@@ -144,7 +167,7 @@ declare global {
 ### 4. Preload 구현
 **파일**: `electron/preload.ts`
 
-렌더러 프로세스에 노출되는 실제 API 구현입니다. 현재 ROI/Edit Mode/Overlay API와 함께 서버 API(`healthCheck`, `analyzeText`, `getKeywords`)가 노출되어 있습니다.
+렌더러 프로세스에 노출되는 실제 API 구현입니다. 현재 ROI/Edit Mode/Overlay API와 함께 서버 API(`healthCheck`, `analyzeText`, `getKeywords`)와 오디오 API가 노출되어 있습니다.
 
 ```typescript
 contextBridge.exposeInMainWorld('api', {
@@ -154,12 +177,25 @@ contextBridge.exposeInMainWorld('api', {
     analyzeText: (text: string) => ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text),
     getKeywords: () => ipcRenderer.invoke(SERVER_CHANNELS.GET_KEYWORDS),
   },
+  audio: {
+    startMonitoring: () => ipcRenderer.invoke(AUDIO_CHANNELS.START_MONITORING),
+    stopMonitoring: () => ipcRenderer.invoke(AUDIO_CHANNELS.STOP_MONITORING),
+    getStatus: () => ipcRenderer.invoke(AUDIO_CHANNELS.GET_STATUS),
+    setVolumeLevel: (level: number) => ipcRenderer.invoke(AUDIO_CHANNELS.SET_VOLUME_LEVEL, level),
+    setBeepEnabled: (enabled: boolean) => ipcRenderer.invoke(AUDIO_CHANNELS.SET_BEEP_ENABLED, enabled),
+    onStatusChange: (callback: (status: any) => void) => {
+      ipcRenderer.on(IPC_CHANNELS.AUDIO_STATUS, (_, status) => callback(status));
+    },
+    onHarmfulDetected: (callback: (data: any) => void) => {
+      ipcRenderer.on(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, (_, data) => callback(data));
+    },
+  },
 });
 ```
 
 **사용 예시**:
 - 새로운 API 추가 시: 이 파일에 API 구현 추가
-- IPC 채널 사용: `IPC_CHANNELS` 또는 `SERVER_CHANNELS` 에서 채널 이름 import
+- IPC 채널 사용: `IPC_CHANNELS` 또는 `SERVER_CHANNELS` 또는 `AUDIO_CHANNELS` 에서 채널 이름 import
 
 ---
 
@@ -187,7 +223,32 @@ ipcMain.handle(SERVER_CHANNELS.GET_KEYWORDS, async () => {
 
 ---
 
-### 6. 오버레이 창 생성
+### 6. 오디오 IPC 핸들러
+**파일**: `electron/ipc/audioHandlers.ts`
+
+오디오 모니터링 관련 IPC 통신을 처리하는 핸들러입니다. Task 25에서 도입되었습니다.
+
+```typescript
+export function registerAudioHandlers(mainWindow: BrowserWindow) {
+  audioService = new AudioService(mainWindow);
+  
+  ipcMain.handle(AUDIO_CHANNELS.START_MONITORING, async () => {
+    await audioService!.startMonitoring();
+    return { success: true };
+  });
+  
+  ipcMain.handle(AUDIO_CHANNELS.STOP_MONITORING, () => {
+    audioService!.stopMonitoring();
+    return { success: true };
+  });
+  
+  // ... 기타 핸들러
+}
+```
+
+---
+
+### 7. 오버레이 창 생성
 **파일**: `electron/windows/createOverlayWindow.ts`
 
 투명 오버레이 창을 생성하고 관리하는 함수입니다.
@@ -204,7 +265,7 @@ ipcMain.handle(SERVER_CHANNELS.GET_KEYWORDS, async () => {
 
 ---
 
-### 7. Edit Mode 상태 관리
+### 8. Edit Mode 상태 관리
 **파일**: `electron/state/editMode.ts`
 
 Edit Mode 상태를 중앙에서 관리하는 모듈입니다.
@@ -222,7 +283,7 @@ export function setTrayUpdateCallback(callback: (() => void) | null): void;
 
 ---
 
-### 8. ROI IPC 핸들러
+### 9. ROI IPC 핸들러
 **파일**: `electron/ipc/roi.ts`
 
 ROI 선택 관련 IPC 통신을 처리하는 핸들러입니다.
@@ -239,7 +300,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 9. 오버레이 React 컴포넌트
+### 10. 오버레이 React 컴포넌트
 **파일**: `renderer/src/overlay/OverlayApp.tsx`
 
 오버레이 창의 React UI 컴포넌트입니다.
@@ -256,7 +317,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 10. 저장소 (electron-store)
+### 11. 저장소 (electron-store)
 **파일**: `electron/store.ts`
 
 ROI와 모드 상태를 영속화하는 경량 래퍼입니다.
@@ -277,7 +338,7 @@ export function getStoreSnapshot(): StoreData;
 
 ---
 
-### 11. 모니터링 & OCR
+### 12. 모니터링 & OCR
 **파일**: `electron/main.ts`
 
 주요 역할:
@@ -288,14 +349,30 @@ export function getStoreSnapshot(): StoreData;
 
 ---
 
-### 12. OCR Worker - 향후 추가
-**파일**: `electron/ocrWorker.ts` (새로 생성 예정)
+### 13. 오디오 모니터링 서비스
+**파일**: `electron/audio/audioService.ts`
 
-OCR/STT 파이프라인을 관리하는 모듈입니다.
+오디오 캡처, 처리, WebSocket 통신을 통합 관리합니다. Task 25에서 도입되었습니다.
 
-**사용 예시**:
-- OCR 시작: `ipcMain.on(OCR_START, ...)`
-- OCR 중지: `ipcMain.on(OCR_STOP, ...)`
+**주요 기능**:
+- Windows 오디오 캡처 (WASAPI Loopback)
+- 오디오 리샘플링 (48kHz → 16kHz)
+- WebSocket을 통한 서버 전송
+- 서버 응답 기반 유해성 감지
+- 앱별 볼륨 조절 (AppVolumeController 사용)
+
+---
+
+### 14. 앱별 볼륨 제어
+**파일**: `electron/audio/appVolumeController.ts`
+
+앱별로 독립적으로 볼륨을 조절하는 모듈입니다. Task 26에서 도입되었습니다.
+
+**주요 기능**:
+- 실행 중인 오디오 세션 조회
+- 특정 앱 볼륨 조절
+- 모든 앱 음소거 (폴백 방식)
+- 자동 복원 (3초 후)
 
 ---
 
@@ -303,7 +380,7 @@ OCR/STT 파이프라인을 관리하는 모듈입니다.
 
 새로운 작업(예: T12: 트레이 메뉴 "영역 지정")을 시작할 때:
 
-1. ✅ **마스터 플랜 확인**: `PROJECT_SPEC.md`에서 작업 요구사항 확인
+1. ✅ **마스터 플랜 확인**: `docs/PROJECT_SPEC.md`에서 작업 요구사항 확인
 2. ✅ **IPC 채널 확인**: `electron/ipc/channels.ts`에서 사용 가능한 채널 확인
 3. ✅ **타입 확인**: `renderer/src/overlay/roiTypes.ts`에서 사용 가능한 타입 확인
 4. ✅ **API 확인**: `renderer/src/global.d.ts`와 `electron/preload.ts`에서 사용 가능한 API 확인
@@ -313,7 +390,7 @@ OCR/STT 파이프라인을 관리하는 모듈입니다.
 
 ```
 작업 지시:
-1. PROJECT_SPEC.md에서 T12 요구사항 확인
+1. docs/PROJECT_SPEC.md에서 T12 요구사항 확인
 2. 다음 파일들을 반드시 참조:
    - @electron/ipc/channels.ts (OVERLAY_SET_MODE 채널 확인)
    - @electron/tray.ts (트레이 메뉴 구조 확인)
@@ -328,7 +405,7 @@ OCR/STT 파이프라인을 관리하는 모듈입니다.
 
 ```
 작업 지시:
-1. PROJECT_SPEC.md에서 T15 요구사항 확인
+1. docs/PROJECT_SPEC.md에서 T15 요구사항 확인
 2. 다음 파일들을 반드시 참조:
    - @electron/ipc/channels.ts (OCR_START, OCR_STOP 채널 확인)
    - @renderer/src/overlay/roiTypes.ts (ROI 타입 확인)
@@ -350,7 +427,8 @@ OCR/STT 파이프라인을 관리하는 모듈입니다.
 
 ## 관련 문서
 
-- `PROJECT_SPEC.md`: 전체 프로젝트 명세서
+- `docs/PROJECT_SPEC.md`: 전체 프로젝트 명세서
 - `docs/00-overview.md`: 작업 개요
 - 각 작업 문서: `docs/01-electron-setup.md` 등
+
 

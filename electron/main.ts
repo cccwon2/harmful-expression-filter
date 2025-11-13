@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, ipcMain, globalShortcut, desktopCapturer, screen } from 'electron';
 import { createOverlayWindow, setExitEditModeAndHideHandler } from './windows/createOverlayWindow';
+import { createMainWindow } from './windows/createMainWindow';
 import { createTray } from './tray';
 import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
@@ -18,6 +19,7 @@ const CAPTURE_FILE_NAME = 'captured.png';
 const OCR_LANGUAGES = 'kor';  // 한국어만 지원
 const SERVER_ANALYZE_URL = 'http://127.0.0.1:8000/analyze';
 
+let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
 let currentROI: ROI | null = null;
@@ -47,14 +49,20 @@ app.whenReady().then(async () => {
     console.log('[Main] FastAPI server 연결이 확인되었습니다.');
   }
 
+  // 메인 윈도우 생성 (AudioMonitor UI용)
+  mainWindow = createMainWindow();
+  
   // 오버레이 창 생성 (초기에는 숨김, 기본 상태는 클릭스루)
   overlayWindow = createOverlayWindow();
   
   // Edit Mode 상태 관리에 오버레이 창 등록
   if (overlayWindow) {
     setOverlayWindow(overlayWindow);
-    // 오디오 핸들러 등록
-    registerAudioHandlers(overlayWindow);
+  }
+  
+  // 오디오 핸들러 등록 (메인 윈도우에 등록하여 AudioMonitor에서 사용)
+  if (mainWindow) {
+    registerAudioHandlers(mainWindow);
   }
   
   const sendOverlayMode = (mode: OverlayMode) => {

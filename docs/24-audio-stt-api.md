@@ -352,7 +352,7 @@ transformers==4.35.0
 작업: T24 - 음성 STT API 구현 (FastAPI)
 
 1. **마스터 플랜 확인**
-   - @PROJECT_SPEC.md에서 T24 요구사항 확인
+   - @docs/PROJECT_SPEC.md에서 T24 요구사항 확인
    - @AISPNLP_종합_프로젝트_계획서.pdf의 "음성 필터 흐름도" 참조
 
 2. **이 문서 참조**

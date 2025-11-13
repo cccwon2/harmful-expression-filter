@@ -101,7 +101,7 @@
 - 감지 모드 자동 전환 (OVERLAY_SET_MODE, OVERLAY_STATE_PUSH, 클릭-스루 활성화)
 
 ### T14: 감지 모드 HUD 표시 ✅
-- ROI 영역에 빨간색 테두리 및 “감시 중” 라벨 표시
+- ROI 영역에 빨간색 테두리 및 "감시 중" 라벨 표시
 - 감지 모드에서 클릭-스루 유지
 
 ### T15: OCR/STT 파이프라인 스텁 ✅
@@ -143,14 +143,28 @@
 - Preload에서 서버 API를 노출하고 타입 정의 업데이트
 - Renderer 개발용 `ServerTest` 컴포넌트로 헬스/분석/키워드 조회 테스트 가능
 
+### T24: 음성 STT API ✅
+- FastAPI 서버에 WebSocket 기반 음성 스트리밍 엔드포인트 구현
+- Whisper 모델을 사용한 실시간 음성 인식
+- 유해성 판별 통합
+
+### T25: 음성 Electron 연동 ✅
+- Windows 오디오 캡처 (WASAPI Loopback)
+- WebSocket을 통한 실시간 오디오 스트리밍
+- 서버 응답 기반 유해성 감지
+- 앱별 볼륨 조절 (T26으로 마이그레이션됨)
+
+### T26: 앱별 볼륨 조절 마이그레이션 ✅
+- `loudness` 패키지 제거 및 `native-sound-mixer`로 마이그레이션
+- 앱별 독립 볼륨 조절 기능
+- 기획서 요구사항 충족: "음성이 발생한 프로그램 오디오 크기 조절"
+
 ## 향후 작업 (Future Tasks)
 
 - T16: 서버 알림 수신 및 블라인드 표시 (진행 중)
 - T18: 저장소 마이그레이션 및 상태 복원 마무리
 - T19: 네이티브 Tesseract 통합 (성능 향상)
-- T24: 음성 STT API 구현 (FastAPI)
-- T25: 음성 Electron 연동 (녹음/IPC/서버 호출)
-- 실제 OCR/음성 분석 파이프라인 고도화, Blur/비프음/볼륨 조절 동작 연동
+- T25 Phase 6: 통합 테스트 및 성능 최적화
 
 ## 핵심 인터페이스 및 타입
 
@@ -171,12 +185,22 @@ export const IPC_CHANNELS = {
   OCR_START: 'ocr:start',
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',
+  AUDIO_STATUS: 'audio:status',
+  AUDIO_HARMFUL_DETECTED: 'audio:harmful-detected',
 } as const;
 
 export const SERVER_CHANNELS = {
   HEALTH_CHECK: 'server:health-check',
   ANALYZE_TEXT: 'server:analyze-text',
   GET_KEYWORDS: 'server:get-keywords',
+} as const;
+
+export const AUDIO_CHANNELS = {
+  START_MONITORING: 'audio:start-monitoring',
+  STOP_MONITORING: 'audio:stop-monitoring',
+  GET_STATUS: 'audio:get-status',
+  SET_VOLUME_LEVEL: 'audio:set-volume-level',
+  SET_BEEP_ENABLED: 'audio:set-beep-enabled',
 } as const;
 ```
 
@@ -219,6 +243,20 @@ interface Window {
       hide: () => void;
       setClickThrough: (enabled: boolean) => Promise<void>;
     };
+    server: ServerAPI;
+    audio: {
+      startMonitoring: () => Promise<{ success: boolean; error?: string }>;
+      stopMonitoring: () => Promise<{ success: boolean }>;
+      getStatus: () => Promise<{
+        isMonitoring: boolean;
+        volumeLevel: number;
+        beepEnabled: boolean;
+      }>;
+      setVolumeLevel: (level: number) => Promise<{ success: boolean }>;
+      setBeepEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+      onStatusChange: (callback: (status: any) => void) => void;
+      onHarmfulDetected: (callback: (data: any) => void) => void;
+    };
   };
 }
 ```
@@ -237,6 +275,9 @@ interface Window {
 - Electron 28.0.0
 - React 18.2.0
 - Vite 5.0.5
+- Python 3.11+
+- FastAPI
+- Whisper (음성 인식)
 
 ## 빌드 및 실행
 
@@ -265,4 +306,6 @@ npm start
 ## 업데이트 히스토리
 
 - 2024-01-XX: 초기 명세서 작성
+- 2024-XX-XX: T24-T26 완료 반영
+
 

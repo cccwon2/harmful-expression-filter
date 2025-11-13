@@ -120,6 +120,6 @@ ipcMain.on(IPC_CHANNELS.OVERLAY_SET_MODE, (_event, mode: OverlayMode) => {
 - [작업 18: ROI/모드 영속화 및 부팅 시 복원](./18-persistence-boot-restore.md)
 
 ## 참조
-- [INTERFACES.md](../INTERFACES.md): 핵심 인터페이스 문서
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md): 프로젝트 명세서
+- [INTERFACES.md](./INTERFACES.md): 핵심 인터페이스 문서
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md): 프로젝트 명세서
 

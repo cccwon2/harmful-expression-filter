@@ -148,6 +148,6 @@ useEffect(() => {
 - [작업 17: ESC/트레이로 설정 모드 재진입](./17-escape-tray-resetup.md)
 
 ## 참조
-- [INTERFACES.md](../INTERFACES.md): 핵심 인터페이스 문서
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md): 프로젝트 명세서
+- [INTERFACES.md](./INTERFACES.md): 핵심 인터페이스 문서
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md): 프로젝트 명세서
 

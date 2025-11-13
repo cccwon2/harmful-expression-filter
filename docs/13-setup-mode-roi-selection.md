@@ -83,6 +83,6 @@
 - [작업 15: OCR/STT 파이프라인 스텁](./15-ocr-stt-stub.md)
 
 ## 참조
-- [INTERFACES.md](../INTERFACES.md): 핵심 인터페이스 문서
-- [PROJECT_SPEC.md](../PROJECT_SPEC.md): 프로젝트 명세서
+- [INTERFACES.md](./INTERFACES.md): 핵심 인터페이스 문서
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md): 프로젝트 명세서
 
