@@ -580,16 +580,69 @@ export const OverlayApp: React.FC = () => {
             top: '20px',
             left: '50%',
             transform: 'translateX(-50%)',
-            padding: '10px 20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            color: '#00ff00',
-            borderRadius: '5px',
-            fontSize: '14px',
+            padding: '16px 24px',
+            backgroundColor: 'rgba(16, 185, 129, 0.95)',
+            color: '#ffffff',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: 600,
             zIndex: 1001,
             pointerEvents: 'none',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+            border: '2px solid rgba(255, 255, 255, 0.2)',
+            backdropFilter: 'blur(10px)',
+            maxWidth: '90vw',
+            textAlign: 'center',
           }}
         >
-          ROI 선택 완료. ESC 키를 눌러 다시 선택하거나 Ctrl+E/Q로 Edit Mode를 종료하세요.
+          <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <span role="img" aria-label="check" style={{ fontSize: '20px' }}>
+              ✅
+            </span>
+            <span>ROI 영역 선택 완료</span>
+          </div>
+          <div style={{ 
+            fontSize: '13px', 
+            opacity: 0.95, 
+            marginTop: '8px',
+            paddingTop: '8px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <kbd style={{ 
+                padding: '2px 6px', 
+                backgroundColor: 'rgba(0, 0, 0, 0.3)', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+              }}>ESC</kbd>
+              <span>다시 선택</span>
+            </span>
+            <span style={{ opacity: 0.6 }}>•</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <kbd style={{ 
+                padding: '2px 6px', 
+                backgroundColor: 'rgba(0, 0, 0, 0.3)', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+              }}>Ctrl+E</kbd>
+              <span>또는</span>
+              <kbd style={{ 
+                padding: '2px 6px', 
+                backgroundColor: 'rgba(0, 0, 0, 0.3)', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+              }}>Ctrl+Q</kbd>
+              <span>Edit Mode 종료</span>
+            </span>
+          </div>
         </div>
       )}
 
@@ -651,27 +704,76 @@ export const OverlayApp: React.FC = () => {
         />
       )}
 
-      {/* 사용 안내 - Edit Mode일 때만 표시 */}
-      {!selectionState && !isSelectionComplete && (
+      {/* 사용 안내 - setup 모드일 때만 표시 */}
+      {mode === 'setup' && !selectionState && !isSelectionComplete && (
         <div
           style={{
             position: 'fixed',
             top: '20px',
             left: '50%',
             transform: 'translateX(-50%)',
-            padding: '10px 20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: '16px 24px',
+            backgroundColor: 'rgba(37, 99, 235, 0.95)',
             color: '#ffffff',
-            borderRadius: '5px',
-            fontSize: '14px',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: 600,
             zIndex: 1001,
             pointerEvents: 'none',
             textAlign: 'center',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+            border: '2px solid rgba(255, 255, 255, 0.2)',
+            backdropFilter: 'blur(10px)',
+            maxWidth: '90vw',
           }}
         >
-          <div>Edit Mode: 마우스를 드래그하여 ROI 영역을 선택하세요</div>
-          <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.7 }}>
-            Ctrl+E 또는 Ctrl+Q: Edit Mode 종료 | ESC: ROI 선택 취소
+          <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <span role="img" aria-label="mouse" style={{ fontSize: '20px' }}>
+              🖱️
+            </span>
+            <span>마우스를 드래그하여 ROI 영역을 선택하세요</span>
+          </div>
+          <div style={{ 
+            fontSize: '13px', 
+            opacity: 0.95, 
+            marginTop: '8px',
+            paddingTop: '8px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <kbd style={{ 
+                padding: '2px 6px', 
+                backgroundColor: 'rgba(0, 0, 0, 0.3)', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+              }}>ESC</kbd>
+              <span>취소</span>
+            </span>
+            <span style={{ opacity: 0.6 }}>•</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <kbd style={{ 
+                padding: '2px 6px', 
+                backgroundColor: 'rgba(0, 0, 0, 0.3)', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+              }}>Ctrl+E</kbd>
+              <span>또는</span>
+              <kbd style={{ 
+                padding: '2px 6px', 
+                backgroundColor: 'rgba(0, 0, 0, 0.3)', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+              }}>Ctrl+Q</kbd>
+              <span>Edit Mode 종료</span>
+            </span>
           </div>
         </div>
       )}
