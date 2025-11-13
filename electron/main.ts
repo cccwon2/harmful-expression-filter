@@ -319,7 +319,7 @@ app.whenReady().then(async () => {
       return;
     }
 
-    console.log('[Main] Stopping monitoring', reason ? `(${reason})` : '');
+    console.log('[Main] Stopping OCR monitoring', reason ? `(${reason})` : '');
 
     isMonitoring = false;
     currentROI = null;
@@ -331,13 +331,8 @@ app.whenReady().then(async () => {
     pushOverlayState({ mode: 'setup' });
     setEditModeState(true);
 
-    // 오디오 모니터링도 중지
-    const { getAudioService } = require('./ipc/audioHandlers');
-    const audioService = getAudioService();
-    if (audioService) {
-      audioService.stopMonitoring();
-      console.log('[Main] Audio monitoring stopped');
-    }
+    // 오디오 모니터링은 ROI와 독립적으로 동작하므로 OCR 모니터링 중지 시 오디오 모니터링은 중지하지 않음
+    // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
 
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       try {
@@ -389,30 +384,18 @@ app.whenReady().then(async () => {
         currentROI = roi;
         console.log('[Main] Current ROI updated:', roi);
         
-        // ROI 선택 후 OCR 모니터링 시작
+        // ROI 선택 후 OCR 모니터링 시작 (오디오 모니터링과 독립적)
         startMonitoring();
         
-        // 오디오 모니터링도 자동으로 시작
-        const { getAudioService } = require('./ipc/audioHandlers');
-        const audioService = getAudioService();
-        if (audioService) {
-          audioService.startMonitoring().catch((err: any) => {
-            console.error('[Main] Failed to start audio monitoring after ROI selection:', err);
-            // 오디오 모니터링 실패는 치명적이지 않으므로 경고만 출력
-          });
-        } else {
-          console.warn('[Main] AudioService is not available - audio monitoring will not start');
-        }
+        // 오디오 모니터링은 ROI와 독립적으로 동작하므로 여기서 시작하지 않음
+        // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
       },
       onROICancelled: () => {
+        // OCR 모니터링만 중지 (오디오 모니터링은 유지)
         stopMonitoring('ROI selection cancelled');
         
-        // 오디오 모니터링도 중지
-        const { getAudioService } = require('./ipc/audioHandlers');
-        const audioService = getAudioService();
-        if (audioService) {
-          audioService.stopMonitoring();
-        }
+        // 오디오 모니터링은 ROI와 독립적이므로 중지하지 않음
+        // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
       },
     });
   }
@@ -759,19 +742,11 @@ app.whenReady().then(async () => {
           harmful: false,
         });
 
+        // OCR 모니터링 시작 (오디오 모니터링과 독립적)
         startMonitoring();
         
-        // 저장된 상태 복원 시 오디오 모니터링도 자동 시작
-        const { getAudioService } = require('./ipc/audioHandlers');
-        const audioService = getAudioService();
-        if (audioService) {
-          audioService.startMonitoring().catch((err: any) => {
-            console.error('[Main] Failed to start audio monitoring after state restore:', err);
-            // 오디오 모니터링 실패는 치명적이지 않으므로 경고만 출력
-          });
-        } else {
-          console.warn('[Main] AudioService is not available - audio monitoring will not start');
-        }
+        // 오디오 모니터링은 ROI와 독립적으로 동작하므로 여기서 자동 시작하지 않음
+        // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
       } else {
         console.log('[Main] Starting in setup mode (no saved state)');
         enterSetupMode();
@@ -784,7 +759,18 @@ app.whenReady().then(async () => {
   });
 
   app.on('before-quit', () => {
+    // OCR 모니터링 중지
     stopMonitoring('Application quitting');
+    
+    // 오디오 모니터링도 중지 (앱 종료 시)
+    const { getAudioService } = require('./ipc/audioHandlers');
+    const audioService = getAudioService();
+    if (audioService) {
+      audioService.stopMonitoring();
+      console.log('[Main] Audio monitoring stopped (app quitting)');
+    }
+    
+    // OCR 워커 종료
     if (ocrWorker && typeof ocrWorker.terminate === 'function') {
       ocrWorker
         .terminate()
