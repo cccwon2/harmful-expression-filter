@@ -241,19 +241,22 @@ app.whenReady().then(async () => {
         console.log(`[OCR] 추출 완료: ${texts.length}개 텍스트, 총 ${processing_time.total.toFixed(3)}초 (OCR: ${processing_time.ocr.toFixed(3)}초, 분석: ${processing_time.analysis.toFixed(3)}초)`);
         console.log(`[OCR] 텍스트: ${texts.join(' ')}`);
         
-        // 5. 유해성 감지 시 알림
-        if (is_harmful) {
-          console.warn(`[OCR] 🚨 유해 표현 감지: ${harmful_words.join(', ')}`);
-          
-          // 오버레이에 알림 전송
-          if (overlayWindow && !overlayWindow.isDestroyed()) {
+        // 5. 유해성 감지 시 알림 (harmful=true/false 모두 전송)
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+          if (is_harmful) {
+            console.warn(`[OCR] 🚨 유해 표현 감지: ${harmful_words.join(', ')}`);
             overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: true,
               words: harmful_words,
             });
+          } else {
+            console.log('[OCR] ✅ 유해 표현 없음');
+            // harmful=false도 전송하여 블라인드 해제 타이머 시작
+            overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
+              harmful: false,
+              words: [],
+            });
           }
-        } else {
-          console.log('[OCR] ✅ 유해 표현 없음');
         }
 
         if (!isMonitoring || !currentROI) {
