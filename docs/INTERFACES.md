@@ -49,6 +49,8 @@ export const SERVER_CHANNELS = {
   HEALTH_CHECK: 'server:health-check',
   ANALYZE_TEXT: 'server:analyze-text',
   GET_KEYWORDS: 'server:get-keywords',
+  OCR_IMAGE: 'server:ocr-image',              // 🆕 OCR만
+  OCR_AND_ANALYZE: 'server:ocr-and-analyze',  // 🆕 OCR + 분석
 } as const;
 
 export const AUDIO_CHANNELS = {
@@ -105,13 +107,28 @@ export interface SelectionState {
 ### 3. Preload API 타입
 **파일**: `renderer/src/global.d.ts`
 
-렌더러 프로세스에서 사용 가능한 `window.api`의 타입 정의입니다. Task 23 완료 이후 서버 API 타입이 추가되었고, Task 25 완료 이후 오디오 API 타입이 추가되었습니다.
+렌더러 프로세스에서 사용 가능한 `window.api`의 타입 정의입니다. Task 23 완료 이후 서버 API 타입이 추가되었고, Task 25 완료 이후 오디오 API 타입이 추가되었으며, Task 28 완료 이후 OCR API 타입이 추가되었습니다.
 
 ```typescript
 interface ServerAPI {
   healthCheck: () => Promise<ServerHealthResponse | ServerErrorResponse>;
   analyzeText: (text: string) => Promise<ServerAnalyzeResponse | ServerErrorResponse>;
   getKeywords: () => Promise<ServerKeywordsResponse | ServerErrorResponse>;
+  ocrImage: (imageBuffer: Buffer) => Promise<{ 
+    success: boolean; 
+    data?: { texts: string[]; processing_time: number; text_count: number }; 
+    error?: string 
+  }>;  // 🆕 Task 28
+  ocrAndAnalyze: (imageBuffer: Buffer) => Promise<{ 
+    success: boolean; 
+    data?: { 
+      texts: string[]; 
+      is_harmful: boolean; 
+      harmful_words: string[]; 
+      processing_time: { ocr: number; analysis: number; total: number } 
+    }; 
+    error?: string 
+  }>;  // 🆕 Task 28
 }
 
 declare global {

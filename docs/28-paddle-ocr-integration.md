@@ -1,5 +1,8 @@
 # Task 28: PaddleOCR 서버 연동 및 Tesseract.js 대체
 
+## 상태
+✅ 완료
+
 ## 📋 작업 개요
 
 **목표**: Tesseract.js 클라이언트 기반 OCR을 PaddleOCR 서버 기반 OCR로 전환하여 인식 정확도 및 성능 향상
@@ -731,20 +734,30 @@ print(f"목표 달성: {'✅' if avg_time < 3.0 else '❌'}")
 
 ## 🔧 환경 변수 설정
 
-**파일**: `.env` (Electron 루트)
+### Electron 환경 변수
+**파일**: `.env` (프로젝트 루트)
 
 ```bash
 # [Electron: .env]
-SERVER_URL=http://localhost:8000
+SERVER_URL=http://127.0.0.1:8000
 ```
 
-**파일**: `.env` (서버 루트)
+**설명**: Electron 앱이 FastAPI 서버에 연결할 URL을 설정합니다. `dotenv` 패키지를 통해 자동 로드됩니다.
+
+### 서버 환경 변수
+**파일**: `server/.env` (서버 루트)
 
 ```bash
-# [Server: .env]
+# [Server: server/.env]
 PADDLEOCR_LANG=korean
-PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속
+PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속 (NVIDIA GPU만 지원)
 ```
+
+**설명**: 
+- `PADDLEOCR_LANG`: OCR 언어 설정 (기본값: 'korean')
+- `PADDLEOCR_USE_GPU`: GPU 사용 여부 (기본값: false, AMD Radeon은 지원 안 됨)
+
+**⚠️ 중요**: 서버의 모든 Python 라이브러리는 `venv311` 가상환경에서만 관리합니다.
 
 ---
 
@@ -778,9 +791,48 @@ PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속
 
 ---
 
+## ✅ 작업 완료 보고
+
+### Phase 1: 서버 측 PaddleOCR 서비스 구현 ✅
+- `server/services/paddle_ocr_service.py` 생성 완료
+- PaddleOCRService 클래스 구현 (환경 변수 연동)
+- 싱글톤 패턴 `get_ocr_service()` 함수 구현
+- venv311 환경에 의존성 설치 완료
+
+### Phase 2: FastAPI OCR 엔드포인트 추가 ✅
+- `/api/ocr` 엔드포인트 추가
+- `/api/ocr-and-analyze` 엔드포인트 추가 (OCR + 유해성 분석 통합)
+- `startup_event()`에서 OCR 서비스 프리로드
+- 기존 `check_keywords()` 함수 활용
+
+### Phase 3: Electron IPC 핸들러 업데이트 ✅
+- `SERVER_CHANNELS`에 `OCR_IMAGE`, `OCR_AND_ANALYZE` 추가
+- `serverHandlers.ts`에 OCR 핸들러 2개 추가 (FormData 전송)
+- `preload.ts`에 `ocrImage()`, `ocrAndAnalyze()` 메서드 추가
+- `global.d.ts`에 타입 정의 확장
+
+### Phase 4: OCR 파이프라인 로직 수정 ✅
+- Tesseract.js 완전 제거 (import, 워커, 의존성)
+- `captureAndProcessROI()` 함수를 서버 기반으로 재구현
+- `sendImageToServer()` 함수 추가
+- 모니터링 루프 업데이트 (OCR_START/OCR_STOP IPC 핸들러)
+- `package.json`에서 tesseract.js 의존성 제거
+
+### Phase 5: 통합 테스트 ✅
+- 서버 단독 테스트 완료
+- Electron 통합 테스트 완료
+- 상태 동기화 문제 해결 (harmful=false도 ALERT_FROM_SERVER 전송)
+
+### 주요 변경 사항
+- **환경 변수 연동**: `.env` 파일에서 `SERVER_URL`, `PADDLEOCR_LANG`, `PADDLEOCR_USE_GPU` 설정
+- **가상환경 관리**: server 폴더의 모든 Python 라이브러리는 `venv311`에서만 관리
+- **의존성 호환성**: NumPy 1.x 사용 (PaddleOCR/imgaug 호환성)
+- **상태 동기화**: harmful=true/false 모두 ALERT_FROM_SERVER로 전송하여 블라인드 상태 정확히 관리
+
 ## 🎯 작업 완료 후 다음 단계
 
 - [ ] T16: 서버 알림 수신 통합 (OCR + 음성 유해성 통합 알림)
 - [ ] 성능 모니터링 대시보드 추가 (관리자 페이지)
-- [ ] GPU 버전 PaddleOCR로 전환 (성능 향상)
+- [ ] GPU 버전 PaddleOCR로 전환 (성능 향상, NVIDIA GPU만 지원)
 - [ ] 다국어 지원 (영어, 일본어 등)
+- [ ] OCR 인식 정확도 개선 (이미지 전처리, ROI 크기 최적화)

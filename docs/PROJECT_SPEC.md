@@ -104,8 +104,9 @@
 - ROI 영역에 빨간색 테두리 및 "감시 중" 라벨 표시
 - 감지 모드에서 클릭-스루 유지
 
-### T15: OCR/STT 파이프라인 스텁 ✅
-- Tesseract.js 기반 OCR 워커 초기화
+### T15: OCR/STT 파이프라인 스텁 ✅ (Task 28에서 PaddleOCR로 대체됨)
+- ~~Tesseract.js 기반 OCR 워커 초기화~~ (제거됨)
+- ✅ PaddleOCR 서버 기반 OCR로 전환 (Task 28)
 - ROI 캡처 및 OCR 결과 로그 출력
 - 감지 모드 전환 시 자동 처리 루프 시작
 
@@ -124,8 +125,9 @@
 - 부팅 시 마지막 ROI/모드를 자동 복원 (감지 모드 & 모니터링 자동 시작)
 - electron-store 마이그레이션 및 alert 상태 복원은 추후 진행
 
-### T19: 네이티브 Tesseract 통합 ⏳
-- WASM 대신 네이티브 실행 파일 호출로 OCR 성능 개선
+### T19: 네이티브 Tesseract 통합 🔄 (Task 28로 대체됨)
+- ~~WASM 대신 네이티브 실행 파일 호출로 OCR 성능 개선~~ (계획)
+- ✅ Task 28에서 PaddleOCR 서버 기반 OCR로 구현됨
 
 ### T20: FastAPI 기본 구조 ✅
 - FastAPI 앱/엔드포인트(`/health`, `/keywords`, `/`) 구축

@@ -1,10 +1,20 @@
 # 작업 19: 네이티브 Tesseract 통합
 
 ## 상태
-🆕 미착수
+🔄 Task 28로 대체됨
 
 ## 개요
-기존 `tesseract.js`(WASM) 기반 OCR 경로를 제거하고, Electron 메인 프로세스에서 네이티브 Tesseract 실행 파일을 직접 호출하여 OCR 성능을 향상합니다. 패키징 단계에서 플랫폼별 Tesseract 바이너리를 포함하거나, 설치 프로그램에 Tesseract 배포본을 동봉하도록 명시합니다.
+**이 작업은 Task 28: PaddleOCR 서버 연동으로 대체되었습니다.**
+
+기존 계획이었던 네이티브 Tesseract 통합 대신, **PaddleOCR 서버 기반 OCR**로 구현되었습니다.
+
+### 변경 사항
+- ❌ 네이티브 Tesseract 실행 파일 통합 (계획)
+- ✅ PaddleOCR 서버 기반 OCR 구현 (실제 구현)
+- ✅ Tesseract.js 완전 제거
+- ✅ 서버 측 고성능 OCR로 전환
+
+자세한 내용은 [Task 28: PaddleOCR 서버 연동](./28-paddle-ocr-integration.md) 문서를 참조하세요.
 
 ## 요구사항
 

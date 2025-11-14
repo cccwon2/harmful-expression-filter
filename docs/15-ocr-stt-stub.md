@@ -1,7 +1,13 @@
 # 작업 15: OCR/STT 파이프라인 스텁 및 ROI 캡처 시작/중지
 
 ## 상태
-⏳ 진행 예정
+✅ 완료 (Task 28에서 PaddleOCR 서버 기반 OCR로 대체됨)
+
+## ⚠️ 중요 참고사항
+이 작업은 초기 스텁 구현이었으며, **Task 28: PaddleOCR 서버 연동**에서 실제 구현으로 대체되었습니다.
+- 기존 Tesseract.js (WASM) → PaddleOCR 서버 기반 OCR로 전환
+- 클라이언트 측 OCR → 서버 측 OCR로 아키텍처 변경
+- 자세한 내용은 [Task 28 문서](./28-paddle-ocr-integration.md) 참조
 
 ## 개요
 OCR/STT 파이프라인의 스텁을 구현하여 감지 모드에서 ROI 영역 캡처를 시작/중지합니다. 실제 OCR/STT 구현은 후속 작업에서 진행합니다.
