@@ -15,4 +15,8 @@ torchaudio==2.1.0; python_version < "3.12"
 deepgram-sdk>=5.3.0
 # Environment variable management
 python-dotenv==1.0.0
+# PaddleOCR for OCR service
+paddleocr==2.7.0.3
+paddlepaddle==2.6.1
+Pillow>=9.0.0
 

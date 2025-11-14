@@ -4,30 +4,25 @@ import { createMainWindow } from './windows/createMainWindow';
 import { createTray } from './tray';
 import { setupROIHandlers, type ROI } from './ipc/roi';
 import { IPC_CHANNELS } from './ipc/channels';
+import { SERVER_CHANNELS } from './ipc/channels';
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from './state/editMode';
 import { getROI, getMode, setMode } from './store';
 import * as fs from 'fs';
 import * as path from 'path';
-import axios from 'axios';
-import { createWorker, type Worker } from 'tesseract.js';
+import * as dotenv from 'dotenv';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
 import { registerAudioHandlers, getAudioService } from './ipc/audioHandlers';
 import { setTrayAudioUpdateCallback } from './tray';
 
-const CAPTURE_INTERVAL_MS = 1000; // 1.0초 간격
-const CAPTURE_FILE_NAME = 'captured.png';
-//const OCR_LANGUAGES = 'kor+eng'; // (기존)
-const OCR_LANGUAGES = 'kor';  // 한국어만 지원
-const SERVER_ANALYZE_URL = 'http://127.0.0.1:8000/analyze';
+const CAPTURE_INTERVAL_MS = 2000; // 2초 간격 (서버 OCR 처리 시간 고려)
 
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
 let currentROI: ROI | null = null;
-let captureInterval: NodeJS.Timeout | null = null;
+let monitoringInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;
 let isCaptureInProgress = false;
-let ocrWorker: Worker | null = null;
 
 type OverlayMode = 'setup' | 'detect' | 'alert';
 
@@ -41,6 +36,15 @@ type OverlayStatePayload = {
 Menu.setApplicationMenu(null);
 
 app.whenReady().then(async () => {
+  // .env 파일 로드 (프로젝트 루트에서)
+  // 개발 모드: 프로젝트 루트, 프로덕션 모드: app.getAppPath()
+  const envPath = process.env.NODE_ENV === 'production' 
+    ? path.join(app.getAppPath(), '.env')
+    : path.join(__dirname, '../.env');
+  dotenv.config({ path: envPath });
+  console.log('[Main] .env 파일 로드 시도:', envPath);
+  console.log('[Main] SERVER_URL:', process.env.SERVER_URL || 'http://127.0.0.1:8000 (기본값)');
+
   registerServerHandlers();
 
   const serverReady = await checkServerConnection();
@@ -117,133 +121,84 @@ app.whenReady().then(async () => {
     console.log('[Main] Sent STOP_MONITORING to renderer');
   };
 
-  const initOCR = async (): Promise<Worker | null> => {
-    if (ocrWorker) {
-      return ocrWorker;
-    }
-    try {
-      ocrWorker = await createWorker([], undefined, {
-        logger: (message: { status: string; progress: number }) => {
-          if (message.status === 'recognizing text') {
-            console.log('[OCR]', message.status, `${Math.round((message.progress ?? 0) * 100)}%`);
-          }
-        },
-      });
-      await ocrWorker.load();
-      await ocrWorker.reinitialize(OCR_LANGUAGES);
-      console.log('[Main] OCR worker initialized with languages:', OCR_LANGUAGES);
-      return ocrWorker;
-    } catch (error) {
-      console.error('[Main] Failed to initialize OCR worker:', error);
-      ocrWorker = null;
-      return null;
-    }
-  };
-
-  const performOCR = async (imageBuffer: Buffer): Promise<string> => {
-    try {
-      const worker = await initOCR();
-      if (!worker) {
-        return '';
-      }
-      const {
-        data: { text },
-      } = await worker.recognize(imageBuffer);
-      return text.trim();
-    } catch (error) {
-      console.error('[Main] OCR processing failed:', error);
-      return '';
-    }
-  };
-
-  const analyzeText = async (
-    text: string,
-  ): Promise<{
-    harmful: boolean;
-    matched: string[];
-    processingTime: number;
+  /**
+   * 이미지를 서버로 전송하여 OCR + 분석 수행
+   */
+  const sendImageToServer = async (imageBuffer: Buffer): Promise<{
+    success: boolean;
+    data?: {
+      texts: string[];
+      is_harmful: boolean;
+      harmful_words: string[];
+      processing_time: { ocr: number; analysis: number; total: number };
+    };
+    error?: string;
   }> => {
-    if (!text.trim()) {
-      return {
-        harmful: false,
-        matched: [],
-        processingTime: 0,
-      };
-    }
+    const axios = require('axios');
+    const FormData = require('form-data');
+    const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:8000';
+    const REQUEST_TIMEOUT = 5000;
 
     try {
-      const startedAt = Date.now();
-      const response = await axios.post(
-        SERVER_ANALYZE_URL,
-        { text, use_ai: false },
-        {
-          timeout: 3000,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
+      const formData = new FormData();
+      formData.append('file', imageBuffer, {
+        filename: 'screenshot.png',
+        contentType: 'image/png',
+      });
 
-      const elapsed = Date.now() - startedAt;
-      const harmful = Boolean(response.data?.has_violation);
-      const matched = Array.isArray(response.data?.matched_keywords)
-        ? response.data.matched_keywords
-        : [];
-      const processingTime =
-        typeof response.data?.processing_time === 'number'
-          ? response.data.processing_time
-          : elapsed;
-
-      if (harmful) {
-        console.warn('[Main] Harmful text detected:', {
-          matched,
-          processingTime,
-        });
-      }
+      const response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
+        headers: formData.getHeaders(),
+        timeout: REQUEST_TIMEOUT,
+      });
 
       return {
-        harmful,
-        matched,
-        processingTime,
+        success: true,
+        data: response.data,
       };
     } catch (error: any) {
-      console.error('[Main] Failed to analyze text:', error?.message ?? error);
+      console.error('[Main] 서버 OCR 요청 실패:', error?.message ?? error);
       return {
-        harmful: false,
-        matched: [],
-        processingTime: 0,
+        success: false,
+        error: error?.message ?? 'Unknown error',
       };
     }
   };
 
-  const captureAndProcessROI = async () => {
+  /**
+   * ROI 영역 캡처 및 서버 OCR 수행
+   */
+  const captureAndProcessROI = async (): Promise<void> => {
     const roi = currentROI;
     if (!isMonitoring || !roi) {
       return;
     }
 
     if (isCaptureInProgress) {
-      console.log('[Main] Capture already in progress, skipping this interval');
+      console.log('[OCR] 캡처가 이미 진행 중입니다. 이번 간격을 건너뜁니다.');
       return;
     }
 
     isCaptureInProgress = true;
     try {
+      // 1. 화면 캡처
       const primaryDisplay = screen.getPrimaryDisplay();
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
         thumbnailSize: primaryDisplay.size,
       });
 
-      if (!sources.length) {
-        console.warn('[Main] No screen sources available for capture');
+      if (sources.length === 0) {
+        console.error('[OCR] 화면 소스를 찾을 수 없음');
         return;
       }
 
       const screenshot = sources[0].thumbnail;
       if (screenshot.isEmpty()) {
-        console.warn('[Main] Captured screenshot is empty');
+        console.warn('[OCR] 캡처된 스크린샷이 비어있음');
         return;
       }
 
+      // 2. ROI 영역만 크롭
       const screenshotSize = screenshot.getSize();
       const cropX = Math.max(0, Math.floor(roi.x));
       const cropY = Math.max(0, Math.floor(roi.y));
@@ -257,7 +212,7 @@ app.whenReady().then(async () => {
       );
 
       if (cropWidth <= 0 || cropHeight <= 0) {
-        console.warn('[Main] Invalid crop dimensions calculated:', {
+        console.warn('[OCR] 잘못된 크롭 크기:', {
           cropX,
           cropY,
           cropWidth,
@@ -273,66 +228,67 @@ app.whenReady().then(async () => {
         height: cropHeight,
       });
 
-      const pngBuffer = croppedImage.toPNG();
-      const outputPath = path.join(app.getPath('userData'), CAPTURE_FILE_NAME);
-      fs.writeFileSync(outputPath, pngBuffer);
-      console.log('[Main] Captured ROI frame saved to:', outputPath);
+      // 3. PNG Buffer로 변환
+      const imageBuffer = croppedImage.toPNG();
 
-      const text = await performOCR(pngBuffer);
-      console.log('[Main] OCR result:', text || '(empty)');
+      // 4. 서버로 OCR + 분석 요청
+      console.log(`[OCR] 서버로 이미지 전송 중... (크기: ${imageBuffer.length} bytes)`);
+      const result = await sendImageToServer(imageBuffer);
 
-      const analysis = await analyzeText(text);
-      const harmful = analysis.harmful;
-      
-      // 상세한 로그 출력
-      if (harmful) {
-        if (analysis.matched.length > 0) {
-          console.warn('[Main] ⚠️ HARMFUL DETECTED - Matched keywords:', analysis.matched);
+      if (result.success && result.data) {
+        const { texts, is_harmful, harmful_words, processing_time } = result.data;
+        
+        console.log(`[OCR] 추출 완료: ${texts.length}개 텍스트, 총 ${processing_time.total.toFixed(3)}초 (OCR: ${processing_time.ocr.toFixed(3)}초, 분석: ${processing_time.analysis.toFixed(3)}초)`);
+        console.log(`[OCR] 텍스트: ${texts.join(' ')}`);
+        
+        // 5. 유해성 감지 시 알림
+        if (is_harmful) {
+          console.warn(`[OCR] 🚨 유해 표현 감지: ${harmful_words.join(', ')}`);
+          
+          // 오버레이에 알림 전송
+          if (overlayWindow && !overlayWindow.isDestroyed()) {
+            overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
+              harmful: true,
+              words: harmful_words,
+            });
+          }
         } else {
-          console.warn('[Main] ⚠️ HARMFUL DETECTED - No keywords matched (AI classifier detected)');
+          console.log('[OCR] ✅ 유해 표현 없음');
         }
+
+        if (!isMonitoring || !currentROI) {
+          console.log('[OCR] 모니터링이 중지되었습니다. 상태 업데이트를 건너뜁니다.');
+          return;
+        }
+
+        // 상태 업데이트
+        const nextMode: OverlayMode = is_harmful ? 'alert' : 'detect';
+        pushOverlayState({
+          mode: nextMode,
+          roi: currentROI,
+          harmful: is_harmful,
+        });
       } else {
-        console.log('[Main] ✅ No harmful content - Text:', text);
-        if (analysis.matched.length > 0) {
-          console.warn('[Main] ⚠️ WARNING: Matched keywords but harmful=false:', analysis.matched);
-        }
+        console.error('[OCR] 서버 요청 실패:', result.error);
       }
-
-      if (!isMonitoring || !currentROI) {
-        console.log('[Main] Monitoring stopped during capture; skipping state update');
-        return;
-      }
-
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        console.log('[Main] Sending ALERT_FROM_SERVER: harmful=', harmful);
-        overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, { harmful });
-      }
-
-      const nextMode: OverlayMode = harmful ? 'alert' : 'detect';
-      console.log('[Main] Pushing overlay state: mode=', nextMode, 'harmful=', harmful);
-      pushOverlayState({
-        mode: nextMode,
-        roi: currentROI,
-        harmful,
-      });
     } catch (error) {
-      console.error('[Main] Error during captureAndProcessROI:', error);
+      console.error('[OCR] 캡처/처리 오류:', error);
     } finally {
       isCaptureInProgress = false;
     }
   };
 
   const stopMonitoring = (reason?: string) => {
-    if (captureInterval) {
-      clearInterval(captureInterval);
-      captureInterval = null;
+    if (monitoringInterval) {
+      clearInterval(monitoringInterval);
+      monitoringInterval = null;
     }
 
     if (!isMonitoring && !currentROI) {
       return;
     }
 
-    console.log('[Main] Stopping OCR monitoring', reason ? `(${reason})` : '');
+    console.log('[OCR] OCR 모니터링 중지', reason ? `(${reason})` : '');
 
     isMonitoring = false;
     currentROI = null;
@@ -359,27 +315,30 @@ app.whenReady().then(async () => {
 
   const startMonitoring = () => {
     if (!currentROI) {
-      console.warn('[Main] Cannot start monitoring - ROI is not defined');
+      console.warn('[OCR] 모니터링을 시작할 수 없습니다 - ROI가 정의되지 않음');
       return;
     }
 
     if (isMonitoring) {
-      console.log('[Main] Monitoring already active');
+      console.log('[OCR] 모니터링이 이미 활성화되어 있습니다');
       return;
     }
 
-    console.log('[Main] Starting monitoring loop for ROI:', currentROI);
+    console.log('[OCR] ROI 모니터링 시작:', currentROI);
     isMonitoring = true;
     pushOverlayState({ mode: 'detect', roi: currentROI });
-    captureInterval = setInterval(() => {
+    
+    // 즉시 한 번 실행
+    captureAndProcessROI().catch((error) => {
+      console.error('[OCR] 초기 캡처 오류:', error);
+    });
+
+    // 2초마다 반복 실행
+    monitoringInterval = setInterval(() => {
       captureAndProcessROI().catch((error) => {
-        console.error('[Main] Monitoring interval error:', error);
+        console.error('[OCR] 모니터링 간격 오류:', error);
       });
     }, CAPTURE_INTERVAL_MS);
-
-    captureAndProcessROI().catch((error) => {
-      console.error('[Main] Initial capture error:', error);
-    });
 
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       try {
@@ -509,6 +468,16 @@ app.whenReady().then(async () => {
     if (mode === 'setup') {
       stopMonitoring('Renderer requested setup mode');
     }
+  });
+
+  ipcMain.on(IPC_CHANNELS.OCR_START, () => {
+    console.log('[OCR] OCR 모니터링 시작 요청');
+    startMonitoring();
+  });
+
+  ipcMain.on(IPC_CHANNELS.OCR_STOP, () => {
+    console.log('[OCR] OCR 모니터링 중지 요청');
+    stopMonitoring('Renderer request');
   });
 
   ipcMain.on(IPC_CHANNELS.START_MONITORING, () => {
@@ -767,10 +736,6 @@ app.whenReady().then(async () => {
     });
   }
 
-  initOCR().catch((error) => {
-    console.error('[Main] OCR initialization error during startup:', error);
-  });
-
   app.on('before-quit', () => {
     // OCR 모니터링 중지
     stopMonitoring('Application quitting');
@@ -781,16 +746,6 @@ app.whenReady().then(async () => {
     if (audioService) {
       audioService.stopMonitoring();
       console.log('[Main] Audio monitoring stopped (app quitting)');
-    }
-    
-    // OCR 워커 종료
-    if (ocrWorker && typeof ocrWorker.terminate === 'function') {
-      ocrWorker
-        .terminate()
-        .catch((error: unknown) => {
-          console.error('[Main] Failed to terminate OCR worker gracefully:', error);
-        });
-      ocrWorker = null;
     }
   });
 

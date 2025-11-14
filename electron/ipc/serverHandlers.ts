@@ -1,8 +1,11 @@
 import { ipcMain } from 'electron';
 import axios, { AxiosError } from 'axios';
+import FormData from 'form-data';
 import { SERVER_CHANNELS } from './channels';
 
-const SERVER_URL = 'http://127.0.0.1:8000';
+// SERVER_URL은 main.ts에서 dotenv로 로드된 환경 변수 사용
+// 기본값: http://127.0.0.1:8000
+const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:8000';
 const REQUEST_TIMEOUT = 5000;
 
 interface HealthResponse {
@@ -122,6 +125,66 @@ export function registerServerHandlers(): void {
         return response.data;
       } catch (error) {
         return handleServerError(error, 'Get Keywords');
+      }
+    },
+  );
+
+  // OCR 전용 핸들러
+  ipcMain.handle(
+    SERVER_CHANNELS.OCR_IMAGE,
+    async (_event, imageBuffer: Buffer): Promise<{ success: boolean; data?: any; error?: string }> => {
+      try {
+        const formData = new FormData();
+        formData.append('file', imageBuffer, {
+          filename: 'screenshot.png',
+          contentType: 'image/png',
+        });
+
+        const response = await axios.post(`${SERVER_URL}/api/ocr`, formData, {
+          headers: formData.getHeaders(),
+          timeout: REQUEST_TIMEOUT,
+        });
+
+        return {
+          success: true,
+          data: response.data,
+        };
+      } catch (error: any) {
+        console.error('[IPC] OCR 요청 실패:', error.message);
+        return {
+          success: false,
+          error: error.message,
+        };
+      }
+    },
+  );
+
+  // OCR + 유해성 분석 통합 핸들러
+  ipcMain.handle(
+    SERVER_CHANNELS.OCR_AND_ANALYZE,
+    async (_event, imageBuffer: Buffer): Promise<{ success: boolean; data?: any; error?: string }> => {
+      try {
+        const formData = new FormData();
+        formData.append('file', imageBuffer, {
+          filename: 'screenshot.png',
+          contentType: 'image/png',
+        });
+
+        const response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
+          headers: formData.getHeaders(),
+          timeout: REQUEST_TIMEOUT,
+        });
+
+        return {
+          success: true,
+          data: response.data,
+        };
+      } catch (error: any) {
+        console.error('[IPC] OCR+분석 요청 실패:', error.message);
+        return {
+          success: false,
+          error: error.message,
+        };
       }
     },
   );

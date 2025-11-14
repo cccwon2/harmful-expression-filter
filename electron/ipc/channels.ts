@@ -26,6 +26,8 @@ export const SERVER_CHANNELS = {
   HEALTH_CHECK: 'server:health-check',
   ANALYZE_TEXT: 'server:analyze-text',
   GET_KEYWORDS: 'server:get-keywords',
+  OCR_IMAGE: 'server:ocr-image',              // 🆕 OCR만
+  OCR_AND_ANALYZE: 'server:ocr-and-analyze',  // 🆕 OCR + 분석
 } as const;
 
 export type ServerChannel = typeof SERVER_CHANNELS[keyof typeof SERVER_CHANNELS];

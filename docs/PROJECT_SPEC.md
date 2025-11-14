@@ -270,14 +270,22 @@ interface Window {
 
 ## 개발 환경
 
+### 클라이언트 (Electron)
 - Node.js
 - TypeScript
 - Electron 28.0.0
 - React 18.2.0
 - Vite 5.0.5
-- Python 3.11+
+
+### 서버 (FastAPI)
+- **Python 3.11+** (venv311 가상환경 사용 필수)
 - FastAPI
 - Whisper (음성 인식)
+- PaddleOCR (OCR 서비스)
+
+**⚠️ 중요**: server 폴더의 모든 Python 라이브러리는 `venv311` 가상환경에서만 관리합니다.
+- 가상환경 활성화: `venv311\Scripts\activate` (Windows) 또는 `source venv311/bin/activate` (Linux/Mac)
+- 의존성 설치: `.\venv311\Scripts\python.exe -m pip install -r requirements.txt`
 
 ## 빌드 및 실행
 

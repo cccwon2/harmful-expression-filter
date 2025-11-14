@@ -17,6 +17,7 @@ export interface AudioStreamResponse {
   audio_duration_sec?: number;
   processing_time_ms?: number;
   detail?: string; // 에러 메시지
+  message?: string; // 연결 확인 메시지
 }
 
 export class AudioStreamClient extends EventEmitter {

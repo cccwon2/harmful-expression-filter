@@ -6,16 +6,20 @@ import logging
 import os
 import time
 from pathlib import Path
+import io
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from PIL import Image
 
 from audio.pipeline import AudioProcessingPipeline, PipelineOutput, STTServiceProtocol
 from audio.whisper_service import WhisperSTTService, WhisperNotAvailableError
 from audio.deepgram_service import DeepgramSTTService, DeepgramNotAvailableError
 from nlp.harmful_classifier import HarmfulTextClassifier, TransformersNotAvailableError
+from services.paddle_ocr_service import get_ocr_service
 
 # .env 파일 로드 (server 디렉토리 또는 상위 디렉토리에서 찾기)
 LOGGER = logging.getLogger("harmful-filter")
@@ -78,6 +82,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # pylint: disable=broad-except
         LOGGER.error("[ERROR] Classifier 초기화 중 예상치 못한 오류: %s", exc, exc_info=True)
         CLASSIFIER = None
+
+    # PaddleOCR 서비스 프리로드 (첫 요청 지연 방지)
+    try:
+        ocr_service = get_ocr_service()
+        LOGGER.info("[INFO] ✅ PaddleOCR Service initialized successfully")
+    except Exception as ocr_exc:  # pylint: disable=broad-except
+        LOGGER.error("[ERROR] PaddleOCR 서비스 초기화 실패: %s", ocr_exc, exc_info=True)
+        LOGGER.warning("[WARN] OCR 엔드포인트가 동작하지 않을 수 있습니다.")
 
     LOGGER.info("[INFO] FastAPI server startup complete")
     LOGGER.info("[INFO] Server URL: http://127.0.0.1:8000")
@@ -316,6 +328,108 @@ async def test_text_simple(text: str):
         "has_violation": len(matched) > 0,
         "matched_keywords": matched,
     }
+
+
+@app.post("/api/ocr")
+async def ocr_endpoint(file: UploadFile = File(...)):
+    """
+    이미지 OCR 엔드포인트
+    
+    Request:
+        - file: 이미지 파일 (multipart/form-data)
+        
+    Response:
+        {
+            "texts": ["추출된", "텍스트", "리스트"],
+            "processing_time": 0.123,
+            "text_count": 3
+        }
+    """
+    try:
+        # 파일 유효성 검사
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+        
+        # 이미지 로드
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        # OCR 실행
+        ocr_service = get_ocr_service()
+        texts, processing_time = ocr_service.extract_text(image)
+        
+        # 결과 반환
+        return JSONResponse(content={
+            "texts": texts,
+            "processing_time": round(processing_time, 3),
+            "text_count": len(texts)
+        })
+        
+    except Exception as e:
+        LOGGER.error(f"OCR API 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ocr-and-analyze")
+async def ocr_and_analyze_endpoint(file: UploadFile = File(...)):
+    """
+    이미지 OCR + 유해성 분석 통합 엔드포인트
+    
+    Request:
+        - file: 이미지 파일
+        
+    Response:
+        {
+            "texts": ["추출된", "텍스트"],
+            "is_harmful": true,
+            "harmful_words": ["유해어1"],
+            "processing_time": {
+                "ocr": 0.123,
+                "analysis": 0.045,
+                "total": 0.168
+            }
+        }
+    """
+    try:
+        import time
+        start_total = time.time()
+        
+        # 이미지 로드
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+        
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        # OCR 실행
+        ocr_service = get_ocr_service()
+        texts, ocr_time = ocr_service.extract_text(image)
+        
+        # 텍스트 결합 및 유해성 분석
+        combined_text = " ".join(texts)
+        start_analysis = time.time()
+        
+        # 기존 analyze_text 함수 로직 사용
+        matched_keywords = check_keywords(combined_text)
+        has_violation = len(matched_keywords) > 0
+        analysis_time = time.time() - start_analysis
+        
+        total_time = time.time() - start_total
+        
+        return JSONResponse(content={
+            "texts": texts,
+            "is_harmful": has_violation,
+            "harmful_words": matched_keywords,
+            "processing_time": {
+                "ocr": round(ocr_time, 3),
+                "analysis": round(analysis_time, 3),
+                "total": round(total_time, 3)
+            }
+        })
+        
+    except Exception as e:
+        LOGGER.error(f"OCR+분석 API 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # [Server: server/main.py]

@@ -19,11 +19,20 @@
 
 ```bash
 # FastAPI 백엔드 (터미널 1)
-# ⚠️ Whisper 호환성을 위해 venv311 사용 필요
+# ⚠️ 중요: server 폴더의 모든 Python 라이브러리는 venv311 가상환경에서만 관리합니다
 cd server
-venv311\Scripts\activate  # Windows (Python 3.11)
-# source venv311/bin/activate  # Linux/Mac
-pip install -r requirements.txt
+
+# Windows
+venv311\Scripts\activate
+# Linux/Mac
+# source venv311/bin/activate
+
+# 의존성 설치 (venv311 활성화 후)
+.\venv311\Scripts\python.exe -m pip install -r requirements.txt
+# 또는
+# python -m pip install -r requirements.txt
+
+# 서버 실행
 uvicorn main:app --reload
 
 # Electron 앱 (터미널 2)

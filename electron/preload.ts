@@ -41,6 +41,25 @@ type ServerAPI = {
   healthCheck: () => Promise<ServerHealthResponse | ServerErrorResponse>;
   analyzeText: (text: string) => Promise<ServerAnalyzeResponse | ServerErrorResponse>;
   getKeywords: () => Promise<ServerKeywordsResponse | ServerErrorResponse>;
+  ocrImage: (imageBuffer: Buffer) => Promise<{ 
+    success: boolean; 
+    data?: { 
+      texts: string[]; 
+      processing_time: number; 
+      text_count: number 
+    }; 
+    error?: string 
+  }>;
+  ocrAndAnalyze: (imageBuffer: Buffer) => Promise<{ 
+    success: boolean; 
+    data?: { 
+      texts: string[]; 
+      is_harmful: boolean; 
+      harmful_words: string[]; 
+      processing_time: { ocr: number; analysis: number; total: number } 
+    }; 
+    error?: string 
+  }>;
 };
 
 // preload 스크립트 로드 확인 (메인 프로세스 콘솔에 출력)
@@ -194,6 +213,8 @@ try {
       healthCheck: () => ipcRenderer.invoke(SERVER_CHANNELS.HEALTH_CHECK),
       analyzeText: (text: string) => ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text),
       getKeywords: () => ipcRenderer.invoke(SERVER_CHANNELS.GET_KEYWORDS),
+      ocrImage: (imageBuffer: Buffer) => ipcRenderer.invoke(SERVER_CHANNELS.OCR_IMAGE, imageBuffer),
+      ocrAndAnalyze: (imageBuffer: Buffer) => ipcRenderer.invoke(SERVER_CHANNELS.OCR_AND_ANALYZE, imageBuffer),
     } as ServerAPI,
     // 오디오 모니터링 API
     audio: {

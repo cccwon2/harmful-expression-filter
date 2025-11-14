@@ -40,6 +40,25 @@ interface ServerAPI {
       }
     | { error: true; message: string; code?: string; status?: number }
   >;
+  ocrImage: (imageBuffer: Buffer) => Promise<{ 
+    success: boolean; 
+    data?: { 
+      texts: string[]; 
+      processing_time: number; 
+      text_count: number 
+    }; 
+    error?: string 
+  }>;
+  ocrAndAnalyze: (imageBuffer: Buffer) => Promise<{ 
+    success: boolean; 
+    data?: { 
+      texts: string[]; 
+      is_harmful: boolean; 
+      harmful_words: string[]; 
+      processing_time: { ocr: number; analysis: number; total: number } 
+    }; 
+    error?: string 
+  }>;
 }
 
 declare global {

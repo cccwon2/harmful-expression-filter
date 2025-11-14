@@ -25,10 +25,40 @@ Electron 클라이언트와 연동할 백엔드 API 서버의 토대를 FastAPI�
 - [x] API 문서(스웨거/Redoc) 접근 경로 확인
 
 ## 의존성
-- Python 3.10+
+- **Python 3.11+** (venv311 가상환경 사용 필수)
 - FastAPI, Uvicorn
-- pydantic, python-dotenv (선택)
+- pydantic, python-dotenv
 - [PROJECT_SPEC.md](./PROJECT_SPEC.md)의 서버 아키텍처 섹션
+
+## ⚠️ 중요: 가상환경 관리
+
+**server 폴더의 모든 Python 라이브러리는 `venv311` 가상환경에서만 관리합니다.**
+
+### 가상환경 활성화
+```bash
+cd server
+
+# Windows
+venv311\Scripts\activate
+
+# Linux/Mac
+source venv311/bin/activate
+```
+
+### 의존성 설치
+```bash
+# venv311 활성화 후
+.\venv311\Scripts\python.exe -m pip install -r requirements.txt
+
+# 또는 활성화된 상태에서
+pip install -r requirements.txt
+```
+
+### 서버 실행
+```bash
+# venv311 활성화 후
+uvicorn main:app --reload
+```
 
 ## 관련 파일
 - `backend/app/main.py`
@@ -40,10 +70,16 @@ Electron 클라이언트와 연동할 백엔드 API 서버의 토대를 FastAPI�
 
 ### 1. 초기 프로젝트 스캐폴딩
 ```bash
-mkdir server
 cd server
-python -m venv venv
-pip install fastapi uvicorn[standard]
+
+# venv311 가상환경 사용 (이미 생성되어 있음)
+# Windows
+venv311\Scripts\activate
+# Linux/Mac
+# source venv311/bin/activate
+
+# 의존성 설치
+.\venv311\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ### 2. 기본 애플리케이션 작성
