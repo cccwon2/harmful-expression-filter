@@ -77,33 +77,33 @@ class DeepgramSTTService:
         Returns:
             str: 변환된 텍스트 (빈 문자열 가능)
         """
+        import time
+        start_time = time.time()
+        
         try:
-            # 입력 검증
+            # 1. 입력 검증
             audio = np.asarray(audio_np, dtype=np.float32)
             if audio.ndim != 1:
                 raise ValueError("audio_np는 1차원 배열이어야 합니다.")
             if audio.size == 0:
                 raise ValueError("audio_np는 비어있을 수 없습니다.")
             
-            # 오디오 통계 로깅
+            # 2. 오디오 통계 계산
             audio_mean = float(np.mean(np.abs(audio)))
             audio_max = float(np.max(np.abs(audio)))
-            logger.info("[INFO] Deepgram transcribe: audio_size=%d, mean_abs=%.4f, max_abs=%.4f", 
-                       audio.size, audio_mean, audio_max)
             
-            # 오디오가 너무 조용하면 로깅
+            # ✅ 개선: 너무 조용한 오디오는 API 호출 생략
             if audio_mean < 0.001:
-                logger.warning("[WARN] Audio signal is very quiet (mean_abs=%.4f). STT may fail.", audio_mean)
+                logger.info("[Deepgram] Audio too quiet (mean=%.4f), skipping API call", audio_mean)
+                return ""
             
-            # float32 → int16 변환
+            # 3. float32 → int16 변환
             audio_int16 = (audio * 32768).astype(np.int16)
             
-            # Deepgram SDK v5는 raw audio bytes를 잘 인식하지 못할 수 있으므로
-            # WAV 파일 형식으로 변환하여 전송 (더 안정적)
+            # 4. WAV 형식으로 변환 (Deepgram이 더 잘 인식함)
             import io
             import wave
             
-            # WAV 파일 형식으로 변환 (헤더 포함)
             wav_buffer = io.BytesIO()
             with wave.open(wav_buffer, 'wb') as wav_file:
                 wav_file.setnchannels(1)  # 모노
@@ -113,123 +113,45 @@ class DeepgramSTTService:
             
             audio_bytes = wav_buffer.getvalue()
             
-            # Deepgram API 호출
-            logger.info("[INFO] Calling Deepgram API with audio_bytes=%d bytes (WAV format), language=%s, model=%s", 
-                       len(audio_bytes), self.language, self.model)
+            # 5. Deepgram API 호출 (SDK v5)
+            # SDK v5 올바른 API: listen.v1.media.transcribe_file
+            # WAV 형식으로 전송하면 encoding 파라미터 없이도 자동으로 감지됨
+            response = await self.deepgram.listen.v1.media.transcribe_file(
+                request=audio_bytes,  # WAV 형식 bytes 전달
+                model=self.model,
+                language=self.language,
+                smart_format=False,
+                punctuate=False,
+                diarize=False,
+            )
             
-            response = None
-            try:
-                # Deepgram SDK v5 사용법: AsyncDeepgramClient 사용
-                logger.info("[INFO] Starting Deepgram API call...")
-                
-                # API 키 확인 (디버깅용 - 처음 10자만 표시)
-                api_key_preview = self.api_key[:10] + "..." if self.api_key and len(self.api_key) > 10 else self.api_key
-                logger.info("[INFO] Using API key: %s (length: %d)", api_key_preview, len(self.api_key) if self.api_key else 0)
-                
-                # Deepgram SDK v5 API 호출
-                # WAV 파일 형식으로 전송하면 encoding 파라미터 없이도 자동으로 감지됨
-                response = await self.deepgram.listen.v1.media.transcribe_file(
-                    request=audio_bytes,
-                    model=self.model,
-                    language=self.language,
-                    punctuate=False,
-                    diarize=False,
-                    request_options={
-                        "timeout_in_seconds": 30.0,
-                    }
-                )
-                
-                logger.info("[INFO] Deepgram API call completed successfully")
-                
-                # 응답 객체 타입 확인
-                logger.info("[INFO] Deepgram response type: %s", type(response))
-                logger.info("[INFO] Deepgram response is None: %s", response is None)
-                
-                # 응답이 None인 경우 처리
-                if response is None:
-                    logger.error("[ERROR] Deepgram API returned None response. Possible causes:")
-                    logger.error("[ERROR] 1. API key is invalid or expired")
-                    logger.error("[ERROR] 2. API usage limits exceeded")
-                    logger.error("[ERROR] 3. Network connectivity issue")
-                    logger.error("[ERROR] 4. Audio format not supported")
-                    logger.error("[ERROR] Please check your DEEPGRAM_API_KEY and API usage limits.")
-                    return ""
-                
-                # 응답 구조 확인 (v5 응답 객체는 속성 기반 접근)
-                logger.info("[INFO] Deepgram response attributes: %s", dir(response) if hasattr(response, '__dict__') else 'N/A')
-                
-                # v5 응답 구조: response.results.channels[0].alternatives[0].transcript
-                try:
-                    # results 속성 확인
-                    if not hasattr(response, 'results'):
-                        logger.error("[ERROR] Deepgram response has no 'results' attribute")
-                        logger.error("[ERROR] Response type: %s", type(response))
-                        return ""
-                    
-                    results = response.results
-                    if results is None:
-                        logger.error("[ERROR] Deepgram results is None")
-                        return ""
-                    
-                    # channels 확인
-                    if not hasattr(results, 'channels'):
-                        logger.error("[ERROR] Deepgram results has no 'channels' attribute")
-                        return ""
-                    
-                    channels = results.channels
-                    if not channels or len(channels) == 0:
-                        logger.warning("[WARN] Deepgram response has no channels or empty channels list")
-                        return ""
-                    
-                    channel = channels[0]
-                    
-                    # alternatives 확인
-                    if not hasattr(channel, 'alternatives'):
-                        logger.error("[ERROR] Deepgram channel has no 'alternatives' attribute")
-                        return ""
-                    
-                    alternatives = channel.alternatives
-                    if not alternatives or len(alternatives) == 0:
-                        logger.warning("[WARN] Deepgram response has no alternatives or empty alternatives list")
-                        # 오디오에 음성이 없을 수 있음 - 이것은 정상일 수 있음
-                        return ""
-                    
-                    alternative = alternatives[0]
-                    
-                    # transcript 추출
-                    if not hasattr(alternative, 'transcript'):
-                        logger.error("[ERROR] Deepgram alternative has no 'transcript' attribute")
-                        return ""
-                    
-                    transcript = alternative.transcript
-                    text = transcript.strip() if transcript else ""
-                    
-                    # STT 결과 로깅
-                    if text:
-                        logger.info("[INFO] Deepgram transcription: '%s'", text)
-                    else:
-                        logger.warning("[WARN] Deepgram transcription returned empty text. Audio may not contain speech.")
-                        # 빈 텍스트는 정상일 수 있음 (음성이 없는 경우)
-                    
-                    return text
-                    
-                except AttributeError as attr_err:
-                    logger.error("[ERROR] Failed to extract transcript from Deepgram response: %s", attr_err)
-                    logger.error("[ERROR] Response structure may have changed in SDK v5")
-                    # 응답 구조를 로깅하여 디버깅
-                    logger.error("[ERROR] Response type: %s", type(response))
-                    if hasattr(response, '__dict__'):
-                        logger.error("[ERROR] Response attributes: %s", list(response.__dict__.keys()))
-                    return ""
-                    
-            except Exception as api_err:
-                logger.error("[ERROR] Deepgram API call failed with exception: %s", api_err, exc_info=True)
-                import traceback
-                logger.error("[ERROR] Full traceback: %s", traceback.format_exc())
-                return ""
+            # 5. 응답 파싱 (SDK v5)
+            transcript = ""
+            if response and response.results:
+                channels = response.results.channels
+                if channels and len(channels) > 0:
+                    alternatives = channels[0].alternatives
+                    if alternatives and len(alternatives) > 0:
+                        transcript = alternatives[0].transcript.strip()
+            
+            # ✅ 개선: 레이턴시 측정 및 로깅
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.info("[Deepgram] Transcription: %.2fms | Text: '%s'", elapsed_ms, transcript[:50])
+            
+            # ⚠️ 레이턴시 목표 초과 경고
+            if elapsed_ms > 2000:
+                logger.warning("[Deepgram] ⚠️ Latency exceeds 2s: %.2fms", elapsed_ms)
+            
+            return transcript
         
-        except Exception as e:
-            logger.error("[ERROR] Deepgram transcription error: %s", e, exc_info=True)
+        except ImportError as exc:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.error("[Deepgram] SDK import error after %.2fms: %s", elapsed_ms, exc)
+            raise DeepgramNotAvailableError("Deepgram SDK v5가 설치되지 않았습니다.") from exc
+        
+        except Exception as exc:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.exception("[Deepgram] Transcription error after %.2fms", elapsed_ms)
             return ""
 
     def transcribe(self, audio_np: np.ndarray) -> str:
@@ -237,7 +159,7 @@ class DeepgramSTTService:
         동기 버전 (WhisperSTTService 호환).
         
         이 메서드는 asyncio.to_thread()에서 호출되므로, 
-        별도의 이벤트 루프를 생성하지 않고 동기적으로 처리합니다.
+        별도 스레드에서 실행되며 새 이벤트 루프를 생성할 수 있습니다.
         
         Args:
             audio_np: float32 numpy array, normalized to [-1.0, 1.0], 16kHz
@@ -248,7 +170,6 @@ class DeepgramSTTService:
         try:
             # asyncio.to_thread()에서 호출되므로 별도 스레드에서 실행됨
             # 새 스레드에서는 실행 중인 이벤트 루프가 없으므로 asyncio.run() 사용 가능
-            # 하지만 안전성을 위해 RuntimeError를 처리
             try:
                 # 이미 실행 중인 이벤트 루프가 있는지 확인
                 loop = asyncio.get_running_loop()
@@ -257,8 +178,67 @@ class DeepgramSTTService:
                 return ""
             except RuntimeError:
                 # 실행 중인 이벤트 루프가 없으면 새로 생성
-                return asyncio.run(self.transcribe_stream(audio_np))
+                # asyncio.run()을 사용하면 이벤트 루프 관리가 자동으로 됨
+                # 하지만 Deepgram 클라이언트가 이벤트 루프를 참조하므로 각 호출마다 새 클라이언트 생성
+                return asyncio.run(self._transcribe_with_new_client(audio_np))
         except Exception as e:
             logger.error("[ERROR] Deepgram transcribe (sync) error: %s", e, exc_info=True)
+            return ""
+    
+    async def _transcribe_with_new_client(self, audio_np: np.ndarray) -> str:
+        """
+        새 Deepgram 클라이언트를 생성하여 transcription 수행.
+        이벤트 루프 문제를 피하기 위해 각 호출마다 새 클라이언트를 사용.
+        """
+        try:
+            from deepgram import AsyncDeepgramClient
+            # 새 클라이언트 생성 (이벤트 루프 문제 방지)
+            temp_client = AsyncDeepgramClient(api_key=self.api_key)
+            
+            # 오디오 처리
+            audio = np.asarray(audio_np, dtype=np.float32)
+            audio_mean = float(np.mean(np.abs(audio)))
+            
+            if audio_mean < 0.001:
+                logger.info("[Deepgram] Audio too quiet (mean=%.4f), skipping API call", audio_mean)
+                return ""
+            
+            audio_int16 = (audio * 32768).astype(np.int16)
+            
+            # WAV 형식으로 변환
+            import io
+            import wave
+            
+            wav_buffer = io.BytesIO()
+            with wave.open(wav_buffer, 'wb') as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(16000)
+                wav_file.writeframes(audio_int16.tobytes())
+            
+            audio_bytes = wav_buffer.getvalue()
+            
+            # API 호출
+            response = await temp_client.listen.v1.media.transcribe_file(
+                request=audio_bytes,
+                model=self.model,
+                language=self.language,
+                smart_format=False,
+                punctuate=False,
+                diarize=False,
+            )
+            
+            # 응답 파싱
+            transcript = ""
+            if response and response.results:
+                channels = response.results.channels
+                if channels and len(channels) > 0:
+                    alternatives = channels[0].alternatives
+                    if alternatives and len(alternatives) > 0:
+                        transcript = alternatives[0].transcript.strip()
+            
+            return transcript
+        except Exception as exc:
+            logger.exception("[Deepgram] _transcribe_with_new_client error")
             return ""
 

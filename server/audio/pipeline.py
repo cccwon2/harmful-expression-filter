@@ -79,107 +79,76 @@ class AudioProcessingPipeline:
         """
         오디오 바이너리를 버퍼에 추가하고, 충분히 쌓이면 STT/분류 결과를 반환한다.
         """
+        total_start = time.time()
 
         if not audio_bytes:
             return None
 
+        # 1. 버퍼에 추가 및 청크 가져오기
+        buffer_start = time.time()
         self.buffer_manager.add_chunk(audio_bytes)
         audio_chunk = self.buffer_manager.get_processed_chunk()
+        buffer_time = (time.time() - buffer_start) * 1000
+
         if audio_chunk is None:
             # 버퍼링 중 - 아직 충분한 데이터가 없음
             return None
 
-        # 오디오 청크 정보 로깅
-        audio_duration = len(audio_chunk) / self.buffer_manager.sample_rate
-        LOGGER.info("[INFO] Processing audio chunk: duration=%.2f sec, samples=%d", audio_duration, len(audio_chunk))
-
-        start_time = time.perf_counter()
-        
-        # STT 호출 전 로그
-        LOGGER.info("[INFO] Calling STT service...")
+        # 2. STT 변환
+        stt_start = time.time()
         text = await asyncio.to_thread(self.stt_service.transcribe, audio_chunk)
-        LOGGER.info("[INFO] STT service returned: '%s'", text if text else "(empty)")
+        stt_time = (time.time() - stt_start) * 1000
+
+        if not text or len(text.strip()) == 0:
+            LOGGER.info("[Pipeline] No text detected, skipping classification")
+            return None
+
+        # 3. 유해성 판단
+        classifier_start = time.time()
         
-        # STT 결과 로그 출력 (디버깅) - 항상 출력
-        if text and text.strip():
-            LOGGER.info("[INFO] STT result: '%s' (length: %d)", text, len(text))
-        else:
-            LOGGER.warning("[WARN] STT result is empty or whitespace only! Audio may not contain speech or STT failed.")
-            # 빈 문자열을 명시적으로 설정
-            text = "" if not text else text.strip()
-        
-        # 키워드 목록 확인 (디버깅) - 항상 출력
-        if not self.keywords:
-            LOGGER.error("[ERROR] No keywords provided to pipeline! Keyword detection will not work.")
-        else:
-            LOGGER.info("[INFO] Keywords count: %d (first few: %s)", len(self.keywords), self.keywords[:5] if len(self.keywords) > 5 else self.keywords)
-        
-        # 키워드 기반 검사 (항상 수행)
+        # 키워드 기반 검사
         keyword_harmful = False
         matched_keywords = []
-        
-        if text and text.strip():  # 텍스트가 비어있지 않을 때만 검사
-            text_lower = text.lower()
-            if self.keywords:
-                matched_keywords = [word for word in self.keywords if word.lower() in text_lower]
-                keyword_harmful = len(matched_keywords) > 0
-                
-                # 키워드 감지 시 로그 출력
-                if keyword_harmful:
-                    LOGGER.warning("[ALERT] Keyword detected in audio: %s in '%s'", matched_keywords, text)
-                else:
-                    LOGGER.info("[INFO] No keywords matched in text: '%s'", text)
-        else:
-            LOGGER.warning("[WARN] Skipping keyword check - STT result is empty. Audio duration: %.2f sec", len(audio_chunk) / self.buffer_manager.sample_rate)
-        
-        # Classifier가 있으면 Classifier도 사용 (키워드 + Classifier 결합)
+        text_lower = text.lower()
+        if self.keywords:
+            matched_keywords = [word for word in self.keywords if word.lower() in text_lower]
+            keyword_harmful = len(matched_keywords) > 0
+
+        # Classifier가 있으면 Classifier도 사용
         if self.classifier is not None:
-            # 텍스트가 비어있으면 Classifier도 스킵 (빈 텍스트는 유해하지 않음)
-            if text and text.strip():
-                classifier_result = await asyncio.to_thread(self.classifier.predict, text)
-                
-                # 키워드 또는 Classifier 중 하나라도 유해하다고 판단하면 유해로 처리
-                # 키워드가 감지되면 confidence를 1.0으로 설정 (키워드 우선)
-                is_harmful = keyword_harmful or classifier_result.is_harmful
-                if keyword_harmful:
-                    confidence = 1.0  # 키워드 감지 시 최고 신뢰도
-                else:
-                    confidence = classifier_result.confidence
+            classifier_result = await asyncio.to_thread(self.classifier.predict, text)
+            is_harmful = keyword_harmful or classifier_result.is_harmful
+            if keyword_harmful:
+                confidence = 1.0
             else:
-                # 빈 텍스트는 키워드 검사 결과만 사용
-                is_harmful = keyword_harmful
-                confidence = 1.0 if keyword_harmful else 0.0
-                
-            classification = ClassificationResult(
-                is_harmful=is_harmful,
-                confidence=confidence,
-                text=text if text else ""  # 빈 문자열 명시
-            )
+                confidence = classifier_result.confidence
         else:
-            # 키워드 기반 분류만 사용
-            classification = ClassificationResult(
-                is_harmful=keyword_harmful,
-                confidence=1.0 if keyword_harmful else 0.0,
-                text=text if text else ""  # 빈 문자열 명시
-            )
-        
-        # 최종 결과 로그 출력 (디버깅) - 항상 출력
-        text_preview = text[:50] if text and text.strip() else "(empty)"
+            is_harmful = keyword_harmful
+            confidence = 1.0 if keyword_harmful else 0.0
+
+        classifier_time = (time.time() - classifier_start) * 1000
+        total_time = (time.time() - total_start) * 1000
+
+        # ✅ 세부 레이턴시 로깅
         LOGGER.info(
-            "[INFO] Pipeline result: text='%s', is_harmful=%s, confidence=%.2f, matched_keywords=%s, has_classifier=%s",
-            text_preview,
-            classification.is_harmful,
-            classification.confidence,
-            matched_keywords,
-            self.classifier is not None
+            "[Pipeline] Total: %.2fms | Buffer: %.2fms | STT: %.2fms | Classifier: %.2fms | Text: '%s'",
+            total_time, buffer_time, stt_time, classifier_time, text[:50]
         )
 
-        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        # ⚠️ 목표 3초 초과 경고
+        if total_time > 3000:
+            LOGGER.warning("[Pipeline] ⚠️ Total latency exceeds 3s: %.2fms", total_time)
+
+        classification = ClassificationResult(
+            is_harmful=is_harmful,
+            confidence=confidence,
+            text=text
+        )
 
         return PipelineOutput(
             text=text,
             classification=classification,
             audio_duration_sec=len(audio_chunk) / self.buffer_manager.sample_rate,
-            processing_time_ms=elapsed_ms,
+            processing_time_ms=total_time,
         )
 

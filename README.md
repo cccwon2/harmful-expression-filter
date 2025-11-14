@@ -19,9 +19,10 @@
 
 ```bash
 # FastAPI 백엔드 (터미널 1)
+# ⚠️ Whisper 호환성을 위해 venv311 사용 필요
 cd server
-python -m venv venv
-venv\Scripts\activate
+venv311\Scripts\activate  # Windows (Python 3.11)
+# source venv311/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 uvicorn main:app --reload
 

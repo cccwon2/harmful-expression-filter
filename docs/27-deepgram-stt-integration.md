@@ -2,6 +2,18 @@
 
 ## ⚠️ 상태: 진행 중
 
+## ⚠️ 중요: Python 환경 설정
+
+**Whisper 호환성 문제로 인해 `server/venv311` (Python 3.11) 환경을 사용해야 합니다.**
+
+```bash
+# 서버 실행 시 venv311 활성화 필수
+cd server
+venv311\Scripts\activate  # Windows
+# source venv311/bin/activate  # Linux/Mac
+uvicorn main:app --reload
+```
+
 ## 📋 작업 개요
 
 T24에서 구현한 Whisper 기반 STT를 **Deepgram 상용 API**로 교체하여:
@@ -21,7 +33,7 @@ Deepgram은 WebSocket 기반 실시간 스트리밍을 지원하며, Whisper 대
 ## 📦 필수 의존성
 ```bash
 # server/requirements.txt에 추가
-deepgram-sdk==3.5.0  # Deepgram Python SDK
+deepgram-sdk>=5.3.0  # Deepgram Python SDK v5
 websockets==12.0     # 이미 있음 (T24)
 ```
 
@@ -40,10 +52,14 @@ websockets==12.0     # 이미 있음 (T24)
 
 ### Phase 1: DeepgramSTTService 구현
 
-- [ ] **1.1. Deepgram SDK 설치 및 테스트**
+- [x] **1.1. Deepgram SDK 설치 및 테스트**
 ```bash
+  # ⚠️ Whisper 호환성을 위해 venv311 사용 필요
   cd server
-  pip install deepgram-sdk==3.5.0
+  venv311\Scripts\activate  # Windows
+  # source venv311/bin/activate  # Linux/Mac
+  
+  pip install --upgrade deepgram-sdk>=5.3.0
   
   # .env 파일에 API 키 추가
   echo "DEEPGRAM_API_KEY=your_api_key_here" >> .env
@@ -53,78 +69,102 @@ websockets==12.0     # 이미 있음 (T24)
   - 무료 크레딧: $200 (약 16,000분)
   - 한국어 모델: `ko` 언어 코드 지원
 
-- [ ] **1.2. DeepgramSTTService 구현**
+- [x] **1.2. DeepgramSTTService 구현 (SDK v5)**
+
 ```python
-  # server/audio/deepgram_service.py
-  from deepgram import Deepgram
-  import asyncio
-  import os
-  import numpy as np
-  
-  class DeepgramSTTService:
-      """
-      Deepgram WebSocket 기반 실시간 STT 서비스
-      WhisperSTTService와 동일한 인터페이스 유지
-      """
-      
-      def __init__(self, api_key: str = None, language: str = "ko"):
-          self.api_key = api_key or os.getenv("DEEPGRAM_API_KEY")
-          if not self.api_key:
-              raise ValueError("DEEPGRAM_API_KEY not found in environment")
-          
-          self.language = language
-          self.deepgram = Deepgram(self.api_key)
-          print(f"✅ DeepgramSTTService initialized (language: {language})")
-      
-      async def transcribe_stream(self, audio_chunk: np.ndarray) -> str:
-          """
-          오디오 청크를 Deepgram으로 전송하여 텍스트 변환
-          
-          Args:
-              audio_chunk: float32 numpy array, normalized to [-1.0, 1.0]
-          
-          Returns:
-              str: 변환된 텍스트 (빈 문자열 가능)
-          """
-          try:
-              # float32 → int16 변환
-              audio_int16 = (audio_chunk * 32768).astype(np.int16)
-              audio_bytes = audio_int16.tobytes()
-              
-              # Deepgram API 호출
-              response = await self.deepgram.transcription.prerecorded(
-                  {
-                      "buffer": audio_bytes,
-                      "mimetype": "audio/raw; encoding=linear16; sample_rate=16000; channels=1",
-                  },
-                  {
-                      "language": self.language,
-                      "model": "general",  # 또는 "nova-2" (최신 모델)
-                      "punctuate": False,
-                      "diarize": False,
-                  }
-              )
-              
-              # 응답에서 텍스트 추출
-              if response and "results" in response:
-                  channels = response["results"]["channels"]
-                  if channels and len(channels) > 0:
-                      alternatives = channels[0]["alternatives"]
-                      if alternatives and len(alternatives) > 0:
-                          transcript = alternatives[0]["transcript"]
-                          return transcript.strip()
-              
-              return ""
-          
-          except Exception as e:
-              print(f"❌ Deepgram transcription error: {e}")
-              return ""
-      
-      def transcribe(self, audio_chunk: np.ndarray) -> str:
-          """
-          동기 버전 (WhisperSTTService 호환)
-          """
-          return asyncio.run(self.transcribe_stream(audio_chunk))
+# [Server: server/audio/deepgram_service.py]
+from deepgram import AsyncDeepgramClient
+import asyncio
+import os
+import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
+
+class DeepgramSTTService:
+    """
+    Deepgram WebSocket 기반 실시간 STT 서비스 (SDK v5)
+    WhisperSTTService와 동일한 인터페이스 유지
+    """
+    
+    def __init__(self, api_key: str = None, language: str = "ko", model: str = "nova-2"):
+        self.api_key = api_key or os.getenv("DEEPGRAM_API_KEY")
+        if not self.api_key:
+            raise ValueError("DEEPGRAM_API_KEY not found in environment")
+        
+        self.language = language
+        self.model = model
+        
+        try:
+            self.deepgram = AsyncDeepgramClient(api_key=self.api_key)
+            logger.info("✅ DeepgramSTTService initialized (language: %s, model: %s)", language, model)
+        except Exception as exc:
+            raise DeepgramNotAvailableError(f"Deepgram 초기화 실패: {exc}") from exc
+    
+    async def transcribe_stream(self, audio_np: np.ndarray) -> str:
+        """
+        오디오 청크를 Deepgram으로 전송하여 텍스트 변환 (SDK v5)
+        
+        Args:
+            audio_np: float32 numpy array, normalized to [-1.0, 1.0]
+        
+        Returns:
+            str: 변환된 텍스트 (빈 문자열 가능)
+        """
+        import time
+        start_time = time.time()
+        
+        try:
+            # 입력 검증
+            audio = np.asarray(audio_np, dtype=np.float32)
+            audio_mean = float(np.mean(np.abs(audio)))
+            
+            # 조용한 오디오 조기 종료
+            if audio_mean < 0.001:
+                logger.info("Audio too quiet, skipping API call")
+                return ""
+            
+            # float32 → int16 변환
+            audio_int16 = (audio * 32768).astype(np.int16)
+            audio_bytes = audio_int16.tobytes()
+            
+            # SDK v5 API 호출 (올바른 경로: listen.v1.media.transcribe_file)
+            # 모든 인자는 keyword-only이므로 request=로 명시해야 함
+            # raw audio bytes를 전달할 때는 encoding을 명시해야 함 (sample_rate는 파라미터로 지원되지 않음)
+            response = await self.deepgram.listen.v1.media.transcribe_file(
+                request=audio_bytes,  # bytes를 직접 전달
+                model=self.model,
+                language=self.language,
+                encoding="linear16",  # raw audio 형식 명시 (16kHz, 16-bit, mono는 기본값)
+                smart_format=False,
+                punctuate=False,
+            )
+            
+            # 응답 파싱
+            transcript = ""
+            if response and response.results:
+                channels = response.results.channels
+                if channels and len(channels) > 0:
+                    alternatives = channels[0].alternatives
+                    if alternatives and len(alternatives) > 0:
+                        transcript = alternatives[0].transcript.strip()
+            
+            # 레이턴시 로깅
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.info("Deepgram: %.2fms | '%s'", elapsed_ms, transcript[:50])
+            
+            if elapsed_ms > 2000:
+                logger.warning("Latency exceeds 2s: %.2fms", elapsed_ms)
+            
+            return transcript
+        
+        except Exception as exc:
+            logger.exception("Deepgram transcription error")
+            return ""
+    
+    def transcribe(self, audio_np: np.ndarray) -> str:
+        """동기 버전 (WhisperSTTService 호환)"""
+        return asyncio.run(self.transcribe_stream(audio_np))
 ```
 
 - [ ] **1.3. 단위 테스트**
@@ -334,10 +374,16 @@ websockets==12.0     # 이미 있음 (T24)
   **실행**:
 ```bash
   # 서버 실행 (터미널 1)
+  # ⚠️ Whisper 호환성을 위해 venv311 사용 필요
   cd server
+  venv311\Scripts\activate  # Windows
+  # source venv311/bin/activate  # Linux/Mac
   uvicorn main:app --reload
   
   # E2E 테스트 (터미널 2)
+  cd server
+  venv311\Scripts\activate  # Windows
+  # source venv311/bin/activate  # Linux/Mac
   python tests/test_e2e_deepgram.py
 ```
 
@@ -503,28 +549,34 @@ export class AudioService {
 
 ## ⚠️ 주의사항
 
-1. **API 키 보안**
+1. **Python 환경 설정**
+   - **Whisper 호환성 문제로 인해 `server/venv311` (Python 3.11) 환경을 사용해야 합니다.**
+   - 서버 실행 및 테스트 시 venv311 활성화 필수
+   - Windows: `venv311\Scripts\activate`
+   - Linux/Mac: `source venv311/bin/activate`
+
+2. **API 키 보안**
    - `.env` 파일에 `DEEPGRAM_API_KEY` 추가
    - `.gitignore`에 `.env` 포함 확인
    - 클라이언트에 API 키 노출 금지
 
-2. **비용 관리**
+3. **비용 관리**
    - Deepgram 무료 크레딧: $200
    - 종량제: 분당 $0.0125 (한국어 모델)
    - 1시간 테스트 = $0.75
    - 무료 크레딧으로 약 16,000분 사용 가능
 
-3. **언어 코드**
+4. **언어 코드**
    - 한국어: `language="ko"`
    - 다국어 지원: `language="multi"`
    - 모델 선택: `model="general"` 또는 `model="nova-2"` (최신)
 
-4. **에러 처리**
+5. **에러 처리**
    - API 키 없음 → `ValueError` 발생
    - 네트워크 오류 → 빈 문자열 반환
    - 응답 파싱 오류 → 로그 출력 후 무시
 
-5. **인터페이스 호환성**
+6. **인터페이스 호환성**
    - `WhisperSTTService`와 동일한 `transcribe(audio_chunk)` 메서드 제공
    - `AudioProcessingPipeline`은 수정 없이 그대로 사용 가능
 
@@ -552,8 +604,10 @@ T27 완료 후:
 ---
 
 **완료 기준**:
-- [x] Deepgram SDK 설치 및 API 키 설정
-- [ ] DeepgramSTTService 구현 및 단위 테스트 통과
-- [ ] AudioProcessingPipeline 통합 완료
-- [ ] E2E 테스트에서 평균 레이턴시 2초 이내 달성
+- [x] Deepgram SDK v5 설치 및 API 키 설정
+- [x] DeepgramSTTService SDK v5 방식으로 구현 완료
+- [x] 조용한 오디오 조기 종료 로직 추가
+- [x] 레이턴시 측정 및 로깅 추가
+- [x] AudioProcessingPipeline 통합 완료
+- [ ] E2E 테스트 실행 및 평균 레이턴시 2초 이내 달성
 - [ ] Whisper vs Deepgram 레이턴시 비교 보고서 작성
