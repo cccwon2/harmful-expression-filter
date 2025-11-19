@@ -137,29 +137,56 @@ app.whenReady().then(async () => {
     const axios = require('axios');
     const FormData = require('form-data');
     const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:8000';
-    const REQUEST_TIMEOUT = 5000;
+    const REQUEST_TIMEOUT = 30000; // 30초로 증가 (OCR 처리 시간 고려)
 
     try {
+      console.log(`[OCR] 서버로 이미지 전송 시작: ${SERVER_URL}/api/ocr-and-analyze`);
+      console.log(`[OCR] 이미지 크기: ${imageBuffer.length} bytes (${(imageBuffer.length / 1024).toFixed(2)} KB)`);
+      
       const formData = new FormData();
       formData.append('file', imageBuffer, {
         filename: 'screenshot.png',
         contentType: 'image/png',
       });
 
+      const requestStartTime = Date.now();
+      console.log(`[OCR] HTTP 요청 전송 중... (타임아웃: ${REQUEST_TIMEOUT}ms)`);
+      
       const response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
         headers: formData.getHeaders(),
         timeout: REQUEST_TIMEOUT,
       });
+
+      const requestTime = Date.now() - requestStartTime;
+      console.log(`[OCR] 서버 응답 수신 완료 (${requestTime}ms)`);
+      console.log(`[OCR] 서버 응답 상태: ${response.status}, 데이터 크기: ${JSON.stringify(response.data).length} bytes`);
 
       return {
         success: true,
         data: response.data,
       };
     } catch (error: any) {
-      console.error('[Main] 서버 OCR 요청 실패:', error?.message ?? error);
+      const errorMessage = error?.message ?? 'Unknown error';
+      const errorStatus = error?.response?.status;
+      const errorData = error?.response?.data;
+      
+      console.error('[OCR] 서버 OCR 요청 실패:', errorMessage);
+      if (errorStatus) {
+        console.error(`[OCR] HTTP 상태 코드: ${errorStatus}`);
+      }
+      if (errorData) {
+        console.error(`[OCR] 서버 응답 데이터:`, JSON.stringify(errorData, null, 2));
+      }
+      if (error?.code === 'ECONNREFUSED') {
+        console.error(`[OCR] 서버 연결 거부됨 - 서버가 실행 중인지 확인하세요: ${SERVER_URL}`);
+      }
+      if (error?.code === 'ETIMEDOUT' || errorMessage.includes('timeout')) {
+        console.error(`[OCR] 요청 타임아웃 (${REQUEST_TIMEOUT}ms) - 서버 응답이 너무 느립니다.`);
+      }
+      
       return {
         success: false,
-        error: error?.message ?? 'Unknown error',
+        error: errorMessage,
       };
     }
   };
@@ -170,6 +197,12 @@ app.whenReady().then(async () => {
   const captureAndProcessROI = async (): Promise<void> => {
     const roi = currentROI;
     if (!isMonitoring || !roi) {
+      if (!isMonitoring) {
+        console.log('[OCR] 모니터링이 비활성화되어 있습니다.');
+      }
+      if (!roi) {
+        console.log('[OCR] ROI가 설정되지 않았습니다.');
+      }
       return;
     }
 
@@ -178,6 +211,7 @@ app.whenReady().then(async () => {
       return;
     }
 
+    console.log(`[OCR] ROI 캡처 시작: x=${roi.x}, y=${roi.y}, width=${roi.width}, height=${roi.height}`);
     isCaptureInProgress = true;
     try {
       // 1. 화면 캡처
@@ -189,14 +223,18 @@ app.whenReady().then(async () => {
 
       if (sources.length === 0) {
         console.error('[OCR] 화면 소스를 찾을 수 없음');
+        isCaptureInProgress = false;
         return;
       }
 
       const screenshot = sources[0].thumbnail;
       if (screenshot.isEmpty()) {
         console.warn('[OCR] 캡처된 스크린샷이 비어있음');
+        isCaptureInProgress = false;
         return;
       }
+
+      console.log(`[OCR] 화면 캡처 완료: ${screenshot.getSize().width}x${screenshot.getSize().height}`);
 
       // 2. ROI 영역만 크롭
       const screenshotSize = screenshot.getSize();
@@ -218,8 +256,11 @@ app.whenReady().then(async () => {
           cropWidth,
           cropHeight,
         });
+        isCaptureInProgress = false;
         return;
       }
+
+      console.log(`[OCR] ROI 영역 크롭: ${cropX}, ${cropY}, ${cropWidth}x${cropHeight}`);
 
       const croppedImage = screenshot.crop({
         x: cropX,
@@ -230,9 +271,10 @@ app.whenReady().then(async () => {
 
       // 3. PNG Buffer로 변환
       const imageBuffer = croppedImage.toPNG();
+      console.log(`[OCR] 이미지 버퍼 생성 완료: ${imageBuffer.length} bytes (${(imageBuffer.length / 1024).toFixed(2)} KB)`);
 
       // 4. 서버로 OCR + 분석 요청
-      console.log(`[OCR] 서버로 이미지 전송 중... (크기: ${imageBuffer.length} bytes)`);
+      console.log(`[OCR] 서버로 이미지 전송 시작...`);
       const result = await sendImageToServer(imageBuffer);
 
       if (result.success && result.data) {

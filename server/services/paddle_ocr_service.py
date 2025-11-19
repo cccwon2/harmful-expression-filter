@@ -74,8 +74,10 @@ class PaddleOCRService:
                 image_array = image
             
             # OCR 실행 및 시간 측정
+            # PaddleOCR 3.x에서는 cls 파라미터가 ocr() 메서드에 직접 지원되지 않음
+            # cls는 PaddleOCR 초기화 시 use_angle_cls 파라미터로 설정됨
             start_time = time.time()
-            result = self.ocr.ocr(image_array, cls=True)
+            result = self.ocr.ocr(image_array)
             end_time = time.time()
             processing_time = end_time - start_time
             

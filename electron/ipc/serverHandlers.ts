@@ -8,6 +8,8 @@ import { SERVER_CHANNELS } from './channels';
 const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:8000';
 const REQUEST_TIMEOUT = 5000;
 
+console.log('[ServerHandlers] SERVER_URL:', SERVER_URL);
+
 interface HealthResponse {
   status: string;
   keywords_loaded: number;
@@ -67,12 +69,15 @@ export function registerServerHandlers(): void {
     SERVER_CHANNELS.HEALTH_CHECK,
     async (): Promise<HealthResponse | ErrorResponse> => {
       try {
-        const response = await axios.get<HealthResponse>(`${SERVER_URL}/health`, {
+        const url = `${SERVER_URL}/health`;
+        console.log('[IPC] 헬스 체크 요청:', url);
+        const response = await axios.get<HealthResponse>(url, {
           timeout: REQUEST_TIMEOUT,
         });
         console.log('[IPC] 서버 헬스 체크 성공:', response.data);
         return response.data;
       } catch (error) {
+        console.error('[IPC] 헬스 체크 실패:', error);
         return handleServerError(error, 'Health Check');
       }
     },
@@ -194,12 +199,30 @@ export function registerServerHandlers(): void {
 
 export async function checkServerConnection(): Promise<boolean> {
   try {
-    const response = await axios.get<HealthResponse>(`${SERVER_URL}/health`, {
+    const url = `${SERVER_URL}/health`;
+    console.log('[IPC] 서버 연결 확인 시도:', url);
+    const response = await axios.get<HealthResponse>(url, {
       timeout: 2000,
     });
-    return response.data.status === 'ok';
+    console.log('[IPC] 서버 응답:', response.data);
+    const isOk = response.data.status === 'ok';
+    if (!isOk) {
+      console.warn('[IPC] 서버 상태가 "ok"가 아님:', response.data);
+    }
+    return isOk;
   } catch (error) {
-    console.error('[IPC] 서버 연결 실패:', error);
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('[IPC] 서버 연결 실패:', {
+        message: axiosError.message,
+        code: axiosError.code,
+        status: axiosError.response?.status,
+        statusText: axiosError.response?.statusText,
+        url: axiosError.config?.url,
+      });
+    } else {
+      console.error('[IPC] 서버 연결 실패 (알 수 없는 오류):', error);
+    }
     return false;
   }
 }
