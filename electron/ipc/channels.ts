@@ -39,6 +39,7 @@ export const AUDIO_CHANNELS = {
   GET_STATUS: 'audio:get-status',
   SET_VOLUME_LEVEL: 'audio:set-volume-level',     // 볼륨 레벨 설정 (0~10)
   SET_BEEP_ENABLED: 'audio:set-beep-enabled',     // 비프음 활성화
+  SET_TARGET_APP: 'audio:set-target-app',         // 타겟 앱 설정 (예: "chrome", null이면 모든 앱)
 } as const;
 
 export type AudioChannel = typeof AUDIO_CHANNELS[keyof typeof AUDIO_CHANNELS];

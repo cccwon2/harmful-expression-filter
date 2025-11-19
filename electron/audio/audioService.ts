@@ -19,7 +19,7 @@ export class AudioService {
   private volumeLevel = 1; // 0~10, 기본값 1 (1단계 볼륨)
   private beepEnabled = false;
   private volumeController: AppVolumeController;
-  private targetAppName: string | null = null; // 모니터링할 앱 이름 (null이면 모든 앱)
+  private targetAppName: string | null = 'chrome'; // 모니터링할 앱 이름 (기본값: chrome, null이면 모든 앱)
   private windows: Set<BrowserWindow> = new Set(); // 여러 윈도우 지원
   
   constructor(initialWindow: BrowserWindow | null) {
@@ -466,9 +466,23 @@ export class AudioService {
   
   private async adjustVolume(level: number): Promise<void> {
     try {
-      // 유해 표현 감지 시 모든 앱 음소거 (자동 복원 없음)
-      console.log(`[AudioService] 🔇 Muting all apps due to harmful content (no auto-restore)`);
-      await this.volumeController.muteAllApps(0); // 자동 복원 없음 (0 = 복원 안함)
+      // 유해 표현 감지 시 볼륨 조절
+      if (this.targetAppName) {
+        // 특정 앱만 음소거 (예: Chrome)
+        console.log(`[AudioService] 🔇 Muting specific app: ${this.targetAppName} (no auto-restore)`);
+        const success = await this.volumeController.muteApp(this.targetAppName);
+        if (success) {
+          console.log(`[AudioService] ✅ Successfully muted ${this.targetAppName}`);
+        } else {
+          console.warn(`[AudioService] ⚠️ Failed to mute ${this.targetAppName}, falling back to mute all apps`);
+          // 폴백: 특정 앱을 찾을 수 없으면 모든 앱 음소거
+          await this.volumeController.muteAllApps(0);
+        }
+      } else {
+        // 모든 앱 음소거 (폴백 방식)
+        console.log(`[AudioService] 🔇 Muting all apps due to harmful content (no auto-restore)`);
+        await this.volumeController.muteAllApps(0); // 자동 복원 없음 (0 = 복원 안함)
+      }
     } catch (error) {
       console.error('[AudioService] Failed to mute apps:', error);
     }

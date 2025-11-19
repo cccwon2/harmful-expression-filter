@@ -89,6 +89,11 @@ function registerIpcHandlers() {
     return { success: true };
   });
   
+  ipcMain.handle(AUDIO_CHANNELS.SET_TARGET_APP, (_, appName: string | null) => {
+    audioService!.setTargetApp(appName);
+    return { success: true };
+  });
+  
   console.log('[AudioHandlers] IPC handlers registered');
 }
 
