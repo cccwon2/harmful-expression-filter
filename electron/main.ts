@@ -170,7 +170,7 @@ app.whenReady().then(async () => {
         response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
           headers: formData.getHeaders(),
           timeout: REQUEST_TIMEOUT,
-          validateStatus: (status) => status < 500, // 500 이상만 에러로 처리
+          validateStatus: (status: any) => status < 500, // 500 이상만 에러로 처리
         });
         console.log(`[OCR] axios 요청 성공: HTTP ${response.status}`);
       } catch (axiosError: any) {
