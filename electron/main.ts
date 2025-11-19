@@ -14,7 +14,7 @@ import { registerServerHandlers, checkServerConnection } from './ipc/serverHandl
 import { registerAudioHandlers, getAudioService } from './ipc/audioHandlers';
 import { setTrayAudioUpdateCallback } from './tray';
 
-const CAPTURE_INTERVAL_MS = 2000; // 2초 간격 (서버 OCR 처리 시간 고려)
+const CAPTURE_INTERVAL_MS = 3000; // 3초 간격 (서버 OCR 처리 시간 고려)
 
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
@@ -41,9 +41,19 @@ app.whenReady().then(async () => {
   const envPath = process.env.NODE_ENV === 'production' 
     ? path.join(app.getAppPath(), '.env')
     : path.join(__dirname, '../.env');
-  dotenv.config({ path: envPath });
+  const envResult = dotenv.config({ path: envPath });
   console.log('[Main] .env 파일 로드 시도:', envPath);
-  console.log('[Main] SERVER_URL:', process.env.SERVER_URL || 'http://127.0.0.1:8000 (기본값)');
+  if (envResult.error) {
+    console.warn('[Main] .env 파일 로드 실패:', envResult.error.message);
+    console.warn('[Main] 기본 SERVER_URL을 사용합니다: http://localhost:8000');
+  } else {
+    console.log('[Main] .env 파일 로드 성공');
+    if (envResult.parsed) {
+      console.log('[Main] .env 파일 내용:', Object.keys(envResult.parsed));
+    }
+  }
+  console.log('[Main] SERVER_URL:', process.env.SERVER_URL || 'http://localhost:8000 (기본값)');
+  console.log('[Main] NODE_ENV:', process.env.NODE_ENV || '(설정 안 됨)');
 
   registerServerHandlers();
 
@@ -136,7 +146,7 @@ app.whenReady().then(async () => {
   }> => {
     const axios = require('axios');
     const FormData = require('form-data');
-    const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:8000';
+    const SERVER_URL = process.env.SERVER_URL || 'http://localhost:8000';
     const REQUEST_TIMEOUT = 30000; // 30초로 증가 (OCR 처리 시간 고려)
 
     try {
@@ -151,11 +161,22 @@ app.whenReady().then(async () => {
 
       const requestStartTime = Date.now();
       console.log(`[OCR] HTTP 요청 전송 중... (타임아웃: ${REQUEST_TIMEOUT}ms)`);
+      console.log(`[OCR] 요청 URL: ${SERVER_URL}/api/ocr-and-analyze`);
+      console.log(`[OCR] FormData 헤더:`, formData.getHeaders());
+      console.log(`[OCR] axios 요청 시작 시간: ${new Date(requestStartTime).toISOString()}`);
       
-      const response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
-        headers: formData.getHeaders(),
-        timeout: REQUEST_TIMEOUT,
-      });
+      let response;
+      try {
+        response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
+          headers: formData.getHeaders(),
+          timeout: REQUEST_TIMEOUT,
+          validateStatus: (status) => status < 500, // 500 이상만 에러로 처리
+        });
+        console.log(`[OCR] axios 요청 성공: HTTP ${response.status}`);
+      } catch (axiosError: any) {
+        console.error(`[OCR] axios 요청 자체 실패 (서버 도달 전):`, axiosError.code, axiosError.message);
+        throw axiosError; // 상위 catch로 전달
+      }
 
       const requestTime = Date.now() - requestStartTime;
       console.log(`[OCR] 서버 응답 수신 완료 (${requestTime}ms)`);
@@ -179,10 +200,19 @@ app.whenReady().then(async () => {
       }
       if (error?.code === 'ECONNREFUSED') {
         console.error(`[OCR] 서버 연결 거부됨 - 서버가 실행 중인지 확인하세요: ${SERVER_URL}`);
+        console.error(`[OCR] 해결 방법:`);
+        console.error(`[OCR]   1. server 폴더로 이동: cd server`);
+        console.error(`[OCR]   2. venv311 가상환경 활성화: venv311\\Scripts\\activate`);
+        console.error(`[OCR]   3. 서버 실행: uvicorn main:app --reload`);
       }
       if (error?.code === 'ETIMEDOUT' || errorMessage.includes('timeout')) {
         console.error(`[OCR] 요청 타임아웃 (${REQUEST_TIMEOUT}ms) - 서버 응답이 너무 느립니다.`);
       }
+      if (error?.code === 'ENOTFOUND') {
+        console.error(`[OCR] 호스트를 찾을 수 없음: ${SERVER_URL}`);
+        console.error(`[OCR] SERVER_URL이 올바른지 확인하세요.`);
+      }
+      console.error(`[OCR] 전체 에러 객체:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       
       return {
         success: false,
@@ -211,7 +241,8 @@ app.whenReady().then(async () => {
       return;
     }
 
-    console.log(`[OCR] ROI 캡처 시작: x=${roi.x}, y=${roi.y}, width=${roi.width}, height=${roi.height}`);
+    const captureStartTime = Date.now();
+    console.log(`[OCR] ROI 캡처 시작: x=${roi.x}, y=${roi.y}, width=${roi.width}, height=${roi.height} (${new Date(captureStartTime).toLocaleTimeString()})`);
     isCaptureInProgress = true;
     try {
       // 1. 화면 캡처
@@ -327,6 +358,7 @@ app.whenReady().then(async () => {
     if (monitoringInterval) {
       clearInterval(monitoringInterval);
       monitoringInterval = null;
+      console.log('[OCR] 모니터링 인터벌 정리 완료');
     }
 
     if (!isMonitoring && !currentROI) {
@@ -370,19 +402,32 @@ app.whenReady().then(async () => {
     }
 
     console.log('[OCR] ROI 모니터링 시작:', currentROI);
+    console.log(`[OCR] 캡처 간격: ${CAPTURE_INTERVAL_MS}ms (${CAPTURE_INTERVAL_MS / 1000}초)`);
     isMonitoring = true;
     pushOverlayState({ mode: 'detect', roi: currentROI });
     
     // 즉시 한 번 실행
+    const initialStartTime = Date.now();
+    console.log(`[OCR] 초기 캡처 시작 (${new Date(initialStartTime).toLocaleTimeString()})`);
     captureAndProcessROI().catch((error) => {
       console.error('[OCR] 초기 캡처 오류:', error);
     });
 
-    // 2초마다 반복 실행
+    // 3초마다 반복 실행
+    let captureCount = 0;
     monitoringInterval = setInterval(() => {
-      captureAndProcessROI().catch((error) => {
-        console.error('[OCR] 모니터링 간격 오류:', error);
-      });
+      captureCount++;
+      const intervalStartTime = Date.now();
+      console.log(`[OCR] 정기 캡처 #${captureCount} 시작 (${new Date(intervalStartTime).toLocaleTimeString()}, 간격: ${CAPTURE_INTERVAL_MS}ms)`);
+      captureAndProcessROI()
+        .then(() => {
+          const intervalEndTime = Date.now();
+          const elapsed = intervalEndTime - intervalStartTime;
+          console.log(`[OCR] 정기 캡처 #${captureCount} 완료 (소요 시간: ${elapsed}ms)`);
+        })
+        .catch((error) => {
+          console.error(`[OCR] 정기 캡처 #${captureCount} 오류:`, error);
+        });
     }, CAPTURE_INTERVAL_MS);
 
     if (overlayWindow && !overlayWindow.isDestroyed()) {

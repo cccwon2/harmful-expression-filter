@@ -5,10 +5,14 @@ import { SERVER_CHANNELS } from './channels';
 
 // SERVER_URL은 main.ts에서 dotenv로 로드된 환경 변수 사용
 // 기본값: http://127.0.0.1:8000
+// 참고: serverHandlers.ts는 main.ts에서 dotenv.config() 이후에 로드되므로
+// process.env.SERVER_URL이 이미 설정되어 있어야 함
 const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:8000';
 const REQUEST_TIMEOUT = 5000;
 
 console.log('[ServerHandlers] SERVER_URL:', SERVER_URL);
+console.log('[ServerHandlers] process.env.SERVER_URL:', process.env.SERVER_URL || '(설정 안 됨)');
+console.log('[ServerHandlers] NODE_ENV:', process.env.NODE_ENV || '(설정 안 됨)');
 
 interface HealthResponse {
   status: string;
@@ -71,6 +75,7 @@ export function registerServerHandlers(): void {
       try {
         const url = `${SERVER_URL}/health`;
         console.log('[IPC] 헬스 체크 요청:', url);
+        console.log('[IPC] 현재 SERVER_URL:', SERVER_URL);
         const response = await axios.get<HealthResponse>(url, {
           timeout: REQUEST_TIMEOUT,
         });
@@ -78,6 +83,19 @@ export function registerServerHandlers(): void {
         return response.data;
       } catch (error) {
         console.error('[IPC] 헬스 체크 실패:', error);
+        if (axios.isAxiosError(error)) {
+          const axiosError = error as AxiosError;
+          console.error('[IPC] 에러 상세:', {
+            message: axiosError.message,
+            code: axiosError.code,
+            status: axiosError.response?.status,
+            url: axiosError.config?.url,
+            serverUrl: SERVER_URL,
+          });
+          if (axiosError.code === 'ECONNREFUSED') {
+            console.error('[IPC] ⚠️ 서버 연결 거부 - 서버가 실행 중인지 확인하세요');
+          }
+        }
         return handleServerError(error, 'Health Check');
       }
     },

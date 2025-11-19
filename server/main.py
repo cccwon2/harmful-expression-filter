@@ -29,18 +29,32 @@ logging.basicConfig(level=logging.INFO)
 server_env_path = Path(__file__).parent / '.env'
 parent_env_path = Path(__file__).parent.parent / '.env'
 
+LOGGER.info("[ENV] 서버 .env 경로 확인 중: %s", server_env_path)
+LOGGER.info("[ENV] 부모 .env 경로 확인 중: %s", parent_env_path)
+LOGGER.info("[ENV] 서버 .env 존재 여부: %s", server_env_path.exists())
+LOGGER.info("[ENV] 부모 .env 존재 여부: %s", parent_env_path.exists())
+
 if server_env_path.exists():
-    load_dotenv(dotenv_path=server_env_path)
-    LOGGER.info("[INFO] ✅ .env file loaded from: %s", server_env_path)
+    result = load_dotenv(dotenv_path=server_env_path)
+    LOGGER.info("[ENV] ✅ .env file loaded from: %s", server_env_path)
+    LOGGER.info("[ENV] load_dotenv 결과: %s", result)
+    if result:
+        LOGGER.info("[ENV] 로드된 환경 변수 확인:")
+        LOGGER.info("[ENV]   - DEEPGRAM_API_KEY: %s", "설정됨" if os.getenv("DEEPGRAM_API_KEY") else "없음")
+        LOGGER.info("[ENV]   - PADDLEOCR_LANG: %s", os.getenv("PADDLEOCR_LANG", "없음"))
+        LOGGER.info("[ENV]   - PADDLEOCR_USE_GPU: %s", os.getenv("PADDLEOCR_USE_GPU", "없음"))
+        LOGGER.info("[ENV]   - SERVER_URL: %s", os.getenv("SERVER_URL", "없음"))
 elif parent_env_path.exists():
-    load_dotenv(dotenv_path=parent_env_path)
-    LOGGER.info("[INFO] ✅ .env file loaded from: %s", parent_env_path)
+    result = load_dotenv(dotenv_path=parent_env_path)
+    LOGGER.info("[ENV] ✅ .env file loaded from: %s", parent_env_path)
+    LOGGER.info("[ENV] load_dotenv 결과: %s", result)
 else:
     # 환경변수에서 직접 읽기 시도
-    load_dotenv()
-    LOGGER.warning("[WARN] ⚠️ .env file not found in server/ or parent directory.")
-    LOGGER.warning("[WARN] ⚠️ Looking for .env in: %s or %s", server_env_path, parent_env_path)
-    LOGGER.warning("[WARN] ⚠️ Using environment variables or system defaults.")
+    result = load_dotenv()
+    LOGGER.warning("[ENV] ⚠️ .env file not found in server/ or parent directory.")
+    LOGGER.warning("[ENV] ⚠️ Looking for .env in: %s or %s", server_env_path, parent_env_path)
+    LOGGER.warning("[ENV] ⚠️ Using environment variables or system defaults.")
+    LOGGER.warning("[ENV] load_dotenv() 결과: %s", result)
 
 # ============== 전역 변수 ==============
 BAD_WORDS: List[str] = []
@@ -118,6 +132,82 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 요청 로깅 미들웨어 (모든 HTTP 요청 캡처)
+# 주의: FastAPI에서 middleware는 역순으로 실행되므로, 이것이 마지막에 실행됨
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """모든 HTTP 요청을 로깅"""
+    start_time = time.time()
+    
+    # 즉시 로그 출력 (요청 도달 확인) - stdout에도 직접 출력
+    import sys
+    print("=" * 80, file=sys.stderr)
+    print("[Request] ========== HTTP 요청 수신 ==========", file=sys.stderr)
+    print(f"[Request] 시간: {time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
+    print(f"[Request] Method: {request.method}", file=sys.stderr)
+    print(f"[Request] URL: {request.url}", file=sys.stderr)
+    print(f"[Request] Path: {request.url.path}", file=sys.stderr)
+    print(f"[Request] Query: {request.url.query}", file=sys.stderr)
+    
+    # 로거로도 출력
+    LOGGER.info("=" * 80)
+    LOGGER.info("[Request] ========== HTTP 요청 수신 ==========")
+    LOGGER.info(f"[Request] 시간: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    LOGGER.info(f"[Request] Method: {request.method}")
+    LOGGER.info(f"[Request] URL: {request.url}")
+    LOGGER.info(f"[Request] Path: {request.url.path}")
+    LOGGER.info(f"[Request] Query: {request.url.query}")
+    
+    # 헤더 일부만 출력 (전체는 너무 길 수 있음)
+    headers_dict = dict(request.headers)
+    content_type = headers_dict.get('content-type', 'N/A')
+    content_length = headers_dict.get('content-length', 'N/A')
+    host = headers_dict.get('host', 'N/A')
+    user_agent = headers_dict.get('user-agent', 'N/A')[:50]
+    
+    print(f"[Request] Content-Type: {content_type}", file=sys.stderr)
+    print(f"[Request] Content-Length: {content_length}", file=sys.stderr)
+    print(f"[Request] Host: {host}", file=sys.stderr)
+    print(f"[Request] User-Agent: {user_agent}...", file=sys.stderr)
+    
+    LOGGER.info(f"[Request] Content-Type: {content_type}")
+    LOGGER.info(f"[Request] Content-Length: {content_length}")
+    LOGGER.info(f"[Request] Host: {host}")
+    LOGGER.info(f"[Request] User-Agent: {user_agent}...")
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        status_code = response.status_code
+        
+        print(f"[Request] ✅ 응답 완료: HTTP {status_code}, 소요 시간: {process_time:.3f}초", file=sys.stderr)
+        print("[Request] =====================================", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        
+        LOGGER.info(f"[Request] ✅ 응답 완료: HTTP {status_code}, 소요 시간: {process_time:.3f}초")
+        LOGGER.info("[Request] =====================================")
+        LOGGER.info("=" * 80)
+        return response
+    except Exception as e:
+        process_time = time.time() - start_time
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        print(f"[Request] ❌ 요청 처리 중 오류 발생", file=sys.stderr)
+        print(f"[Request] 오류 타입: {error_type}", file=sys.stderr)
+        print(f"[Request] 오류 메시지: {error_msg}", file=sys.stderr)
+        print(f"[Request] 소요 시간: {process_time:.3f}초", file=sys.stderr)
+        print("[Request] =====================================", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        
+        LOGGER.error(f"[Request] ❌ 요청 처리 중 오류 발생", exc_info=True)
+        LOGGER.error(f"[Request] 오류 타입: {error_type}")
+        LOGGER.error(f"[Request] 오류 메시지: {error_msg}")
+        LOGGER.error(f"[Request] 소요 시간: {process_time:.3f}초")
+        LOGGER.info("[Request] =====================================")
+        LOGGER.info("=" * 80)
+        raise
+
 
 # ============== 데이터 모델 ==============
 class HealthResponse(BaseModel):
@@ -170,33 +260,52 @@ def load_keywords() -> None:
         "미 친 놈",
     ]
 
+    LOGGER.info(f"[Keywords] 키워드 파일 경로: {keywords_path}")
+    LOGGER.info(f"[Keywords] 파일 존재 여부: {os.path.exists(keywords_path)}")
+    
     if os.path.exists(keywords_path):
         try:
             with open(keywords_path, "r", encoding="utf-8") as file:
                 data = json.load(file)
                 BAD_WORDS = data.get("keywords", default_keywords)
-                print(f"[INFO] {len(BAD_WORDS)} keywords loaded")
+                LOGGER.info(f"[Keywords] ✅ {len(BAD_WORDS)}개 키워드 로드 완료")
+                LOGGER.info(f"[Keywords] 키워드 목록: {BAD_WORDS[:10]}..." if len(BAD_WORDS) > 10 else f"[Keywords] 키워드 목록: {BAD_WORDS}")
+                
+                # 키워드가 비어있는지 확인
+                if not BAD_WORDS or len(BAD_WORDS) == 0:
+                    LOGGER.error("[Keywords] ❌ 키워드가 비어있습니다! 기본 키워드를 사용합니다.")
+                    BAD_WORDS = default_keywords
         except Exception as exc:  # pylint: disable=broad-except
-            print(f"[WARN] failed to load keywords file: {exc}")
+            LOGGER.error(f"[Keywords] ❌ 키워드 파일 로드 실패: {exc}", exc_info=True)
+            LOGGER.warning("[Keywords] 기본 키워드를 사용합니다.")
             BAD_WORDS = default_keywords
     else:
-        print("[WARN] bad_words.json missing. Using default keywords.")
+        LOGGER.warning("[Keywords] ⚠️ bad_words.json 파일이 없습니다. 기본 키워드를 사용합니다.")
         BAD_WORDS = default_keywords
 
         # 폴더 생성 및 기본 파일 저장
         os.makedirs(os.path.dirname(keywords_path), exist_ok=True)
-        with open(keywords_path, "w", encoding="utf-8") as file:
-            json.dump(
-                {
-                    "keywords": default_keywords,
-                    "version": "1.0",
-                    "updated_at": "2024-11-11",
-                },
-                file,
-                ensure_ascii=False,
-                indent=2,
-            )
-        print("[INFO] default bad_words.json created")
+        try:
+            with open(keywords_path, "w", encoding="utf-8") as file:
+                json.dump(
+                    {
+                        "keywords": default_keywords,
+                        "version": "1.0",
+                        "updated_at": "2024-11-11",
+                    },
+                    file,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            LOGGER.info(f"[Keywords] ✅ 기본 bad_words.json 파일 생성 완료: {keywords_path}")
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error(f"[Keywords] ❌ 키워드 파일 생성 실패: {exc}", exc_info=True)
+    
+    # 최종 확인
+    if not BAD_WORDS or len(BAD_WORDS) == 0:
+        LOGGER.error("[Keywords] ❌ CRITICAL: BAD_WORDS가 비어있습니다! 유해 표현 감지가 작동하지 않습니다!")
+    else:
+        LOGGER.info(f"[Keywords] ✅ 최종 확인: {len(BAD_WORDS)}개 키워드 준비 완료")
 
 
 
@@ -214,30 +323,52 @@ def check_keywords(text: str) -> List[str]:
     import re
     
     if not text or not text.strip():
+        LOGGER.debug("[Keywords] 텍스트가 비어있어 키워드 체크를 건너뜁니다.")
+        return []
+
+    # BAD_WORDS가 비어있는지 확인
+    if not BAD_WORDS or len(BAD_WORDS) == 0:
+        LOGGER.error("[Keywords] ❌ BAD_WORDS가 비어있습니다! 키워드 체크를 수행할 수 없습니다.")
         return []
 
     text_lower = text.lower()
     matched: List[str] = []
+    
+    LOGGER.debug(f"[Keywords] 키워드 체크 시작: 텍스트='{text[:50]}...', 키워드 수={len(BAD_WORDS)}")
 
     for bad_word in BAD_WORDS:
         bad_word_lower = bad_word.lower().strip()
         if not bad_word_lower:
             continue
         
-        # 단어 단위 매칭을 위해 정규식 사용
-        # 공백이나 특수문자, 문자열 시작/끝으로 구분된 키워드만 매칭
-        # 한글의 경우 단어 경계가 제대로 작동하지 않을 수 있으므로
-        # 공백이나 특수문자, 문자열 시작/끝으로 구분된 키워드만 매칭
-        # \W는 단어 문자가 아닌 문자 (공백, 특수문자 등)
-        word_boundary_pattern = r'(^|[\s\W])' + re.escape(bad_word_lower) + r'([\s\W]|$)'
-        
-        if re.search(word_boundary_pattern, text_lower):
-            matched.append(bad_word)
-            LOGGER.warning("[ALERT] Keyword detected: '%s' in '%s'", bad_word, text)
-        # 키워드가 전체 텍스트와 정확히 일치하는 경우
-        elif bad_word_lower == text_lower.strip():
-            matched.append(bad_word)
-            LOGGER.warning("[ALERT] Keyword detected (exact match): '%s' in '%s'", bad_word, text)
+        # 1. 간단한 포함 체크 (가장 기본적인 방법)
+        if bad_word_lower in text_lower:
+            # 단어 단위 매칭을 위해 정규식 사용
+            # 공백이나 특수문자, 문자열 시작/끝으로 구분된 키워드만 매칭
+            # 한글의 경우 단어 경계가 제대로 작동하지 않을 수 있으므로
+            # 공백이나 특수문자, 문자열 시작/끝으로 구분된 키워드만 매칭
+            # \W는 단어 문자가 아닌 문자 (공백, 특수문자 등)
+            word_boundary_pattern = r'(^|[\s\W])' + re.escape(bad_word_lower) + r'([\s\W]|$)'
+            
+            if re.search(word_boundary_pattern, text_lower):
+                if bad_word not in matched:
+                    matched.append(bad_word)
+                    LOGGER.warning("[ALERT] 🚨 키워드 감지: '%s' in '%s'", bad_word, text)
+            # 키워드가 전체 텍스트와 정확히 일치하는 경우
+            elif bad_word_lower == text_lower.strip():
+                if bad_word not in matched:
+                    matched.append(bad_word)
+                    LOGGER.warning("[ALERT] 🚨 키워드 감지 (정확 일치): '%s' in '%s'", bad_word, text)
+            # 공백이 있는 키워드의 경우 공백 무시하고 매칭
+            elif bad_word_lower.replace(" ", "") in text_lower.replace(" ", ""):
+                if bad_word not in matched:
+                    matched.append(bad_word)
+                    LOGGER.warning("[ALERT] 🚨 키워드 감지 (공백 무시): '%s' in '%s'", bad_word, text)
+
+    if matched:
+        LOGGER.warning("[Keywords] ⚠️ 총 {matched_count}개 키워드 매칭: {matched}".format(matched_count=len(matched), matched=matched))
+    else:
+        LOGGER.debug("[Keywords] ✅ 유해 표현 없음")
 
     return matched
 
@@ -350,16 +481,30 @@ async def ocr_endpoint(file: UploadFile = File(...)):
     """
     try:
         # 파일 유효성 검사
+        LOGGER.info(f"[OCR] OCR 요청 수신: 파일명={file.filename}, Content-Type={file.content_type}")
         if not file.content_type or not file.content_type.startswith("image/"):
+            LOGGER.error(f"[OCR] 잘못된 파일 형식: {file.content_type}")
             raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
         
         # 이미지 로드
         image_data = await file.read()
-        image = Image.open(io.BytesIO(image_data))
+        LOGGER.info(f"[OCR] 이미지 데이터 수신 완료: {len(image_data)} bytes")
+        try:
+            image = Image.open(io.BytesIO(image_data))
+            LOGGER.info(f"[OCR] 이미지 로드 완료: 크기={image.size}, 모드={image.mode}")
+        except Exception as img_error:
+            LOGGER.error(f"[OCR] 이미지 로드 실패: {img_error}", exc_info=True)
+            raise HTTPException(status_code=400, detail=f"이미지 로드 실패: {img_error}")
         
         # OCR 실행
-        ocr_service = get_ocr_service()
-        texts, processing_time = ocr_service.extract_text(image)
+        LOGGER.info("[OCR] OCR 서비스 호출 시작...")
+        try:
+            ocr_service = get_ocr_service()
+            texts, processing_time = ocr_service.extract_text(image)
+            LOGGER.info(f"[OCR] OCR 처리 완료: {len(texts)}개 텍스트 추출, 소요 시간={processing_time:.3f}초")
+        except Exception as ocr_error:
+            LOGGER.error(f"[OCR] OCR 처리 실패: {ocr_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"OCR 처리 실패: {ocr_error}")
         
         # 결과 반환
         return JSONResponse(content={
@@ -368,9 +513,13 @@ async def ocr_endpoint(file: UploadFile = File(...)):
             "text_count": len(texts)
         })
         
+    except HTTPException:
+        # HTTPException은 그대로 전달
+        raise
     except Exception as e:
-        LOGGER.error(f"OCR API 오류: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        LOGGER.error(f"[OCR] OCR API 오류: {e}", exc_info=True)
+        LOGGER.error(f"[OCR] 오류 타입: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
 
 
 @app.post("/api/ocr-and-analyze")
@@ -393,23 +542,77 @@ async def ocr_and_analyze_endpoint(file: UploadFile = File(...)):
             }
         }
     """
+    import time
+    import sys
+    start_total = time.time()
+    
+    # 즉시 stdout/stderr에도 출력 (로거 문제 확인용)
+    print("=" * 60, file=sys.stderr)
+    print("[OCR] ========== OCR+분석 요청 시작 ==========", file=sys.stderr)
+    print(f"[OCR] 요청 시간: {time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
+    print(f"[OCR] 요청 파일명: {file.filename}", file=sys.stderr)
+    print(f"[OCR] 요청 Content-Type: {file.content_type}", file=sys.stderr)
+    
+    LOGGER.info("=" * 60)
+    LOGGER.info("[OCR] ========== OCR+분석 요청 시작 ==========")
+    LOGGER.info(f"[OCR] 요청 시간: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    LOGGER.info(f"[OCR] 요청 파일명: {file.filename}")
+    LOGGER.info(f"[OCR] 요청 Content-Type: {file.content_type}")
+    
     try:
-        import time
-        start_total = time.time()
         
         # 이미지 로드
+        LOGGER.info(f"[OCR] OCR+분석 요청 수신: 파일명={file.filename}, Content-Type={file.content_type}")
         if not file.content_type or not file.content_type.startswith("image/"):
+            LOGGER.error(f"[OCR] 잘못된 파일 형식: {file.content_type}")
             raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
         
         image_data = await file.read()
-        image = Image.open(io.BytesIO(image_data))
+        LOGGER.info(f"[OCR] 이미지 데이터 수신 완료: {len(image_data)} bytes")
+        
+        try:
+            image = Image.open(io.BytesIO(image_data))
+            LOGGER.info(f"[OCR] 이미지 로드 완료: 크기={image.size}, 모드={image.mode}")
+        except Exception as img_error:
+            LOGGER.error(f"[OCR] 이미지 로드 실패: {img_error}", exc_info=True)
+            raise HTTPException(status_code=400, detail=f"이미지 로드 실패: {img_error}")
         
         # OCR 실행
-        ocr_service = get_ocr_service()
-        texts, ocr_time = ocr_service.extract_text(image)
+        import sys
+        ocr_start = time.time()
+        
+        LOGGER.info("[OCR] OCR 서비스 호출 시작...")
+        print("[OCR] OCR 서비스 호출 시작...", file=sys.stderr)
+        
+        try:
+            LOGGER.info("[OCR] get_ocr_service() 호출 중...")
+            print("[OCR] get_ocr_service() 호출 중...", file=sys.stderr)
+            ocr_service = get_ocr_service()
+            LOGGER.info("[OCR] get_ocr_service() 완료")
+            print("[OCR] get_ocr_service() 완료", file=sys.stderr)
+            
+            LOGGER.info("[OCR] ocr_service.extract_text() 호출 중...")
+            print("[OCR] ocr_service.extract_text() 호출 중...", file=sys.stderr)
+            extract_start = time.time()
+            texts, ocr_time = ocr_service.extract_text(image)
+            extract_end = time.time()
+            
+            LOGGER.info(f"[OCR] OCR 처리 완료: {len(texts)}개 텍스트 추출, 소요 시간={ocr_time:.3f}초 (실제: {extract_end - extract_start:.3f}초)")
+            print(f"[OCR] OCR 처리 완료: {len(texts)}개 텍스트", file=sys.stderr)
+        except Exception as ocr_error:
+            ocr_error_time = time.time() - ocr_start
+            error_msg = f"OCR 처리 실패 (소요 시간: {ocr_error_time:.3f}초): {ocr_error}"
+            LOGGER.error(error_msg, exc_info=True)
+            print(f"[OCR] OCR 처리 실패: {error_msg}", file=sys.stderr)
+            raise HTTPException(status_code=500, detail=f"OCR 처리 실패: {ocr_error}")
         
         # 텍스트 결합 및 유해성 분석
-        combined_text = " ".join(texts)
+        combined_text = " ".join(texts) if texts else ""
+        LOGGER.info(f"[OCR] 분석할 텍스트: '{combined_text[:100]}{'...' if len(combined_text) > 100 else ''}' (총 {len(combined_text)}자)")
+        LOGGER.info(f"[OCR] 현재 BAD_WORDS 상태: {len(BAD_WORDS)}개 키워드 로드됨")
+        if not BAD_WORDS or len(BAD_WORDS) == 0:
+            LOGGER.error("[OCR] ⚠️ WARNING: BAD_WORDS가 비어있습니다! 유해 표현 감지가 작동하지 않습니다!")
+        
         start_analysis = time.time()
         
         # 기존 analyze_text 함수 로직 사용
@@ -417,9 +620,17 @@ async def ocr_and_analyze_endpoint(file: UploadFile = File(...)):
         has_violation = len(matched_keywords) > 0
         analysis_time = time.time() - start_analysis
         
+        LOGGER.info(f"[OCR] 키워드 매칭 결과: {len(matched_keywords)}개 키워드 매칭됨")
+        if matched_keywords:
+            LOGGER.warning(f"[OCR] 🚨 유해 표현 감지됨: {matched_keywords}")
+        else:
+            LOGGER.info(f"[OCR] ✅ 유해 표현 없음")
+        
         total_time = time.time() - start_total
         
-        return JSONResponse(content={
+        LOGGER.info(f"[OCR] 분석 완료: 유해 표현={'감지됨' if has_violation else '없음'}, 매칭 키워드={matched_keywords}, 총 처리 시간={total_time:.3f}초")
+        
+        response_data = {
             "texts": texts,
             "is_harmful": has_violation,
             "harmful_words": matched_keywords,
@@ -428,11 +639,30 @@ async def ocr_and_analyze_endpoint(file: UploadFile = File(...)):
                 "analysis": round(analysis_time, 3),
                 "total": round(total_time, 3)
             }
-        })
+        }
         
+        LOGGER.info("[OCR] 응답 데이터 준비 완료, JSONResponse 반환 시작...")
+        LOGGER.info(f"[OCR] 응답 데이터 크기: {len(str(response_data))} bytes")
+        
+        response = JSONResponse(content=response_data)
+        
+        LOGGER.info("[OCR] ========== OCR+분석 요청 완료 ==========")
+        LOGGER.info("=" * 60)
+        
+        return response
+        
+    except HTTPException as http_exc:
+        # HTTPException은 그대로 전달
+        LOGGER.error(f"[OCR] HTTPException 발생: {http_exc.status_code} - {http_exc.detail}")
+        LOGGER.info("=" * 60)
+        raise
     except Exception as e:
-        LOGGER.error(f"OCR+분석 API 오류: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        LOGGER.error(f"[OCR] ❌ OCR+분석 API 오류 발생", exc_info=True)
+        LOGGER.error(f"[OCR] 오류 타입: {type(e).__name__}")
+        LOGGER.error(f"[OCR] 오류 메시지: {str(e)}")
+        LOGGER.error(f"[OCR] 오류 전체 정보: {e}")
+        LOGGER.info("=" * 60)
+        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
 
 
 # [Server: server/main.py]
@@ -588,5 +818,6 @@ if __name__ == "__main__":
         port=8000,
         log_level="info",
         reload=True,
+        access_log=True,  # 요청 로그 활성화
     )
 
