@@ -8,25 +8,25 @@ httpx==0.25.2
 # NumPy 2.x는 PaddleOCR 호환 안됨 → 1.x로 제한
 numpy<2.0
 
-# Transformers는 아직 Python 3.12 정식 휠 없음 → 3.11 이하에서만 설치
-transformers==4.35.0; python_version < "3.12"
+# Transformers는 Python 3.11에서는 잘 동작
+transformers==4.35.0
 
 pydub==0.25.1
 
-# Whisper & Torch 계열 패키지는 Python 3.12 미만 환경에서만 설치
-openai-whisper==20231117; python_version < "3.12"
-torch==2.1.0; python_version < "3.12"
-torchaudio==2.1.0; python_version < "3.12"
+# Whisper & Torch 계열 (Python 3.11 지원)
+torch==2.1.0
+torchaudio==2.1.0
+openai-whisper==20231117
 
-# Deepgram SDK
+# Deepgram V5
 deepgram-sdk>=5.3.0
 
-# Environment variables
+# 환경 변수 및 유틸
 python-dotenv==1.0.0
 
-# PaddleOCR (Python 3.10~3.12 호환)
+# PaddleOCR & PaddlePaddle (Python 3.11 권장 버전)
 paddleocr==2.7.0.3
-paddlepaddle==2.6.1; python_version < "3.12"
-paddlepaddle==2.6.0.post101; python_version >= "3.12"
+paddlepaddle==2.6.1
 
+# 이미지 처리
 Pillow>=9.0.0
