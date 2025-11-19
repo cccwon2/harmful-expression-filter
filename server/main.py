@@ -83,12 +83,15 @@ async def lifespan(app: FastAPI):
         LOGGER.error("[ERROR] Classifier 초기화 중 예상치 못한 오류: %s", exc, exc_info=True)
         CLASSIFIER = None
 
-    # PaddleOCR 서비스 프리로드 (첫 요청 지연 방지)
+    # PaddleOCR 서비스는 지연 초기화로 변경됨 (서버 시작 시 블로킹 방지)
+    # 첫 OCR 요청 시 자동으로 초기화됩니다.
     try:
+        # 서비스 객체만 생성 (실제 모델 로드는 첫 요청 시 수행)
         ocr_service = get_ocr_service()
-        LOGGER.info("[INFO] ✅ PaddleOCR Service initialized successfully")
+        LOGGER.info("[INFO] ✅ PaddleOCR Service 객체 생성 완료 (지연 초기화)")
+        LOGGER.info("[INFO] ℹ️  첫 OCR 요청 시 모델이 로드됩니다 (약간의 지연 발생 가능)")
     except Exception as ocr_exc:  # pylint: disable=broad-except
-        LOGGER.error("[ERROR] PaddleOCR 서비스 초기화 실패: %s", ocr_exc, exc_info=True)
+        LOGGER.error("[ERROR] PaddleOCR 서비스 객체 생성 실패: %s", ocr_exc, exc_info=True)
         LOGGER.warning("[WARN] OCR 엔드포인트가 동작하지 않을 수 있습니다.")
 
     LOGGER.info("[INFO] FastAPI server startup complete")

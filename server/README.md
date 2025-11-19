@@ -33,8 +33,15 @@ pip install -r requirements.txt
 ### 서버 실행
 
 ```bash
-# venv311 활성화 후
+# 방법 1: 가상환경 활성화 후 실행 (권장)
+venv311\Scripts\activate
 uvicorn main:app --reload
+
+# 방법 2: 가상환경 Python 직접 사용 (Windows)
+.\venv311\Scripts\python.exe -m uvicorn main:app --reload
+
+# 방법 3: 가상환경 Python 직접 사용 (Linux/Mac)
+venv311/bin/python -m uvicorn main:app --reload
 ```
 
 ## 환경 변수
