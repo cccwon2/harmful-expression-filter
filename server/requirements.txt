@@ -26,7 +26,7 @@ python-dotenv==1.0.0
 
 # PaddleOCR & PaddlePaddle (Python 3.11 권장 버전)
 paddleocr==2.7.0.3
-paddlepaddle==2.6.1
+paddlepaddle==2.6.2
 
 # 이미지 처리
 Pillow>=9.0.0
