@@ -33,6 +33,7 @@ Thumbs.db
 # Server
 **/server/data/
 **/server/venv/
+**/server/venv310/
 **/server/venv311/
 **/server/tests/
 **/server/__pycache__/
