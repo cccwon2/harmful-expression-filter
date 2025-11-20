@@ -5,11 +5,10 @@ python-multipart==0.0.6
 pytest==7.4.3
 httpx==0.25.2
 
-# NumPy: Torch / Paddle 모두 안전한 1.x 대로 고정
-# (필요하면 나중에 2.x 테스트 후 올려도 됨)
+# NumPy 2.x는 PaddleOCR 호환 안됨 → 1.x로 제한
 numpy<2.0
 
-# Transformers는 Python 3.11에서 정상 동작
+# Transformers는 Python 3.11에서는 잘 동작
 transformers==4.35.0
 
 pydub==0.25.1
@@ -25,11 +24,9 @@ deepgram-sdk>=5.3.0
 # 환경 변수 및 유틸
 python-dotenv==1.0.0
 
-# PaddleOCR 3.x + PaddlePaddle 3.x (Python 3.11 + Windows 공식 지원)
-# 3.x에서는 기본 OCR만 쓰면 PyMuPDF 같은 문서 파서 의존성이 분리되어 있어서
-# 더 이상 PyMuPDF 1.20.2 빌드 지옥에 안 빠짐
-paddlepaddle==3.2.0
-paddleocr==3.2.0
+# PaddleOCR & PaddlePaddle (Python 3.11 권장 버전)
+paddleocr==2.7.0.3
+paddlepaddle==2.6.1
 
 # 이미지 처리
 Pillow>=9.0.0
