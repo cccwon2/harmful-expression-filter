@@ -2,6 +2,7 @@
  * Phase 4: 오디오 모니터링 UI 컴포넌트
  * 
  * 사용자가 오디오 모니터링을 제어할 수 있는 UI를 제공합니다.
+ * OnVoice COM 브리지를 통한 프로세스별 오디오 캡처도 지원합니다.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -12,11 +13,18 @@ interface AudioStatus {
   beepEnabled: boolean;
 }
 
+interface OnVoiceStatus {
+  isMonitoring: boolean;
+  targetPid: 'edge' | 'chrome' | 'discord' | number;
+}
+
 interface HarmfulEvent {
   text: string;
   confidence: number;
   timestamp: number;
 }
+
+type AppTarget = 'edge' | 'chrome' | 'discord';
 
 export function AudioMonitor() {
   const [status, setStatus] = useState<AudioStatus>({
@@ -24,25 +32,44 @@ export function AudioMonitor() {
     volumeLevel: 1,
     beepEnabled: false
   });
+  const [onVoiceStatus, setOnVoiceStatus] = useState<OnVoiceStatus>({
+    isMonitoring: false,
+    targetPid: 'edge'
+  });
+  const [selectedApp, setSelectedApp] = useState<AppTarget>('edge');
   const [harmfulEvents, setHarmfulEvents] = useState<HarmfulEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
-    // 상태 변경 리스너
+    // AudioService 상태 변경 리스너
     window.api.audio.onStatusChange((newStatus: AudioStatus) => {
       setStatus(newStatus);
     });
     
-    // 유해 감지 리스너
+    // OnVoice 상태 변경 리스너
+    window.api.onvoice.onStatusChange((newStatus: OnVoiceStatus) => {
+      setOnVoiceStatus(newStatus);
+    });
+    
+    // 유해 감지 리스너 (AudioService)
     window.api.audio.onHarmfulDetected((data: HarmfulEvent) => {
-      console.log('⚠️ Harmful detected:', data);
+      console.log('⚠️ Harmful detected (AudioService):', data);
+      setHarmfulEvents(prev => [...prev, data]);
+    });
+    
+    // 유해 감지 리스너 (OnVoice)
+    window.api.onvoice.onHarmfulDetected((data: HarmfulEvent) => {
+      console.log('⚠️ Harmful detected (OnVoice):', data);
       setHarmfulEvents(prev => [...prev, data]);
     });
     
     // 초기 상태 로드
     window.api.audio.getStatus().then(setStatus).catch((err) => {
       console.error('Failed to get audio status:', err);
-      setError('오디오 상태를 불러올 수 없습니다.');
+    });
+    
+    window.api.onvoice.getStatus().then(setOnVoiceStatus).catch((err) => {
+      console.error('Failed to get OnVoice status:', err);
     });
   }, []);
   
@@ -79,6 +106,35 @@ export function AudioMonitor() {
       await window.api.audio.setBeepEnabled(!status.beepEnabled);
     } catch (err) {
       console.error('Failed to toggle beep:', err);
+    }
+  };
+  
+  const handleOnVoiceStartStop = async () => {
+    try {
+      setError(null);
+      if (onVoiceStatus.isMonitoring) {
+        const result = await window.api.onvoice.stopCapture();
+        if (!result.success) {
+          setError('OnVoice 캡처 중지 실패');
+        }
+      } else {
+        const result = await window.api.onvoice.startCapture(selectedApp);
+        if (!result.success) {
+          setError(result.error || 'OnVoice 캡처 시작 실패');
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to start/stop OnVoice capture:', err);
+      setError(err.message || '오류가 발생했습니다.');
+    }
+  };
+  
+  const getAppDisplayName = (app: AppTarget): string => {
+    switch (app) {
+      case 'edge': return 'Microsoft Edge';
+      case 'chrome': return 'Google Chrome';
+      case 'discord': return 'Discord';
+      default: return String(app);
     }
   };
   
@@ -147,6 +203,65 @@ export function AudioMonitor() {
         <p className="text-xs text-gray-500 mt-1">
           체크 시 볼륨 조절 대신 비프음을 재생합니다.
         </p>
+      </div>
+      
+      {/* OnVoice 프로세스별 캡처 섹션 */}
+      <div className="mt-6 pt-6 border-t border-gray-300">
+        <h3 className="text-lg font-bold mb-4">🎯 프로세스별 오디오 캡처 (OnVoice)</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          특정 앱의 오디오만 캡처하여 Deepgram STT로 변환하고 유해 표현을 감지합니다.
+        </p>
+        
+        {/* 앱 선택 드롭다운 */}
+        <div className="mb-4">
+          <label className="block mb-2 text-sm font-semibold">
+            캡처할 앱 선택:
+          </label>
+          <select
+            value={selectedApp}
+            onChange={(e) => setSelectedApp(e.target.value as AppTarget)}
+            disabled={onVoiceStatus.isMonitoring}
+            className="px-3 py-2 border border-gray-300 rounded bg-white text-sm font-medium disabled:bg-gray-100 disabled:cursor-not-allowed w-full"
+          >
+            <option value="edge">Microsoft Edge</option>
+            <option value="chrome">Google Chrome</option>
+            <option value="discord">Discord</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            선택한 앱의 오디오만 캡처합니다. 앱이 실행 중이어야 합니다.
+          </p>
+        </div>
+        
+        {/* OnVoice 시작/중지 버튼 */}
+        <button
+          onClick={handleOnVoiceStartStop}
+          disabled={!selectedApp}
+          className={`px-4 py-2 rounded font-bold text-white ${
+            onVoiceStatus.isMonitoring 
+              ? 'bg-red-500 hover:bg-red-600' 
+              : 'bg-blue-500 hover:bg-blue-600'
+          } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+        >
+          {onVoiceStatus.isMonitoring ? '🛑 OnVoice 중지' : '▶️ OnVoice 시작'}
+        </button>
+        
+        {/* OnVoice 상태 표시 */}
+        <div className="mt-4">
+          <p className="text-sm text-gray-600">
+            OnVoice 상태: {onVoiceStatus.isMonitoring ? (
+              <span className="text-green-600 font-semibold">
+                모니터링 중 ({getAppDisplayName(onVoiceStatus.targetPid as AppTarget)})
+              </span>
+            ) : (
+              <span className="text-gray-500">중지됨</span>
+            )}
+          </p>
+          {onVoiceStatus.isMonitoring && (
+            <p className="text-xs text-gray-500 mt-1">
+              오디오가 Deepgram으로 전송되어 실시간 STT 및 유해 표현 감지가 수행됩니다.
+            </p>
+          )}
+        </div>
       </div>
       
       {/* 유해 감지 로그 */}

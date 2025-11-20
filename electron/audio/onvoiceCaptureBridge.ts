@@ -12,11 +12,13 @@ export interface CreateOnVoiceCaptureOptions {
   progId?: string;
   /** 
    * 프로세스 ID 찾기 방법
-   * - 'edge': Edge 프로세스 자동 검색
+   * - 'edge': Edge 프로세스 자동 검색 (FindEdgeProcess)
+   * - 'chrome': Chrome 프로세스 자동 검색 (FindChromeProcess)
+   * - 'discord': Discord 프로세스 자동 검색 (FindDiscordProcess)
    * - number: 직접 PID 지정
    * - function: 커스텀 검색 함수
    */
-  findPid?: 'edge' | 'chrome' | number | ((capture: any) => number);
+  findPid?: 'edge' | 'chrome' | 'discord' | number | ((capture: any) => number);
   /** PCM 오디오 데이터 수신 콜백 (Buffer) */
   onData: (buf: Buffer) => void;
   /** 에러 콜백 (선택) */
@@ -156,14 +158,23 @@ export function createOnVoiceCapture(
         return 0;
       }
     } else if (findPid === 'chrome') {
-      // Chrome 프로세스 찾기 (필요시 구현)
-      // 현재는 Edge만 지원하므로 기본값으로 Edge 사용
+      // Chrome 프로세스 찾기
       try {
-        const pid = capture.FindEdgeProcess();
-        console.log(`[OnVoiceBridge] Chrome 프로세스 찾기 (임시로 Edge 사용): ${pid}`);
+        const pid = capture.FindChromeProcess();
+        console.log(`[OnVoiceBridge] Chrome 프로세스 PID: ${pid}`);
         return pid;
       } catch (err) {
         console.error('[OnVoiceBridge] FindChromeProcess 실패:', err);
+        return 0;
+      }
+    } else if (findPid === 'discord') {
+      // Discord 프로세스 찾기
+      try {
+        const pid = capture.FindDiscordProcess();
+        console.log(`[OnVoiceBridge] Discord 프로세스 PID: ${pid}`);
+        return pid;
+      } catch (err) {
+        console.error('[OnVoiceBridge] FindDiscordProcess 실패:', err);
         return 0;
       }
     }

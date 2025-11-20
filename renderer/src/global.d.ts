@@ -100,6 +100,16 @@ declare global {
         onStatusChange: (callback: (status: any) => void) => void;
         onHarmfulDetected: (callback: (data: any) => void) => void;
       };
+      onvoice: {
+        startCapture: (target: 'edge' | 'chrome' | 'discord' | number) => Promise<{ success: boolean; error?: string }>;
+        stopCapture: () => Promise<{ success: boolean }>;
+        getStatus: () => Promise<{
+          isMonitoring: boolean;
+          targetPid: 'edge' | 'chrome' | 'discord' | number;
+        }>;
+        onStatusChange: (callback: (status: any) => void) => void;
+        onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
     };
   }
 }

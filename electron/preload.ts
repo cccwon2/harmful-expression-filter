@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ROI } from './ipc/roi';
-import { SERVER_CHANNELS, AUDIO_CHANNELS, IPC_CHANNELS } from './ipc/channels';
+import { SERVER_CHANNELS, AUDIO_CHANNELS, ONVOICE_CHANNELS, IPC_CHANNELS } from './ipc/channels';
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
@@ -231,6 +231,19 @@ try {
         ipcRenderer.on(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, (_, data) => callback(data));
       },
     },
+    // OnVoice COM 브리지 API (프로세스별 오디오 캡처)
+    onvoice: {
+      startCapture: (target: 'edge' | 'chrome' | 'discord' | number) => 
+        ipcRenderer.invoke(ONVOICE_CHANNELS.START_CAPTURE, { target }),
+      stopCapture: () => ipcRenderer.invoke(ONVOICE_CHANNELS.STOP_CAPTURE),
+      getStatus: () => ipcRenderer.invoke(ONVOICE_CHANNELS.GET_STATUS),
+      onStatusChange: (callback: (status: any) => void) => {
+        ipcRenderer.on(IPC_CHANNELS.AUDIO_STATUS, (_, status) => callback(status));
+      },
+      onHarmfulDetected: (callback: (data: any) => void) => {
+        ipcRenderer.on(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, (_, data) => callback(data));
+      },
+    },
   });
   
   console.log('[Preload] api exposed successfully');
@@ -275,6 +288,16 @@ declare global {
         }>;
         setVolumeLevel: (level: number) => Promise<{ success: boolean }>;
         setBeepEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+        onStatusChange: (callback: (status: any) => void) => void;
+        onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
+      onvoice: {
+        startCapture: (target: 'edge' | 'chrome' | 'discord' | number) => Promise<{ success: boolean; error?: string }>;
+        stopCapture: () => Promise<{ success: boolean }>;
+        getStatus: () => Promise<{
+          isMonitoring: boolean;
+          targetPid: 'edge' | 'chrome' | 'discord' | number;
+        }>;
         onStatusChange: (callback: (status: any) => void) => void;
         onHarmfulDetected: (callback: (data: any) => void) => void;
       };
