@@ -59,6 +59,13 @@ export const AUDIO_CHANNELS = {
   GET_STATUS: 'audio:get-status',
   SET_VOLUME_LEVEL: 'audio:set-volume-level',
   SET_BEEP_ENABLED: 'audio:set-beep-enabled',
+  SET_TARGET_APP: 'audio:set-target-app',
+} as const;
+
+export const ONVOICE_CHANNELS = {
+  START_CAPTURE: 'onvoice:startCapture',
+  STOP_CAPTURE: 'onvoice:stopCapture',
+  GET_STATUS: 'onvoice:get-status',
 } as const;
 ```
 
@@ -265,7 +272,39 @@ export function registerAudioHandlers(mainWindow: BrowserWindow) {
 
 ---
 
-### 7. 오버레이 창 생성
+### 7. OnVoice IPC 핸들러
+**파일**: `electron/ipc/onvoiceHandlers.ts`
+
+OnVoice COM 브리지를 통한 프로세스별 오디오 캡처 관련 IPC 통신을 처리하는 핸들러입니다. Task 29에서 도입되었습니다.
+
+```typescript
+export function registerOnVoiceHandlers(window: BrowserWindow) {
+  const service = new OnVoiceService(window, {
+    deepgramApiKey: process.env.DEEPGRAM_API_KEY,
+    serverWebSocketUrl: 'ws://127.0.0.1:8000/ws/audio',
+    enableHarmfulAnalysis: true,
+  });
+  
+  ipcMain.handle(ONVOICE_CHANNELS.START_CAPTURE, async (_, payload: { target?: 'edge' | 'chrome' | number }) => {
+    await service.startMonitoring(payload?.target || 'edge');
+    return { success: true };
+  });
+  
+  ipcMain.handle(ONVOICE_CHANNELS.STOP_CAPTURE, () => {
+    service.stopMonitoring();
+    return { success: true };
+  });
+}
+```
+
+**관련 파일**:
+- `electron/audio/onvoiceService.ts` - OnVoice 서비스 클래스
+- `electron/audio/onvoiceCaptureBridge.ts` - COM 브리지 모듈
+- `electron/utils/harmfulAnalysisClient.ts` - 유해 표현 분석 클라이언트
+
+---
+
+### 8. 오버레이 창 생성
 **파일**: `electron/windows/createOverlayWindow.ts`
 
 투명 오버레이 창을 생성하고 관리하는 함수입니다.
@@ -282,7 +321,7 @@ export function registerAudioHandlers(mainWindow: BrowserWindow) {
 
 ---
 
-### 8. Edit Mode 상태 관리
+### 9. Edit Mode 상태 관리
 **파일**: `electron/state/editMode.ts`
 
 Edit Mode 상태를 중앙에서 관리하는 모듈입니다.
@@ -300,7 +339,7 @@ export function setTrayUpdateCallback(callback: (() => void) | null): void;
 
 ---
 
-### 9. ROI IPC 핸들러
+### 10. ROI IPC 핸들러
 **파일**: `electron/ipc/roi.ts`
 
 ROI 선택 관련 IPC 통신을 처리하는 핸들러입니다.
@@ -317,7 +356,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 10. 오버레이 React 컴포넌트
+### 11. 오버레이 React 컴포넌트
 **파일**: `renderer/src/overlay/OverlayApp.tsx`
 
 오버레이 창의 React UI 컴포넌트입니다.
@@ -334,7 +373,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 11. 저장소 (electron-store)
+### 12. 저장소 (electron-store)
 **파일**: `electron/store.ts`
 
 ROI와 모드 상태를 영속화하는 경량 래퍼입니다.

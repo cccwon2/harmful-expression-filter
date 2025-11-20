@@ -12,6 +12,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
 import { registerAudioHandlers, getAudioService } from './ipc/audioHandlers';
+import { registerOnVoiceHandlers } from './ipc/onvoiceHandlers';
 import { setTrayAudioUpdateCallback } from './tray';
 
 const CAPTURE_INTERVAL_MS = 3000; // 3초 간격 (서버 OCR 처리 시간 고려)
@@ -98,6 +99,21 @@ app.whenReady().then(async () => {
     }
   } catch (err) {
     console.warn('[Main] Failed to register audio handlers (non-critical):', err);
+  }
+  
+  // OnVoice 핸들러 등록 (COM 브리지 기반 프로세스별 오디오 캡처)
+  // 메인 윈도우와 오버레이 창 모두에 등록
+  try {
+    if (mainWindow) {
+      registerOnVoiceHandlers(mainWindow);
+      console.log('[Main] OnVoice handlers registered on main window');
+    }
+    if (overlayWindow) {
+      registerOnVoiceHandlers(overlayWindow);
+      console.log('[Main] OnVoice handlers registered on overlay window');
+    }
+  } catch (err) {
+    console.warn('[Main] Failed to register OnVoice handlers (non-critical):', err);
   }
   
   const sendOverlayMode = (mode: OverlayMode) => {
@@ -836,6 +852,14 @@ app.whenReady().then(async () => {
     if (audioService) {
       audioService.stopMonitoring();
       console.log('[Main] Audio monitoring stopped (app quitting)');
+    }
+    
+    // OnVoice 모니터링도 중지 (앱 종료 시)
+    const { getOnVoiceService } = require('./audio/onvoiceService');
+    const onVoiceService = getOnVoiceService();
+    if (onVoiceService) {
+      onVoiceService.stopMonitoring();
+      console.log('[Main] OnVoice monitoring stopped (app quitting)');
     }
   });
 

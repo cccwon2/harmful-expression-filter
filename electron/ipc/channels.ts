@@ -44,3 +44,12 @@ export const AUDIO_CHANNELS = {
 
 export type AudioChannel = typeof AUDIO_CHANNELS[keyof typeof AUDIO_CHANNELS];
 
+// OnVoice COM 브리지 IPC 채널
+export const ONVOICE_CHANNELS = {
+  START_CAPTURE: 'onvoice:startCapture',
+  STOP_CAPTURE: 'onvoice:stopCapture',
+  GET_STATUS: 'onvoice:get-status',
+} as const;
+
+export type OnVoiceChannel = typeof ONVOICE_CHANNELS[keyof typeof ONVOICE_CHANNELS];
+

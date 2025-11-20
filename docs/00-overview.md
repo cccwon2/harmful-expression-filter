@@ -39,6 +39,7 @@
 26. **[앱별 볼륨 조절 마이그레이션](./26-app-volume-migration.md)** ✅ 완료
 27. **[Deepgram STT 통합](./27-deepgram-stt-integration.md)** ✅ 완료
 28. **[PaddleOCR 서버 연동 및 Tesseract.js 대체](./28-paddle-ocr-integration.md)** ✅ 완료
+29. **[OnVoice COM Bridge 통합](./29-onvoice-com-bridge-integration.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -72,11 +73,15 @@
     ├─ 22-ipc-server-handlers
     │   └─ 23-electron-integration
     ├─ 24-audio-stt-api
-    │   └─ 25-audio-electron-integration
-    │       └─ 26-app-volume-migration
-    └─ 28-paddle-ocr-integration
-        ├─ 15-ocr-stt-stub (대체)
-        └─ 19-native-tesseract-integration (대체)
+    │   ├─ 25-audio-electron-integration
+    │   │   └─ 26-app-volume-migration
+    │   └─ 27-deepgram-stt-integration
+    ├─ 28-paddle-ocr-integration
+    │   ├─ 15-ocr-stt-stub (대체)
+    │   └─ 19-native-tesseract-integration (대체)
+    └─ 29-onvoice-com-bridge-integration
+        ├─ 24-audio-stt-api
+        └─ 27-deepgram-stt-integration
 ```
 
 ## 작업 상태
@@ -111,6 +116,7 @@
 | 앱별 볼륨 조절 마이그레이션 | ✅ 완료 | 100%   | High     |
 | Deepgram STT 통합     | ✅ 완료      | 100%   | High     |
 | PaddleOCR 서버 연동    | ✅ 완료      | 100%   | High     |
+| OnVoice COM Bridge 통합 | ✅ 완료      | 100%   | High     |
 
 ## 다음 단계
 
@@ -118,6 +124,7 @@
 
 ## 업데이트 히스토리
 
+- 2025-01-XX: Task 29 완료 - OnVoice COM Bridge 통합, 프로세스별 오디오 캡처 및 Deepgram/서버 STT 연동
 - 2025-01-XX: Task 28 완료 - PaddleOCR 서버 연동 및 Tesseract.js 대체, venv311 가상환경 사용 명시
 - 2025-11-13: 오디오 모니터링과 ROI 독립성 구현, 시스템 트레이 오디오 모니터링 상태 표시 추가, 오버레이 UI 개선
 - 2025-01-XX: 초기 작업 문서 생성
