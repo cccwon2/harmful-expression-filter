@@ -31,14 +31,15 @@
     "ws": "^8.14.2"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@types/ws": "^8.5.8",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
-    "electron": "^28.3.3",
-    "electron-builder": "^24.9.1",
+    "electron": "^37.10.2",
+    "electron-builder": "^26.0.12",
     "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
