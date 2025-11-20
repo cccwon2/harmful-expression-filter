@@ -28,6 +28,7 @@
     "naudiodon2": "^2.5.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "winax": "^3.6.2",
     "ws": "^8.14.2"
   },
   "devDependencies": {
