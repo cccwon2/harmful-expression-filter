@@ -124,7 +124,7 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
     const onVoiceService = getOnVoiceServiceInstance();
     const onVoiceStatus = onVoiceService ? onVoiceService.getStatus() : null;
     const isAudioMonitoring = onVoiceStatus?.isMonitoring || false;
-    const currentTarget = onVoiceStatus?.targetPid || 'edge';
+    const currentTarget = onVoiceStatus?.targetPid || 'chrome';
 
     // OnVoice 캡처 시작 헬퍼 함수
     const startOnVoiceCapture = async (target: 'edge' | 'chrome' | 'discord') => {
@@ -348,19 +348,19 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'submenu',
         submenu: [
           {
-            label: 'Microsoft Edge',
-            type: 'radio',
-            checked: currentTarget === 'edge',
-            click: async () => {
-              await startOnVoiceCapture('edge');
-            },
-          },
-          {
             label: 'Google Chrome',
             type: 'radio',
             checked: currentTarget === 'chrome',
             click: async () => {
               await startOnVoiceCapture('chrome');
+            },
+          },
+          {
+            label: 'Microsoft Edge',
+            type: 'radio',
+            checked: currentTarget === 'edge',
+            click: async () => {
+              await startOnVoiceCapture('edge');
             },
           },
           {
@@ -384,9 +384,9 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
                 onVoiceService.stopMonitoring();
                 console.log('[Tray] OnVoice monitoring stopped');
               } else {
-                // 기본값으로 Edge 시작
-                await onVoiceService.startMonitoring('edge');
-                console.log('[Tray] OnVoice monitoring started (Edge)');
+                // 기본값으로 Chrome 시작
+                await onVoiceService.startMonitoring('chrome');
+                console.log('[Tray] OnVoice monitoring started (Chrome)');
               }
               // 메뉴 업데이트 (상태 변경 후)
               setTimeout(() => {

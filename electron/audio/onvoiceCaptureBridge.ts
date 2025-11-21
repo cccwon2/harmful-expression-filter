@@ -87,72 +87,87 @@ export function createOnVoiceCapture(
   connectionPoint = connectionPoints[0];
   console.log(`[OnVoiceBridge] Connection Point 발견: ${connectionPoints.length}개`);
 
-  // 이벤트 리스너 객체
-  // COM 이벤트는 다른 스레드에서 호출될 수 있으므로, 메인 스레드로 마샬링 필요
-  const eventSink = {
-    OnAudioData: (data: any) => {
-      try {
-        if (!data) return;
+  // 원시 데이터 저장을 위한 버퍼 (원시 바이트 배열)
+  // COM 스레드에서 안전하게 접근할 수 있도록 원시 메모리만 사용
+  const rawDataBuffers: Uint8Array[] = [];
+  let isProcessingQueue = false;
+  let queueLock = false;
 
-        // 데이터를 Buffer로 정규화 (COM 스레드에서 안전하게 처리)
-        let rawData: any = data;
-        
-        // COM 스레드에서 Buffer로 변환 시도 (실패할 수 있음)
-        let buf: Buffer | null = null;
+  // 큐 처리 함수 (메인 스레드에서 실행)
+  const processQueue = () => {
+    if (isProcessingQueue || rawDataBuffers.length === 0 || queueLock) {
+      return;
+    }
+
+    isProcessingQueue = true;
+    queueLock = true;
+    
+    try {
+      // 큐에서 모든 데이터를 한 번에 가져오기
+      const buffers = rawDataBuffers.splice(0, rawDataBuffers.length);
+      queueLock = false;
+
+      for (const rawBuffer of buffers) {
         try {
-          if (Buffer.isBuffer(data)) {
-            buf = data;
-          } else if (Array.isArray(data)) {
-            // 배열인 경우 복사본 생성
-            buf = Buffer.from(data);
-          } else if (data.buffer) {
-            // TypedArray인 경우
-            buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-          } else {
-            // 기타 경우 - 원본 데이터를 보존
-            rawData = data;
-          }
-        } catch (convertErr) {
-          // 변환 실패 시 원본 데이터 사용
-          rawData = data;
-        }
+          if (!rawBuffer || rawBuffer.length === 0) continue;
 
-        // 메인 스레드로 마샬링하여 처리
-        // setImmediate를 사용하여 Node.js 이벤트 루프의 다음 틱에서 실행
-        setImmediate(() => {
-          try {
-            // 메인 스레드에서 Buffer로 변환
-            let finalBuf: Buffer;
-            if (buf) {
-              finalBuf = buf;
-            } else if (Array.isArray(rawData)) {
-              finalBuf = Buffer.from(rawData);
-            } else if (rawData.buffer) {
-              finalBuf = Buffer.from(rawData.buffer, rawData.byteOffset, rawData.byteLength);
-            } else {
-              finalBuf = Buffer.from(rawData);
-            }
-
-            if (finalBuf.length > 0) {
-              onData(finalBuf);
-            }
-          } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('[OnVoiceBridge] OnAudioData 메인 스레드 처리 오류:', error);
-            if (onError) {
-              onError(error);
-            }
+          // 메인 스레드에서 Buffer로 변환
+          const finalBuf = Buffer.from(rawBuffer);
+          
+          if (finalBuf.length > 0) {
+            onData(finalBuf);
           }
-        });
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        console.error('[OnVoiceBridge] OnAudioData 이벤트 처리 오류:', error);
-        // 메인 스레드로 에러 전달
-        setImmediate(() => {
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          console.error('[OnVoiceBridge] 큐 데이터 처리 오류:', error);
           if (onError) {
             onError(error);
           }
-        });
+        }
+      }
+    } finally {
+      isProcessingQueue = false;
+      queueLock = false;
+    }
+  };
+
+  // 이벤트 리스너 객체
+  // COM 이벤트는 다른 스레드에서 호출되므로, 원시 바이트 배열만 복사
+  const eventSink = {
+    OnAudioData: (data: any) => {
+      // COM 스레드에서는 V8 JavaScript 객체를 전혀 사용하지 않음
+      // 원시 바이트 배열만 복사하여 저장
+      try {
+        if (!data) return;
+
+        // 원시 바이트 배열로 변환 (V8 핸들 생성 없이)
+        let rawBytes: Uint8Array | null = null;
+        
+        if (data instanceof Uint8Array) {
+          // 이미 Uint8Array인 경우 복사본 생성
+          rawBytes = new Uint8Array(data);
+        } else if (data.buffer && data.byteLength !== undefined) {
+          // TypedArray인 경우
+          rawBytes = new Uint8Array(data.buffer, data.byteOffset || 0, data.byteLength);
+        } else if (Array.isArray(data)) {
+          // 배열인 경우 Uint8Array로 변환
+          rawBytes = new Uint8Array(data);
+        } else if (typeof data === 'object' && data.length !== undefined) {
+          // length 속성이 있는 객체
+          const length = data.length;
+          rawBytes = new Uint8Array(length);
+          for (let i = 0; i < length; i++) {
+            rawBytes[i] = data[i] || 0;
+          }
+        }
+
+        // 원시 바이트 배열을 큐에 추가 (V8 핸들 생성 최소화)
+        if (rawBytes && rawBytes.length > 0 && !queueLock) {
+          rawDataBuffers.push(rawBytes);
+        }
+      } catch (err) {
+        // COM 스레드에서 에러 발생 시 무시 (메인 스레드로 전달 불가)
+        // 에러는 메시지 펌프에서 처리
       }
     },
   };
@@ -170,14 +185,17 @@ export function createOnVoiceCapture(
     throw error;
   }
 
-  // COM 메시지 펌프 시작 (50ms 간격)
+  // COM 메시지 펌프 시작 (10ms 간격으로 더 자주 실행)
+  // 동시에 큐 처리도 수행
   messagePumpInterval = setInterval(() => {
     try {
       winax.peekAndDispatchMessages();
+      // 큐 처리 (메인 스레드에서 실행)
+      processQueue();
     } catch (err) {
       console.error('[OnVoiceBridge] peekAndDispatchMessages 오류:', err);
     }
-  }, 50);
+  }, 10);
 
   // PID 찾기 함수
   const resolvePid = (): number => {

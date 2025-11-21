@@ -71,7 +71,7 @@ function registerIpcHandlers() {
   
   ipcMain.handle(ONVOICE_CHANNELS.START_CAPTURE, async (_, payload: { target?: 'edge' | 'chrome' | 'discord' | number }) => {
     try {
-      const target = payload?.target || 'edge';
+      const target = payload?.target || 'chrome';
       await service.startMonitoring(target);
       return { success: true };
     } catch (err: any) {

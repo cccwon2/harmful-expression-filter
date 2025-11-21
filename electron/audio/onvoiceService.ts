@@ -29,7 +29,7 @@ export class OnVoiceService {
   private serverWs: WebSocket | null = null;
   private windows: Set<BrowserWindow> = new Set();
   private options: Required<OnVoiceServiceOptions>;
-  private targetPid: 'edge' | 'chrome' | 'discord' | number = 'edge';
+  private targetPid: 'edge' | 'chrome' | 'discord' | number = 'chrome';
 
   constructor(initialWindow: BrowserWindow | null, options: OnVoiceServiceOptions = {}) {
     this.options = {
@@ -65,7 +65,7 @@ export class OnVoiceService {
    * 
    * @param target 캡처할 프로세스 ('edge', 'chrome', 'discord', 또는 PID)
    */
-  async startMonitoring(target: 'edge' | 'chrome' | 'discord' | number = 'edge'): Promise<void> {
+  async startMonitoring(target: 'edge' | 'chrome' | 'discord' | number = 'chrome'): Promise<void> {
     if (this.isMonitoring) {
       console.log('[OnVoiceService] 이미 모니터링 중입니다.');
       return;
