@@ -4,7 +4,10 @@
   "description": "OnVoice - Voice Overlay Application",
   "main": "./dist-electron/main.js",
   "scripts": {
+    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet build",
+    "copy:dll": "node scripts/copy-dll.js",
     "build:main": "tsc -p electron/tsconfig.json",
+    "build:all": "npm run build:dotnet && npm run copy:dll && npm run build:main",
     "dev:main": "tsc -w -p electron/tsconfig.json",
     "dev:renderer": "vite",
     "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
@@ -25,6 +28,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "dotenv": "^16.3.1",
+    "electron-edge-js": "^12.19.2",
     "form-data": "^4.0.0",
     "native-sound-mixer": "^3.4.6-win",
     "react": "^18.2.0",

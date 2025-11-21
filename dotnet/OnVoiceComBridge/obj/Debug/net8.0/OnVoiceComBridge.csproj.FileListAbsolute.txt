@@ -1,0 +1,12 @@
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net8.0\OnVoiceComBridge.deps.json
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net8.0\OnVoiceComBridge.dll
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net8.0\OnVoiceComBridge.pdb
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\OnVoiceComBridge.GeneratedMSBuildEditorConfig.editorconfig
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\OnVoiceComBridge.AssemblyInfoInputs.cache
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\OnVoiceComBridge.AssemblyInfo.cs
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\OnVoiceComBridge.csproj.CoreCompileInputs.cache
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\OnVoiceComBridge.sourcelink.json
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\OnVoiceComBridge.dll
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\refint\OnVoiceComBridge.dll
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\OnVoiceComBridge.pdb
+C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net8.0\ref\OnVoiceComBridge.dll
