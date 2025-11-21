@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 from pathlib import Path
 import io
@@ -675,6 +676,8 @@ async def audio_stream(websocket: WebSocket) -> None:
 
     await websocket.accept()
     # 연결 확인 메시지를 JSON 형식으로 전송
+    print("[INFO] connection open", flush=True)
+    LOGGER.info("[INFO] connection open")
     await websocket.send_json({
         "status": "connected",
         "message": "Connected (Deepgram STT)",
@@ -701,6 +704,7 @@ async def audio_stream(websocket: WebSocket) -> None:
     if not BAD_WORDS:
         LOGGER.error("[ERROR] BAD_WORDS is empty! Keywords will not be checked.")
 
+    # 파이프라인 생성 (빠르게 완료되어야 함 - 블로킹 최소화)
     pipeline = AudioProcessingPipeline(
         stt_service=STT_SERVICE,
         classifier=CLASSIFIER,
@@ -708,17 +712,26 @@ async def audio_stream(websocket: WebSocket) -> None:
         chunk_duration_sec=1.0,
         keywords=BAD_WORDS,  # 전역 키워드 목록 전달
     )
+    
+    print("[INFO] Pipeline created, entering receive loop", flush=True)
+    LOGGER.info("[INFO] Pipeline created, entering receive loop")
 
     try:
+        print("[INFO] Starting receive loop, waiting for audio data...", flush=True)
+        LOGGER.info("[INFO] Starting receive loop, waiting for audio data...")
         while True:
             try:
+                # ⚠️ 여기서 블로킹될 수 있습니다 - 데이터가 들어오면 즉시 반환되어야 함
+                # receive()는 비동기이므로 블로킹되지 않지만, 데이터가 없으면 대기합니다
                 message = await websocket.receive()
             except Exception as receive_err:
                 # 연결이 끊어진 경우
+                print(f"[INFO] WebSocket receive error (connection closed): {receive_err}", flush=True)
                 LOGGER.info("[INFO] WebSocket receive error (connection closed): %s", receive_err)
                 break
 
             if message["type"] == "websocket.disconnect":
+                print("[INFO] WebSocket client disconnected: /ws/audio", flush=True)
                 LOGGER.info("[INFO] WebSocket client disconnected: /ws/audio")
                 break
 
@@ -733,17 +746,31 @@ async def audio_stream(websocket: WebSocket) -> None:
                         }
                     )
                 except Exception as send_err:
+                    print(f"[WARN] Failed to send error message (connection may be closed): {send_err}", flush=True)
                     LOGGER.warning("[WARN] Failed to send error message (connection may be closed): %s", send_err)
                     break
                 continue
 
-            # ✅ 오디오 데이터 수신 로그
-            LOGGER.debug("[WebSocket] Audio data received: %d bytes", len(audio_bytes))
+            # ✅ 오디오 데이터 수신 로그 (INFO 레벨로 변경, print로 즉시 출력)
+            # 처음 몇 개만 상세 로그 출력 (너무 많이 출력되지 않도록)
+            static_data_count = getattr(audio_stream, '_data_count', 0)
+            audio_stream._data_count = static_data_count + 1
+            should_log_detail = static_data_count < 5 or static_data_count % 100 == 0
+            
+            if should_log_detail:
+                print(f"[INFO] 데이터 받음! 크기: {len(audio_bytes)} bytes (총 {static_data_count + 1}개)", flush=True)
+            LOGGER.info("[INFO] 데이터 받음! 크기: %d bytes", len(audio_bytes))
 
             try:
+                if should_log_detail:
+                    print(f"[INFO] 파이프라인 처리 시작... (총 {static_data_count + 1}개 패킷)", flush=True)
+                
                 result = await pipeline.process_audio(audio_bytes)
+                
                 if result is None:
                     # 버퍼링 중 - 아직 충분한 데이터가 없음
+                    if should_log_detail:
+                        print(f"[INFO] 버퍼링 중... (아직 충분한 데이터 없음, 총 {static_data_count + 1}개 패킷)", flush=True)
                     LOGGER.debug("[WebSocket] Buffering audio data: %d bytes (waiting for more data)", len(audio_bytes))
                     try:
                         await websocket.send_json({"status": "buffering", "size": len(audio_bytes)})
@@ -751,6 +778,10 @@ async def audio_stream(websocket: WebSocket) -> None:
                         LOGGER.warning("[WARN] Failed to send buffering status (connection may be closed): %s", send_err)
                         break
                     continue
+                
+                # 결과가 나왔을 때
+                if should_log_detail:
+                    print(f"[INFO] ✅ 파이프라인 처리 완료! 텍스트: '{result.text[:50] if result.text else '(empty)'}'", flush=True)
 
                 # 메시지 전송 전 연결 상태 확인
                 try:

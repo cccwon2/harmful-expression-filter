@@ -87,12 +87,35 @@ class AudioProcessingPipeline:
         # 1. 버퍼에 추가 및 청크 가져오기
         buffer_start = time.time()
         self.buffer_manager.add_chunk(audio_bytes)
+        
+        # 버퍼 상태 확인 (처음 몇 번만 로그)
+        if not hasattr(self, '_buffer_log_count'):
+            self._buffer_log_count = 0
+        self._buffer_log_count += 1
+        should_log_buffer = self._buffer_log_count <= 10 or self._buffer_log_count % 50 == 0
+        
+        if should_log_buffer:
+            # 버퍼는 샘플 수로 저장되므로, 바이트로 변환하려면 * 2 (16-bit = 2 bytes)
+            buffer_samples = len(self.buffer_manager.buffer)
+            buffer_bytes = buffer_samples * 2
+            required_samples = self.buffer_manager.chunk_size
+            required_bytes = required_samples * 2
+            percent = (buffer_samples / required_samples * 100) if required_samples > 0 else 0
+            LOGGER.info("[Pipeline] 버퍼 상태: %d 샘플 (%d bytes) / %d 샘플 (%d bytes) 필요 (%.1f%%)", 
+                       buffer_samples, buffer_bytes, required_samples, required_bytes, percent)
+            print(f"[Pipeline] 버퍼 상태: {buffer_samples} 샘플 ({buffer_bytes} bytes) / {required_samples} 샘플 ({required_bytes} bytes) 필요 ({percent:.1f}%)", flush=True)
+        
         audio_chunk = self.buffer_manager.get_processed_chunk()
         buffer_time = (time.time() - buffer_start) * 1000
 
         if audio_chunk is None:
             # 버퍼링 중 - 아직 충분한 데이터가 없음
+            if should_log_buffer:
+                print(f"[Pipeline] ⏳ 버퍼링 중... (총 {self._buffer_log_count}개 패킷 수신)", flush=True)
             return None
+        
+        if should_log_buffer:
+            print(f"[Pipeline] ✅ 버퍼 충분! STT 처리 시작 (청크 크기: {len(audio_chunk)} samples)", flush=True)
 
         # 2. STT 변환
         stt_start = time.time()
