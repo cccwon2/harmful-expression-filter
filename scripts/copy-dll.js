@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const sourceDir = path.join(__dirname, '..', 'dotnet', 'OnVoiceComBridge', 'bin', 'Debug', 'net8.0');
+const sourceDir = path.join(__dirname, '..', 'dotnet', 'OnVoiceComBridge', 'bin', 'Debug', 'net6.0');
 const targetDir = path.join(__dirname, '..', 'dist-electron', 'dotnet');
 
 const filesToCopy = [
