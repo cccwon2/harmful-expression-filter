@@ -92,6 +92,10 @@ class DeepgramWebSocketManager:
         self.result_queue: asyncio.Queue = asyncio.Queue()
         self.is_running: bool = False
 
+        # ✅ STT 중복 필터용 상태
+        self.last_transcript: str = ""
+        self.last_is_final: bool = False
+
     async def start(self) -> bool:
         """Deepgram WebSocket 연결 시작"""
         if not self.api_key:
@@ -229,6 +233,19 @@ class DeepgramWebSocketManager:
 
         is_final = bool(payload.get("is_final", False))
 
+        # ✅ 1단계: 중복/노이즈 필터링
+        # - 직전과 문장이 완전히 같고, 둘 다 진행 or 둘 다 확정이면 스킵
+        if transcript == self.last_transcript and is_final == self.last_is_final:
+            return
+
+        # - 진행(임시)인데, 길이가 줄어들거나 같으면 스킵 (Deepgram이 가끔 리셋하는 케이스 방지)
+        if not is_final and len(transcript) <= len(self.last_transcript):
+            return
+
+        # 상태 갱신
+        self.last_transcript = transcript
+        self.last_is_final = is_final
+
         matched = check_keywords(transcript)
         is_harmful = len(matched) > 0
 
@@ -246,6 +263,10 @@ class DeepgramWebSocketManager:
         print(f"[STT] {status_tag} {transcript}", flush=True)
         if is_harmful:
             print(f"🚨 유해 표현 감지: {matched}", flush=True)
+
+        # ✅ 2단계: 진행 중 결과는 로그만 찍고, 클라이언트로는 확정만 보냄
+        if not is_final:
+            return
 
         self.result_queue.put_nowait(response_data)
 
