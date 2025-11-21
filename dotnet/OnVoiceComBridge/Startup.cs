@@ -81,7 +81,7 @@ namespace OnVoiceComBridge
                     try 
                     {
                         // IOnVoiceCapture 인터페이스로 캐스팅하여 호출
-                        // 52b4a16b-9f83-4a3e-9240-4dd6676540ea GUID를 사용
+                        // 43a468da-7889-46c9-99de-38cb93e4e649 GUID를 사용
                         var capturer = (IOnVoiceCapture)_capture;
                         capturer.StartCapture(pid);
                         
@@ -146,7 +146,7 @@ namespace OnVoiceComBridge
                 // 이벤트 인터페이스 GUID (IOnVoiceCaptureEvents)
                 // 여기서는 사용자가 제공한 GUID가 메인 인터페이스와 이벤트 인터페이스 모두에 쓰이는 것으로 가정
                 // (만약 다르다면 별도로 분리해야 함)
-                var eventIID = new Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea");
+                var eventIID = new Guid("43a468da-7889-46c9-99de-38cb93e4e649");
 
                 IConnectionPoint? connectionPoint;
                 cpContainer.FindConnectionPoint(ref eventIID, out connectionPoint);
@@ -234,10 +234,10 @@ namespace OnVoiceComBridge
 
     /// <summary>
     /// ✅ [핵심 수정] StartCapture/StopCapture 호출을 위한 메인 인터페이스 정의
-    /// 제공된 GUID 사용: 52b4a16b-9f83-4a3e-9240-4dd6676540ea
+    /// 제공된 GUID 사용: 43a468da-7889-46c9-99de-38cb93e4e649
     /// </summary>
     [ComImport]
-    [Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea")]
+    [Guid("43a468da-7889-46c9-99de-38cb93e4e649")]
     [InterfaceType(ComInterfaceType.InterfaceIsIDispatch)] // Dispatch 인터페이스로 가정
     public interface IOnVoiceCapture
     {
@@ -257,7 +257,7 @@ namespace OnVoiceComBridge
     /// </summary>
     [ComVisible(true)]
     [SupportedOSPlatform("windows")]
-    [Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea")] // 이벤트 인터페이스 GUID
+    [Guid("43a468da-7889-46c9-99de-38cb93e4e649")] // 이벤트 인터페이스 GUID
     [ClassInterface(ClassInterfaceType.None)]
     public class OnVoiceCaptureEventSink : IOnVoiceCaptureEvents
     {
@@ -314,7 +314,7 @@ namespace OnVoiceComBridge
     }
 
     [ComVisible(true)]
-    [Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea")]
+    [Guid("43a468da-7889-46c9-99de-38cb93e4e649")]
     [InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
     public interface IOnVoiceCaptureEvents
     {
