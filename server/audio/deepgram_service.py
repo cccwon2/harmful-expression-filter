@@ -240,14 +240,27 @@ class DeepgramSTTService:
             api_time = (time.time() - api_start) * 1000
             print(f"[Deepgram] ✅ API 응답 수신! (소요 시간: {api_time:.2f}ms)", flush=True)
             
-            # 응답 파싱
+            # 응답 파싱 (디버깅용 상세 로깅)
             transcript = ""
-            if response and response.results:
-                channels = response.results.channels
-                if channels and len(channels) > 0:
-                    alternatives = channels[0].alternatives
-                    if alternatives and len(alternatives) > 0:
-                        transcript = alternatives[0].transcript.strip()
+            if response:
+                if hasattr(response, 'results') and response.results:
+                    channels = response.results.channels
+                    print(f"[Deepgram] 📊 응답 구조: results 있음, channels 개수: {len(channels) if channels else 0}", flush=True)
+                    if channels and len(channels) > 0:
+                        alternatives = channels[0].alternatives
+                        print(f"[Deepgram] 📊 Channel[0] alternatives 개수: {len(alternatives) if alternatives else 0}", flush=True)
+                        if alternatives and len(alternatives) > 0:
+                            transcript = alternatives[0].transcript.strip() if hasattr(alternatives[0], 'transcript') else ""
+                            confidence = alternatives[0].confidence if hasattr(alternatives[0], 'confidence') else None
+                            print(f"[Deepgram] 📊 Transcript: '{transcript[:50]}', confidence: {confidence}", flush=True)
+                    else:
+                        print(f"[Deepgram] ⚠️ Channels가 비어있음", flush=True)
+                else:
+                    print(f"[Deepgram] ⚠️ Response.results가 없음. Response 타입: {type(response)}", flush=True)
+                    if hasattr(response, '__dict__'):
+                        print(f"[Deepgram] Response 속성: {list(response.__dict__.keys())[:10]}", flush=True)
+            else:
+                print(f"[Deepgram] ⚠️ Response가 None", flush=True)
             
             elapsed_ms = (time.time() - start_time) * 1000
             if transcript:

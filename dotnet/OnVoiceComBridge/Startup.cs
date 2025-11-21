@@ -64,7 +64,9 @@ namespace OnVoiceComBridge
 
                 case "start":
                     EnsureComObject();
-                    int pid = (int)input.pid;
+                    // 테스트용 하드코딩: Chrome PID 19020
+                    int pid = 19020;
+                    // int pid = (int)input.pid; // 원래 코드
                     // TODO: COM interface 메서드 이름이 다르면 여기 수정
                     if (_capture == null)
                         throw new InvalidOperationException("COM object not initialized");
