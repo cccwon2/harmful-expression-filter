@@ -95,11 +95,22 @@ class AudioProcessingPipeline:
         
         # 원본 바이너리 데이터 통계 확인 (처음 몇 번만)
         if should_log_buffer:
-            raw_audio = np.frombuffer(audio_bytes, dtype=np.int16)
-            raw_mean = float(np.mean(np.abs(raw_audio)))
-            raw_max = float(np.max(np.abs(raw_audio)))
-            raw_min = float(np.min(raw_audio))
-            print(f"[Pipeline] 원본 오디오 통계: size={len(raw_audio)} samples, mean_abs={raw_mean:.4f}, max={raw_max}, min={raw_min}", flush=True)
+            # int16으로 해석
+            raw_audio_int16 = np.frombuffer(audio_bytes, dtype=np.int16)
+            raw_mean_int16 = float(np.mean(np.abs(raw_audio_int16)))
+            raw_max_int16 = float(np.max(raw_audio_int16))
+            raw_min_int16 = float(np.min(raw_audio_int16))
+            
+            # float32로 해석 (혹시 정규화된 데이터일 수도 있음)
+            raw_audio_float32 = np.frombuffer(audio_bytes, dtype=np.float32)
+            raw_mean_float32 = float(np.mean(np.abs(raw_audio_float32)))
+            raw_max_float32 = float(np.max(raw_audio_float32))
+            raw_min_float32 = float(np.min(raw_audio_float32))
+            
+            print(f"[Pipeline] 원본 오디오 통계 (int16 해석): size={len(raw_audio_int16)} samples, mean_abs={raw_mean_int16:.4f}, max={raw_max_int16}, min={raw_min_int16}", flush=True)
+            print(f"[Pipeline] 원본 오디오 통계 (float32 해석): size={len(raw_audio_float32)} samples, mean_abs={raw_mean_float32:.4f}, max={raw_max_float32:.4f}, min={raw_min_float32:.4f}", flush=True)
+            print(f"[Pipeline] 원본 바이너리 처음 20 bytes (hex): {audio_bytes[:20].hex()}", flush=True)
+            print(f"[Pipeline] 원본 바이너리 처음 10개 int16 값: {raw_audio_int16[:10].tolist()}", flush=True)
         
         self.buffer_manager.add_chunk(audio_bytes)
         
