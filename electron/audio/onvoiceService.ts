@@ -9,9 +9,10 @@
 
 import { BrowserWindow } from 'electron';
 import WebSocket from 'ws';
-import { createOnVoiceCapture, OnVoiceCaptureHandle } from './onvoiceCaptureBridge';
+import { createOnVoiceCapture, OnVoiceCaptureHandle } from './onvoiceBridgeAdapter';
 import { sendTextForAnalysis, AnalysisResult } from '../utils/harmfulAnalysisClient';
 import { IPC_CHANNELS } from '../ipc/channels';
+import { findProcessByType } from '../utils/processFinder';
 
 export interface OnVoiceServiceOptions {
   /** Deepgram API 키 (Deepgram WebSocket 사용 시) */
@@ -74,6 +75,18 @@ export class OnVoiceService {
     this.targetPid = target;
 
     try {
+      // 프로세스 PID 해결
+      const pid = await findProcessByType(target);
+      if (!pid || pid <= 0) {
+        const error = new Error(
+          `프로세스를 찾을 수 없습니다. (target: ${target})`
+        );
+        console.error(`[OnVoiceService] ${error.message}`);
+        throw error;
+      }
+
+      console.log(`[OnVoiceService] 프로세스 PID: ${pid} (target: ${target})`);
+
       // WebSocket 연결 (Deepgram 또는 서버)
       if (this.options.deepgramApiKey) {
         await this.connectDeepgram();
@@ -81,9 +94,9 @@ export class OnVoiceService {
         await this.connectServer();
       }
 
-      // OnVoice 브리지 생성 및 시작
+      // OnVoice 브리지 생성 및 시작 (새로운 bridge adapter 사용)
       this.captureHandle = createOnVoiceCapture({
-        findPid: target,
+        findPid: pid, // 숫자 PID로 전달
         onData: (buf: Buffer) => {
           this.handleAudioData(buf);
         },
