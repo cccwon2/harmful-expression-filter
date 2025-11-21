@@ -737,9 +737,14 @@ async def audio_stream(websocket: WebSocket) -> None:
                     break
                 continue
 
+            # ✅ 오디오 데이터 수신 로그
+            LOGGER.debug("[WebSocket] Audio data received: %d bytes", len(audio_bytes))
+
             try:
                 result = await pipeline.process_audio(audio_bytes)
                 if result is None:
+                    # 버퍼링 중 - 아직 충분한 데이터가 없음
+                    LOGGER.debug("[WebSocket] Buffering audio data: %d bytes (waiting for more data)", len(audio_bytes))
                     try:
                         await websocket.send_json({"status": "buffering", "size": len(audio_bytes)})
                     except Exception as send_err:
@@ -749,7 +754,11 @@ async def audio_stream(websocket: WebSocket) -> None:
 
                 # 메시지 전송 전 연결 상태 확인
                 try:
+                    LOGGER.info("[WebSocket] Sending STT result to client: text='%s', is_harmful=%s", 
+                               result.text[:50] if result.text else "(empty)", 
+                               result.classification.is_harmful)
                     await websocket.send_json(_serialize_pipeline_output(result))
+                    LOGGER.info("[WebSocket] ✅ STT result sent successfully")
                 except Exception as send_err:
                     # 연결이 끊어진 경우 - 정상적인 종료로 처리
                     LOGGER.info("[INFO] WebSocket connection closed while sending result: %s", send_err)

@@ -96,15 +96,20 @@ class AudioProcessingPipeline:
 
         # 2. STT 변환
         stt_start = time.time()
+        LOGGER.info("[Pipeline] Starting STT conversion (audio chunk: %d samples, %.2f sec)", 
+                    len(audio_chunk), len(audio_chunk) / self.buffer_manager.sample_rate)
         text = await asyncio.to_thread(self.stt_service.transcribe, audio_chunk)
         stt_time = (time.time() - stt_start) * 1000
 
         if not text or len(text.strip()) == 0:
-            LOGGER.info("[Pipeline] No text detected, skipping classification")
+            LOGGER.info("[Pipeline] STT completed (%.2fms) but no text detected, skipping classification", stt_time)
             return None
+        
+        LOGGER.info("[Pipeline] STT completed (%.2fms): '%s'", stt_time, text[:100])
 
         # 3. 유해성 판단
         classifier_start = time.time()
+        LOGGER.info("[Pipeline] Starting harmful classification for text: '%s'", text[:100])
         
         # 키워드 기반 검사
         keyword_harmful = False
@@ -113,6 +118,8 @@ class AudioProcessingPipeline:
         if self.keywords:
             matched_keywords = [word for word in self.keywords if word.lower() in text_lower]
             keyword_harmful = len(matched_keywords) > 0
+            if matched_keywords:
+                LOGGER.warning("[Pipeline] 🚨 Keyword match detected: %s", matched_keywords)
 
         # Classifier가 있으면 Classifier도 사용
         if self.classifier is not None:
@@ -122,22 +129,32 @@ class AudioProcessingPipeline:
                 confidence = 1.0
             else:
                 confidence = classifier_result.confidence
+            LOGGER.info("[Pipeline] Classifier result: is_harmful=%s, confidence=%.2f", 
+                       classifier_result.is_harmful, classifier_result.confidence)
         else:
             is_harmful = keyword_harmful
             confidence = 1.0 if keyword_harmful else 0.0
+            LOGGER.info("[Pipeline] Keyword-only classification: is_harmful=%s, confidence=%.2f", 
+                       is_harmful, confidence)
 
         classifier_time = (time.time() - classifier_start) * 1000
         total_time = (time.time() - total_start) * 1000
 
         # ✅ 세부 레이턴시 로깅
         LOGGER.info(
-            "[Pipeline] Total: %.2fms | Buffer: %.2fms | STT: %.2fms | Classifier: %.2fms | Text: '%s'",
-            total_time, buffer_time, stt_time, classifier_time, text[:50]
+            "[Pipeline] ✅ Result: Total=%.2fms | Buffer=%.2fms | STT=%.2fms | Classifier=%.2fms | "
+            "Text='%s' | IsHarmful=%s | Confidence=%.2f",
+            total_time, buffer_time, stt_time, classifier_time, text[:50], is_harmful, confidence
         )
 
         # ⚠️ 목표 3초 초과 경고
         if total_time > 3000:
             LOGGER.warning("[Pipeline] ⚠️ Total latency exceeds 3s: %.2fms", total_time)
+        
+        # 🚨 유해 표현 감지 시 경고
+        if is_harmful:
+            LOGGER.warning("[Pipeline] 🚨🚨🚨 HARMFUL EXPRESSION DETECTED 🚨🚨🚨 | Text: '%s' | Confidence: %.2f | Keywords: %s",
+                          text[:100], confidence, matched_keywords)
 
         classification = ClassificationResult(
             is_harmful=is_harmful,
