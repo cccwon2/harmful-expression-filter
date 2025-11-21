@@ -28,7 +28,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "dotenv": "^16.3.1",
-    "electron-edge-js": "^12.19.2",
+    "electron-edge-js": "^37.0.0",
     "form-data": "^4.0.0",
     "native-sound-mixer": "^3.4.6-win",
     "react": "^18.2.0",
@@ -37,6 +37,7 @@
     "ws": "^8.14.2"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "@types/node": "^22.0.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
@@ -45,7 +46,6 @@
     "concurrently": "^8.2.2",
     "electron": "^37.10.2",
     "electron-builder": "^26.0.12",
-    "@electron/rebuild": "^4.0.1",
     "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
