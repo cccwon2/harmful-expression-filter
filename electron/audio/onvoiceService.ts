@@ -243,17 +243,42 @@ export class OnVoiceService {
   /**
    * 오디오 데이터 처리 (WebSocket으로 전송)
    */
+  private static _audioDataCallCount = 0;
+  
   private handleAudioData(buf: Buffer): void {
-    // DEBUG: 반복 로그는 디버그 레벨로만 출력
-    // console.debug(`[OnVoiceService] 오디오 데이터 처리: ${buf.length} bytes`);
+    const callId = ++OnVoiceService._audioDataCallCount;
+    const shouldLog = callId <= 3 || callId % 100 === 0;
     
-    if (this.deepgramWs && this.deepgramWs.readyState === WebSocket.OPEN) {
-      this.deepgramWs.send(buf);
-    } else if (this.serverWs && this.serverWs.readyState === WebSocket.OPEN) {
-      this.serverWs.send(buf);
-    } else {
-      // 연결 문제는 경고로 출력
-      console.warn('[OnVoiceService] ⚠️ WebSocket 연결이 없어 오디오 데이터를 전송할 수 없습니다.');
+    if (shouldLog) {
+      console.log(`[OnVoiceService] 🎵 handleAudioData 호출됨! (callId=${callId}, size=${buf.length} bytes)`);
+    }
+    
+    try {
+      if (this.deepgramWs && this.deepgramWs.readyState === WebSocket.OPEN) {
+        if (shouldLog) {
+          console.log(`[OnVoiceService] 📤 Deepgram WebSocket으로 전송 (callId=${callId})`);
+        }
+        this.deepgramWs.send(buf);
+        if (shouldLog) {
+          console.log(`[OnVoiceService] ✅ Deepgram 전송 완료 (callId=${callId})`);
+        }
+      } else if (this.serverWs && this.serverWs.readyState === WebSocket.OPEN) {
+        if (shouldLog) {
+          console.log(`[OnVoiceService] 📤 서버 WebSocket으로 전송 (callId=${callId})`);
+        }
+        this.serverWs.send(buf);
+        if (shouldLog) {
+          console.log(`[OnVoiceService] ✅ 서버 전송 완료 (callId=${callId})`);
+        }
+      } else {
+        // 연결 문제는 경고로 출력
+        if (shouldLog) {
+          console.warn(`[OnVoiceService] ⚠️ WebSocket 연결이 없어 오디오 데이터를 전송할 수 없습니다. (callId=${callId})`);
+          console.warn(`[OnVoiceService] Deepgram 상태: ${this.deepgramWs?.readyState}, 서버 상태: ${this.serverWs?.readyState}`);
+        }
+      }
+    } catch (err) {
+      console.error(`[OnVoiceService] ❌ WebSocket 전송 오류 (callId=${callId}):`, err);
     }
   }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OnVoiceComBridge
@@ -25,6 +26,11 @@ namespace OnVoiceComBridge
         // JS callback passed from Node (edge-js marshalling)
         // JS 함수 시그니처: (msg: any, cb: (err: Error | null, res?: any) => void) => void
         private static Func<object, Task<object>>? _audioCallback;
+        
+        // 메인 스레드의 SynchronizationContext (edge-js가 실행되는 스레드)
+        // COM 스레드에서 JavaScript 콜백을 호출할 때 메인 스레드로 마샬링하기 위해 사용
+        private static SynchronizationContext? _mainThreadContext;
+        private static int _mainThreadId = -1;
 
         public async Task<object> Invoke(dynamic input)
         {
@@ -35,6 +41,20 @@ namespace OnVoiceComBridge
                 case "init":
                     // Save callback from JS (onAudioData)
                     _audioCallback = (Func<object, Task<object>>)input.onAudioData;
+                    
+                    // 현재 스레드의 SynchronizationContext 저장 (edge-js가 실행되는 메인 스레드)
+                    // COM 스레드에서 JavaScript 콜백을 호출할 때 이 컨텍스트로 마샬링
+                    _mainThreadContext = SynchronizationContext.Current;
+                    _mainThreadId = Thread.CurrentThread.ManagedThreadId;
+                    
+                    if (_mainThreadContext == null)
+                    {
+                        // SynchronizationContext가 없으면 기본 컨텍스트 생성
+                        _mainThreadContext = new SynchronizationContext();
+                        SynchronizationContext.SetSynchronizationContext(_mainThreadContext);
+                    }
+                    
+                    Console.WriteLine($"[OnVoiceComBridge] 초기화 완료 (SynchronizationContext 저장됨, MainThreadId={_mainThreadId})");
 
                     EnsureComObject();
                     SubscribeComEvents();
@@ -229,9 +249,66 @@ namespace OnVoiceComBridge
 
             try
             {
+                var currentThreadId = Thread.CurrentThread.ManagedThreadId;
+                var isMainThread = (currentThreadId == _mainThreadId);
+                
+                if (callId <= 3 || callId % 100 == 0)
+                {
+                    Console.WriteLine($"[OnVoiceComBridge] 현재 스레드 ID: {currentThreadId}, 메인 스레드 ID: {_mainThreadId}, 메인 스레드 여부: {isMainThread}, 컨텍스트: {(_mainThreadContext != null ? "있음" : "없음")}");
+                }
+                
+                // COM 스레드에서 호출될 수 있으므로, 메인 스레드로 마샬링
+                if (!isMainThread && _mainThreadContext != null)
+                {
+                    if (callId <= 3 || callId % 100 == 0)
+                    {
+                        Console.WriteLine($"[OnVoiceComBridge] ⚠️ COM 스레드에서 호출됨! 메인 스레드로 마샬링 (callId={callId})");
+                    }
+                    
+                    // 메인 스레드로 마샬링하여 JavaScript 콜백 호출
+                    _mainThreadContext.Post(_ =>
+                    {
+                        try
+                        {
+                            InvokeJavaScriptCallback(cb, buffer, callId);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"[OnVoiceComBridge] 메인 스레드 마샬링 후 콜백 호출 오류 (callId={callId}): {ex.Message}");
+                        }
+                    }, null);
+                }
+                else
+                {
+                    // 이미 메인 스레드이거나 컨텍스트가 없으면 직접 호출
+                    if (callId <= 3 || callId % 100 == 0)
+                    {
+                        Console.WriteLine($"[OnVoiceComBridge] 메인 스레드에서 직접 호출 (callId={callId})");
+                    }
+                    InvokeJavaScriptCallback(cb, buffer, callId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] 콜백 호출 오류 (callId={callId}): {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
+            }
+        }
+        
+        /// <summary>
+        /// JavaScript 콜백을 실제로 호출하는 헬퍼 메서드
+        /// </summary>
+        private static void InvokeJavaScriptCallback(Func<object, Task<object>> cb, byte[] buffer, int callId)
+        {
+            try
+            {
+                if (callId <= 3 || callId % 100 == 0)
+                {
+                    Console.WriteLine($"[OnVoiceComBridge] JavaScript 콜백 호출 시작 (callId={callId}, ThreadId={Thread.CurrentThread.ManagedThreadId})");
+                }
+                
                 // Fire-and-forget: edge-js callback returns a Task<object>
                 // JS side is responsible for handling the message and acknowledging via cb(null, res).
-                // 비동기 작업의 예외를 처리하기 위해 ContinueWith 사용
                 var task = cb(new
                 {
                     type = "audio",
@@ -260,7 +337,7 @@ namespace OnVoiceComBridge
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[OnVoiceComBridge] 콜백 호출 오류 (callId={callId}): {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceComBridge] InvokeJavaScriptCallback 오류 (callId={callId}): {ex.Message}");
                 Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
             }
         }

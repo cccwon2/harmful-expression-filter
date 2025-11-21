@@ -72,11 +72,22 @@ export const onVoiceBridge: OnVoiceBridge = {
 
       // This function is marshalled to C# as Func<object, Task<object>>
       // C# will call it with: { type: "audio", data: byte[] }
+      // ⚠️ 이 콜백은 COM 스레드에서 호출될 수 있으므로 스레드 안전성을 고려해야 함
       onAudioData: function (msg: any, cb: EdgeCallback) {
+        const callId = Math.floor(Math.random() * 1000000);
+        const threadId = process.pid; // Node.js 메인 스레드 ID (대략적인 표시)
+        
+        // 처음 몇 번만 상세 로그 출력
+        const shouldLog = callId % 100 < 3;
+        
+        if (shouldLog) {
+          console.log(`[OnVoiceBridge] ⚡ JavaScript 콜백 호출됨! (callId=${callId}, threadId=${threadId})`);
+        }
+        
         try {
           // Null 체크
           if (!msg) {
-            console.warn('[OnVoiceBridge] 메시지가 null입니다.');
+            console.warn(`[OnVoiceBridge] 메시지가 null입니다. (callId=${callId})`);
             cb(null, { ok: true });
             return;
           }
@@ -85,33 +96,50 @@ export const onVoiceBridge: OnVoiceBridge = {
             try {
               const buf = Buffer.from(msg.data);
               
-              // DEBUG: 반복 로그는 디버그 레벨로만 출력 (프로덕션에서는 표시되지 않음)
-              // console.debug(`[OnVoiceBridge] 오디오 데이터 수신: ${buf.length} bytes`);
+              if (shouldLog) {
+                console.log(`[OnVoiceBridge] ✅ 오디오 데이터 수신 성공! (callId=${callId}, size=${buf.length} bytes)`);
+              }
               
               // Emit event for listeners (예외가 발생해도 계속 진행)
               try {
+                const listenerCount = events.listenerCount('audio');
+                if (shouldLog) {
+                  console.log(`[OnVoiceBridge] events.emit 호출 (listeners=${listenerCount}, callId=${callId})`);
+                }
                 events.emit("audio", buf);
+                if (shouldLog) {
+                  console.log(`[OnVoiceBridge] ✅ events.emit 완료 (callId=${callId})`);
+                }
               } catch (emitErr) {
-                console.error('[OnVoiceBridge] events.emit 오류:', emitErr);
+                console.error(`[OnVoiceBridge] ❌ events.emit 오류 (callId=${callId}):`, emitErr);
               }
               
               // Invoke user callback (예외가 발생해도 계속 진행)
               try {
+                if (shouldLog) {
+                  console.log(`[OnVoiceBridge] onAudioData 콜백 호출 (callId=${callId})`);
+                }
                 onAudioData(buf);
+                if (shouldLog) {
+                  console.log(`[OnVoiceBridge] ✅ onAudioData 콜백 완료 (callId=${callId})`);
+                }
               } catch (callbackErr) {
-                console.error('[OnVoiceBridge] onAudioData 콜백 오류:', callbackErr);
+                console.error(`[OnVoiceBridge] ❌ onAudioData 콜백 오류 (callId=${callId}):`, callbackErr);
               }
             } catch (bufErr) {
-              console.error('[OnVoiceBridge] Buffer.from 오류:', bufErr);
+              console.error(`[OnVoiceBridge] ❌ Buffer.from 오류 (callId=${callId}):`, bufErr);
             }
           } else {
-            console.warn('[OnVoiceBridge] 예상하지 못한 메시지 형식:', msg);
+            console.warn(`[OnVoiceBridge] 예상하지 못한 메시지 형식 (callId=${callId}):`, msg);
           }
 
           // 항상 성공 응답 (예외가 발생해도 C#에 성공 응답을 보내서 COM 스레드가 블록되지 않도록 함)
+          if (shouldLog) {
+            console.log(`[OnVoiceBridge] ✅ C#에 성공 응답 전송 (callId=${callId})`);
+          }
           cb(null, { ok: true });
         } catch (e: any) {
-          console.error('[OnVoiceBridge] 콜백 처리 오류:', e);
+          console.error(`[OnVoiceBridge] ❌ 콜백 처리 오류 (callId=${callId}):`, e);
           // 예외가 발생해도 성공 응답을 보냄 (COM 스레드가 블록되지 않도록)
           cb(null, { ok: false, error: e instanceof Error ? e.message : String(e) });
         }
