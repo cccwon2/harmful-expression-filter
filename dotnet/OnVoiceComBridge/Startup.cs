@@ -158,6 +158,12 @@ namespace OnVoiceComBridge
         /// </summary>
         private static void TrySubscribeEventsWithDynamic()
         {
+            if (_capture == null)
+            {
+                Console.Error.WriteLine("[OnVoiceComBridge] _capture가 null이어서 Dynamic 이벤트 구독을 시도할 수 없습니다.");
+                return;
+            }
+
             try
             {
                 // Reflection을 사용하여 이벤트 찾기
