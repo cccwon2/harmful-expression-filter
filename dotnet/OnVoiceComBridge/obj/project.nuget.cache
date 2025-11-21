@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "IWQu7KnqwiY=",
+  "dgSpecHash": "MVqd9cNJLQj8o437SK0I+dztA2WoYaOVsfeiPbZtU+W1WjVr2WB3PrHlhS7CBZ/vD+T9lxznpFjUC8RxZWJhRw==",
   "success": true,
-  "projectFilePath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
+  "projectFilePath": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }
