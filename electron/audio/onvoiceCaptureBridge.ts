@@ -88,34 +88,71 @@ export function createOnVoiceCapture(
   console.log(`[OnVoiceBridge] Connection Point 발견: ${connectionPoints.length}개`);
 
   // 이벤트 리스너 객체
+  // COM 이벤트는 다른 스레드에서 호출될 수 있으므로, 메인 스레드로 마샬링 필요
   const eventSink = {
     OnAudioData: (data: any) => {
       try {
         if (!data) return;
 
-        // 데이터를 Buffer로 정규화
-        let buf: Buffer;
-        if (Buffer.isBuffer(data)) {
-          buf = data;
-        } else if (Array.isArray(data)) {
-          buf = Buffer.from(data);
-        } else if (data.buffer) {
-          // TypedArray인 경우
-          buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-        } else {
-          // 기타 경우
-          buf = Buffer.from(data);
+        // 데이터를 Buffer로 정규화 (COM 스레드에서 안전하게 처리)
+        let rawData: any = data;
+        
+        // COM 스레드에서 Buffer로 변환 시도 (실패할 수 있음)
+        let buf: Buffer | null = null;
+        try {
+          if (Buffer.isBuffer(data)) {
+            buf = data;
+          } else if (Array.isArray(data)) {
+            // 배열인 경우 복사본 생성
+            buf = Buffer.from(data);
+          } else if (data.buffer) {
+            // TypedArray인 경우
+            buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+          } else {
+            // 기타 경우 - 원본 데이터를 보존
+            rawData = data;
+          }
+        } catch (convertErr) {
+          // 변환 실패 시 원본 데이터 사용
+          rawData = data;
         }
 
-        if (buf.length > 0) {
-          onData(buf);
-        }
+        // 메인 스레드로 마샬링하여 처리
+        // setImmediate를 사용하여 Node.js 이벤트 루프의 다음 틱에서 실행
+        setImmediate(() => {
+          try {
+            // 메인 스레드에서 Buffer로 변환
+            let finalBuf: Buffer;
+            if (buf) {
+              finalBuf = buf;
+            } else if (Array.isArray(rawData)) {
+              finalBuf = Buffer.from(rawData);
+            } else if (rawData.buffer) {
+              finalBuf = Buffer.from(rawData.buffer, rawData.byteOffset, rawData.byteLength);
+            } else {
+              finalBuf = Buffer.from(rawData);
+            }
+
+            if (finalBuf.length > 0) {
+              onData(finalBuf);
+            }
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error('[OnVoiceBridge] OnAudioData 메인 스레드 처리 오류:', error);
+            if (onError) {
+              onError(error);
+            }
+          }
+        });
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         console.error('[OnVoiceBridge] OnAudioData 이벤트 처리 오류:', error);
-        if (onError) {
-          onError(error);
-        }
+        // 메인 스레드로 에러 전달
+        setImmediate(() => {
+          if (onError) {
+            onError(error);
+          }
+        });
       }
     },
   };
