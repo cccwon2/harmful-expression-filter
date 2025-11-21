@@ -17,6 +17,42 @@ import { setTrayAudioUpdateCallback } from './tray';
 
 const CAPTURE_INTERVAL_MS = 3000; // 3초 간격 (서버 OCR 처리 시간 고려)
 
+// 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
+const originalConsoleLog = console.log;
+const originalConsoleWarn = console.warn;
+const originalConsoleError = console.error;
+
+// 필터링할 로그 패턴
+const FILTERED_PATTERNS = [
+  /\[COnVoiceCapture\] OnAudioData/i,
+  /\[COnVoiceCapture\] Fire_OnAudioData/i,
+  /\[conn \d+\] GIT CopyTo/i,
+  /\[conn \d+\] Invoke/i,
+];
+
+// 로그 필터링 함수
+function shouldFilterLog(message: string): boolean {
+  return FILTERED_PATTERNS.some(pattern => pattern.test(message));
+}
+
+// console.log 오버라이드
+console.log = function(...args: any[]) {
+  const message = args.map(arg => String(arg)).join(' ');
+  if (!shouldFilterLog(message)) {
+    originalConsoleLog.apply(console, args);
+  }
+};
+
+// console.warn 오버라이드 (필요시)
+console.warn = function(...args: any[]) {
+  const message = args.map(arg => String(arg)).join(' ');
+  if (!shouldFilterLog(message)) {
+    originalConsoleWarn.apply(console, args);
+  }
+};
+
+// console.error는 필터링하지 않음 (중요한 오류는 항상 표시)
+
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
