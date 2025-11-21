@@ -98,6 +98,7 @@ export class OnVoiceService {
       this.captureHandle = createOnVoiceCapture({
         findPid: pid, // 숫자 PID로 전달
         onData: (buf: Buffer) => {
+          console.log(`[OnVoiceService] 오디오 데이터 수신 (adapter): ${buf.length} bytes`);
           this.handleAudioData(buf);
         },
         onError: (err: Error) => {
@@ -240,10 +241,17 @@ export class OnVoiceService {
    * 오디오 데이터 처리 (WebSocket으로 전송)
    */
   private handleAudioData(buf: Buffer): void {
+    console.log(`[OnVoiceService] handleAudioData 호출: ${buf.length} bytes`);
+    console.log(`[OnVoiceService] WebSocket 상태 - Deepgram: ${this.deepgramWs?.readyState}, Server: ${this.serverWs?.readyState}`);
+    
     if (this.deepgramWs && this.deepgramWs.readyState === WebSocket.OPEN) {
       this.deepgramWs.send(buf);
+      console.log(`[OnVoiceService] Deepgram WebSocket으로 전송: ${buf.length} bytes`);
     } else if (this.serverWs && this.serverWs.readyState === WebSocket.OPEN) {
       this.serverWs.send(buf);
+      console.log(`[OnVoiceService] Server WebSocket으로 전송: ${buf.length} bytes`);
+    } else {
+      console.warn('[OnVoiceService] WebSocket이 연결되지 않았습니다. 데이터를 전송할 수 없습니다.');
     }
   }
 

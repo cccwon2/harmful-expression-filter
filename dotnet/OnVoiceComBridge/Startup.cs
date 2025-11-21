@@ -212,17 +212,22 @@ namespace OnVoiceComBridge
 
             try
             {
+                Console.WriteLine($"[OnVoiceComBridge] OnAudioData 호출됨: {buffer?.Length ?? 0} bytes, 콜백 호출 시도...");
+                
                 // Fire-and-forget: edge-js callback returns a Task<object>
                 // JS side is responsible for handling the message and acknowledging via cb(null, res).
-                _ = cb(new
+                var task = cb(new
                 {
                     type = "audio",
                     data = buffer
                 });
+                
+                Console.WriteLine("[OnVoiceComBridge] 콜백 호출 완료 (비동기)");
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[OnVoiceComBridge] 콜백 호출 오류: {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
             }
         }
 

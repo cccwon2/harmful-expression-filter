@@ -74,16 +74,28 @@ export const onVoiceBridge: OnVoiceBridge = {
       // C# will call it with: { type: "audio", data: byte[] }
       onAudioData: function (msg: any, cb: EdgeCallback) {
         try {
+          console.log(`[OnVoiceBridge] C#에서 콜백 호출됨:`, {
+            type: msg?.type,
+            dataLength: msg?.data?.length,
+            hasData: !!msg?.data
+          });
+
           if (msg && msg.type === "audio" && msg.data) {
             const buf = Buffer.from(msg.data);
+            console.log(`[OnVoiceBridge] 오디오 데이터 수신: ${buf.length} bytes`);
+            
             // Emit event for listeners
             events.emit("audio", buf);
+            
             // Invoke user callback
             onAudioData(buf);
+          } else {
+            console.warn('[OnVoiceBridge] 예상하지 못한 메시지 형식:', msg);
           }
 
           cb(null, { ok: true });
         } catch (e: any) {
+          console.error('[OnVoiceBridge] 콜백 처리 오류:', e);
           cb(e instanceof Error ? e : new Error(String(e)));
         }
       },
