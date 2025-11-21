@@ -87,6 +87,12 @@ class AudioProcessingPipeline:
         # 1. 버퍼에 추가 및 청크 가져오기
         buffer_start = time.time()
         
+        # 버퍼 상태 확인 (처음 몇 번만 로그) - 먼저 정의
+        if not hasattr(self, '_buffer_log_count'):
+            self._buffer_log_count = 0
+        self._buffer_log_count += 1
+        should_log_buffer = self._buffer_log_count <= 10 or self._buffer_log_count % 50 == 0
+        
         # 원본 바이너리 데이터 통계 확인 (처음 몇 번만)
         if should_log_buffer:
             raw_audio = np.frombuffer(audio_bytes, dtype=np.int16)
@@ -96,12 +102,6 @@ class AudioProcessingPipeline:
             print(f"[Pipeline] 원본 오디오 통계: size={len(raw_audio)} samples, mean_abs={raw_mean:.4f}, max={raw_max}, min={raw_min}", flush=True)
         
         self.buffer_manager.add_chunk(audio_bytes)
-        
-        # 버퍼 상태 확인 (처음 몇 번만 로그)
-        if not hasattr(self, '_buffer_log_count'):
-            self._buffer_log_count = 0
-        self._buffer_log_count += 1
-        should_log_buffer = self._buffer_log_count <= 10 or self._buffer_log_count % 50 == 0
         
         if should_log_buffer:
             # 버퍼는 샘플 수로 저장되므로, 바이트로 변환하려면 * 2 (16-bit = 2 bytes)
