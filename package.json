@@ -10,9 +10,9 @@
     "build:all": "npm run build:dotnet && npm run copy:dll && npm run build:main",
     "dev:main": "tsc -w -p electron/tsconfig.json",
     "dev:renderer": "vite",
-    "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
+    "dev": "cross-env EDGE_USE_CORECLR=1 concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
     "typecheck": "tsc --noEmit",
-    "start": "cross-env NODE_ENV=production electron .",
+    "start": "cross-env NODE_ENV=production DOTNET_ROOT=\"C:\\Program Files\\dotnet\" EDGE_USE_CORECLR=1 electron .",
     "postinstall": "electron-rebuild || echo 'Rebuild skipped'",
     "rebuild": "electron-rebuild -f -w"
   },
