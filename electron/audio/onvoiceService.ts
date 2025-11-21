@@ -95,12 +95,13 @@ export class OnVoiceService {
       }
 
       // OnVoice 브리지 생성 및 시작 (새로운 bridge adapter 사용)
-      this.captureHandle = createOnVoiceCapture({
-        findPid: pid, // 숫자 PID로 전달
-        onData: (buf: Buffer) => {
-          console.log(`[OnVoiceService] 오디오 데이터 수신 (adapter): ${buf.length} bytes`);
-          this.handleAudioData(buf);
-        },
+              this.captureHandle = createOnVoiceCapture({
+                findPid: pid, // 숫자 PID로 전달
+                onData: (buf: Buffer) => {
+                  // DEBUG: 반복 로그 제거
+                  // console.log(`[OnVoiceService] 오디오 데이터 수신 (adapter): ${buf.length} bytes`);
+                  this.handleAudioData(buf);
+                },
         onError: (err: Error) => {
           console.error('[OnVoiceService] 캡처 오류:', err);
           this.stopMonitoring();
@@ -217,7 +218,8 @@ export class OnVoiceService {
       });
 
       ws.on('message', (data: Buffer) => {
-        console.log(`[OnVoiceService] 서버로부터 메시지 수신: ${data.length} bytes`);
+        // DEBUG: 반복 로그 제거 (버퍼링 메시지가 너무 많이 출력됨)
+        // console.log(`[OnVoiceService] 서버로부터 메시지 수신: ${data.length} bytes`);
         this.handleServerMessage(data);
       });
 
