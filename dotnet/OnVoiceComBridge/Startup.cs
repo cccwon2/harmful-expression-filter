@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
 
@@ -16,6 +17,10 @@ namespace OnVoiceComBridge
     {
         // COM capture object (dynamic to avoid hard dependency on generated interop types)
         private static dynamic? _capture;
+
+        // Connection Point Cookie (for unadvise)
+        private static uint _connectionCookie = 0;
+        private static IConnectionPoint? _connectionPoint;
 
         // JS callback passed from Node (edge-js marshalling)
         // JS 함수 시그니처: (msg: any, cb: (err: Error | null, res?: any) => void) => void
@@ -78,51 +83,260 @@ namespace OnVoiceComBridge
         }
 
         /// <summary>
-        /// Subscribe to COM events (OnAudioData).
-        /// This is skeleton code; actual event name and delegate type should be adjusted.
+        /// Subscribe to COM events (OnAudioData) using IConnectionPoint.
         /// 
-        /// TODO: 실제 OnVoice COM 인터페이스에 맞게 이 부분을 구현해야 합니다:
-        /// 1. COM interop 어셈블리를 추가한 경우:
-        ///    ((OnVoiceAudioBridgeLib.OnVoiceCapture)_capture).OnAudioData += OnAudioData;
-        /// 
-        /// 2. dynamic event를 사용하는 경우, C#에서 직접 이벤트를 구독할 수 있는지 확인 필요.
-        /// 
-        /// 현재는 skeleton이므로 구체 구현은 프로젝트에서 채워 넣는다.
+        /// 이 구현은 IConnectionPoint를 사용하여 COM 이벤트를 구독합니다.
+        /// 기존 winax 코드의 connectionPoint.advise() 패턴을 따릅니다.
         /// </summary>
         private static void SubscribeComEvents()
         {
             if (_capture == null) return;
 
-            // TODO:
-            // 1. COM interop 어셈블리를 추가한 경우:
-            //    ((OnVoiceAudioBridgeLib.OnVoiceCapture)_capture).OnAudioData += OnAudioData;
-            //
-            // 2. dynamic event를 사용하는 경우, C#에서 직접 이벤트를 구독할 수 있는지 확인 필요.
-            //
-            // 현재는 skeleton이므로 구체 구현은 프로젝트에서 채워 넣는다.
+            try
+            {
+                // IConnectionPointContainer 가져오기
+                var cpContainer = (IConnectionPointContainer)_capture;
+
+                // 이벤트 인터페이스 GUID (IDL에서 확인: _IOnVoiceCaptureEvents)
+                var eventIID = new Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea");
+
+                // 직접 Connection Point 찾기
+                IConnectionPoint? connectionPoint;
+                cpContainer.FindConnectionPoint(ref eventIID, out connectionPoint);
+
+                if (connectionPoint == null)
+                {
+                    Console.Error.WriteLine("[OnVoiceComBridge] Connection Point를 찾을 수 없습니다. EnumConnectionPoints를 시도합니다...");
+                    
+                    // Fallback: 모든 Connection Points 열거
+                    IEnumConnectionPoints? enumConnectionPoints;
+                    cpContainer.EnumConnectionPoints(out enumConnectionPoints);
+                    
+                    if (enumConnectionPoints == null)
+                    {
+                        Console.Error.WriteLine("[OnVoiceComBridge] Connection Points를 열거할 수 없습니다.");
+                        return;
+                    }
+
+                    IConnectionPoint[] connectionPoints = new IConnectionPoint[1];
+                    uint fetched = 0;
+
+                    // 첫 번째 Connection Point 가져오기
+                    enumConnectionPoints.Next(1, connectionPoints, out fetched);
+                    
+                    if (fetched == 0 || connectionPoints[0] == null)
+                    {
+                        Console.Error.WriteLine("[OnVoiceComBridge] Connection Point를 찾을 수 없습니다.");
+                        return;
+                    }
+
+                    connectionPoint = connectionPoints[0];
+                }
+
+                _connectionPoint = connectionPoint;
+
+                // 이벤트 싱크 생성
+                var eventSink = new OnVoiceCaptureEventSink();
+
+                // 이벤트 구독 (advise)
+                _connectionPoint.Advise(eventSink, out _connectionCookie);
+
+                Console.WriteLine($"[OnVoiceComBridge] COM 이벤트 구독 성공 (Cookie: {_connectionCookie})");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] COM 이벤트 구독 실패: {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
+                
+                // Dynamic을 통한 대체 방법 시도
+                TrySubscribeEventsWithDynamic();
+            }
+        }
+
+        /// <summary>
+        /// Dynamic 객체를 통한 이벤트 구독 시도 (대체 방법)
+        /// </summary>
+        private static void TrySubscribeEventsWithDynamic()
+        {
+            try
+            {
+                // Reflection을 사용하여 이벤트 찾기
+                var captureType = _capture.GetType();
+                var eventInfo = captureType.GetEvent("OnAudioData");
+                
+                if (eventInfo != null)
+                {
+                    // 이벤트 핸들러 생성
+                    var handlerType = eventInfo.EventHandlerType;
+                    var methodInfo = typeof(Startup).GetMethod("OnAudioDataHandler",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    
+                    if (methodInfo != null)
+                    {
+                        var handler = Delegate.CreateDelegate(handlerType, methodInfo);
+                        eventInfo.AddEventHandler(_capture, handler);
+                        Console.WriteLine("[OnVoiceComBridge] COM 이벤트 구독 성공 (Reflection)");
+                        return;
+                    }
+                }
+                
+                Console.WriteLine("[OnVoiceComBridge] WARN: Dynamic 이벤트 구독도 실패했습니다. COM 인터페이스를 확인하세요.");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] Dynamic 이벤트 구독 실패: {ex.Message}");
+            }
         }
 
         /// <summary>
         /// Called by COM when audio data is available.
         /// This method forwards PCM bytes to Node via the stored JS callback.
         /// 
-        /// ⚠️ 실제 COM 이벤트 시그니처(예: void OnAudioData(byte[] data, int size) 등)에 맞춰
-        /// 이 메서드의 시그니처를 수정해야 합니다.
+        /// ⚠️ 실제 COM 이벤트 시그니처에 맞춰 이 메서드의 시그니처를 수정해야 할 수 있습니다.
         /// </summary>
         /// <param name="buffer">PCM audio data from COM (e.g., 16kHz mono)</param>
-        private static void OnAudioData(byte[] buffer)
+        internal static void OnAudioData(byte[] buffer)
         {
             var cb = _audioCallback;
-            if (cb == null) return;
-
-            // Fire-and-forget: edge-js callback returns a Task<object>
-            // JS side is responsible for handling the message and acknowledging via cb(null, res).
-            _ = cb(new
+            if (cb == null)
             {
-                type = "audio",
-                data = buffer
-            });
+                Console.WriteLine("[OnVoiceComBridge] WARN: _audioCallback이 null입니다!");
+                return;
+            }
+
+            try
+            {
+                // Fire-and-forget: edge-js callback returns a Task<object>
+                // JS side is responsible for handling the message and acknowledging via cb(null, res).
+                _ = cb(new
+                {
+                    type = "audio",
+                    data = buffer
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] 콜백 호출 오류: {ex.Message}");
+            }
         }
+
+        /// <summary>
+        /// Reflection을 통한 이벤트 핸들러 (대체 방법용)
+        /// </summary>
+        private static void OnAudioDataHandler(object? sender, dynamic data)
+        {
+            try
+            {
+                byte[]? buffer = null;
+
+                // 다양한 형태의 데이터를 byte[]로 변환
+                if (data is byte[] bytes)
+                {
+                    buffer = bytes;
+                }
+                else if (data != null)
+                {
+                    // IntPtr이나 다른 형태일 수도 있음
+                    // 실제 COM 이벤트 시그니처에 맞게 수정 필요
+                    var dataType = data?.GetType();
+                    Console.WriteLine($"[OnVoiceComBridge] WARN: 예상하지 못한 데이터 타입: {dataType?.Name ?? "null"}");
+                }
+
+                if (buffer != null)
+                {
+                    OnAudioData(buffer);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] OnAudioDataHandler 오류: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// COM 이벤트 싱크 구현
+    /// OnVoice COM 객체의 _IOnVoiceCaptureEvents 인터페이스를 구현합니다.
+    /// GUID: 52b4a16b-9f83-4a3e-9240-4dd6676540ea (IDL에서 확인됨)
+    /// </summary>
+    [ComVisible(true)]
+    [SupportedOSPlatform("windows")]
+    [Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea")]
+    public class OnVoiceCaptureEventSink : IOnVoiceCaptureEvents
+    {
+        public void OnAudioData(byte[] data)
+        {
+            Startup.OnAudioData(data);
+        }
+    }
+
+    /// <summary>
+    /// COM Connection Point 관련 인터페이스
+    /// </summary>
+    [ComImport]
+    [Guid("B196B284-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IConnectionPointContainer
+    {
+        void EnumConnectionPoints(out IEnumConnectionPoints? ppEnum);
+        void FindConnectionPoint(ref Guid riid, out IConnectionPoint? ppCP);
+    }
+
+    [ComImport]
+    [Guid("B196B285-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IEnumConnectionPoints
+    {
+        void Next(uint cConnections, IConnectionPoint[] rgpcn, out uint pcFetched);
+        void Skip(uint cConnections);
+        void Reset();
+        void Clone(out IEnumConnectionPoints? ppEnum);
+    }
+
+    [ComImport]
+    [Guid("B196B286-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IConnectionPoint
+    {
+        void GetConnectionInterface(out Guid pIID);
+        void GetConnectionPointContainer(out IConnectionPointContainer? ppCPC);
+        void Advise([MarshalAs(UnmanagedType.IUnknown)] object pUnkSink, out uint pdwCookie);
+        void Unadvise(uint dwCookie);
+        void EnumConnections(out IEnumConnections? ppEnum);
+    }
+
+    [ComImport]
+    [Guid("B196B287-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IEnumConnections
+    {
+        void Next(uint cConnections, [Out] object[] rgcd, out uint pcFetched);
+        void Skip(uint cConnections);
+        void Reset();
+        void Clone(out IEnumConnections? ppEnum);
+    }
+
+    /// <summary>
+    /// OnVoice COM 이벤트 인터페이스
+    /// GUID: 52b4a16b-9f83-4a3e-9240-4dd6676540ea (IDL _IOnVoiceCaptureEvents에서 확인됨)
+    /// 
+    /// IDL 정의:
+    /// dispinterface _IOnVoiceCaptureEvents {
+    ///   [id(1)] void OnAudioData([in] SAFEARRAY(unsigned char) pcmData);
+    /// }
+    /// 
+    /// SAFEARRAY(unsigned char)는 C#에서 byte[]로 매핑됩니다.
+    /// </summary>
+    [ComImport]
+    [Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIDispatch)] // dispinterface이므로 IDispatch
+    internal interface IOnVoiceCaptureEvents
+    {
+        [DispId(1)] // IDL에서 [id(1)]로 정의됨
+        void OnAudioData(
+            [MarshalAs(UnmanagedType.SafeArray, SafeArraySubType = VarEnum.VT_UI1)] 
+            byte[] pcmData
+        );
     }
 }
 
