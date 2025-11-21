@@ -74,15 +74,10 @@ export const onVoiceBridge: OnVoiceBridge = {
       // C# will call it with: { type: "audio", data: byte[] }
       onAudioData: function (msg: any, cb: EdgeCallback) {
         try {
-          console.log(`[OnVoiceBridge] C#에서 콜백 호출됨:`, {
-            type: msg?.type,
-            dataLength: msg?.data?.length,
-            hasData: !!msg?.data
-          });
-
           if (msg && msg.type === "audio" && msg.data) {
             const buf = Buffer.from(msg.data);
-            console.log(`[OnVoiceBridge] 오디오 데이터 수신: ${buf.length} bytes`);
+            // DEBUG: 반복 로그는 디버그 레벨로만 출력 (프로덕션에서는 표시되지 않음)
+            // console.debug(`[OnVoiceBridge] 오디오 데이터 수신: ${buf.length} bytes`);
             
             // Emit event for listeners
             events.emit("audio", buf);

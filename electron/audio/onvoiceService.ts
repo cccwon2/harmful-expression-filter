@@ -242,17 +242,16 @@ export class OnVoiceService {
    * 오디오 데이터 처리 (WebSocket으로 전송)
    */
   private handleAudioData(buf: Buffer): void {
-    console.log(`[OnVoiceService] handleAudioData 호출: ${buf.length} bytes`);
-    console.log(`[OnVoiceService] WebSocket 상태 - Deepgram: ${this.deepgramWs?.readyState}, Server: ${this.serverWs?.readyState}`);
+    // DEBUG: 반복 로그는 디버그 레벨로만 출력
+    // console.debug(`[OnVoiceService] 오디오 데이터 처리: ${buf.length} bytes`);
     
     if (this.deepgramWs && this.deepgramWs.readyState === WebSocket.OPEN) {
       this.deepgramWs.send(buf);
-      console.log(`[OnVoiceService] Deepgram WebSocket으로 전송: ${buf.length} bytes`);
     } else if (this.serverWs && this.serverWs.readyState === WebSocket.OPEN) {
       this.serverWs.send(buf);
-      console.log(`[OnVoiceService] Server WebSocket으로 전송: ${buf.length} bytes`);
     } else {
-      console.warn('[OnVoiceService] WebSocket이 연결되지 않았습니다. 데이터를 전송할 수 없습니다.');
+      // 연결 문제는 경고로 출력
+      console.warn('[OnVoiceService] ⚠️ WebSocket 연결이 없어 오디오 데이터를 전송할 수 없습니다.');
     }
   }
 
@@ -285,19 +284,9 @@ export class OnVoiceService {
    * 서버 메시지 처리 (STT + 분석 결과)
    */
   private handleServerMessage(data: Buffer): void {
-    console.log(`[OnVoiceService] handleServerMessage 호출: ${data.length} bytes`);
     try {
       const messageStr = data.toString();
-      console.log(`[OnVoiceService] 서버 메시지 원본: ${messageStr}`);
-      
       const message = JSON.parse(messageStr);
-      console.log(`[OnVoiceService] 서버 메시지 파싱 완료:`, {
-        status: message.status,
-        type: message.type,
-        hasText: !!message.text,
-        hasTranscription: !!message.transcription,
-        isHarmful: message.is_harmful
-      });
       
       // 서버에서 이미 STT + 분석이 완료된 경우
       // 서버 응답 형식: status="ok", text, is_harmful, confidence 등
@@ -308,25 +297,22 @@ export class OnVoiceService {
         const rawText = message.raw_text || text;
         
         if (text && text.trim()) {
-          console.log(`[OnVoiceService] [STT] ${text} (confidence: ${confidence})`);
+          console.log(`[OnVoiceService] [STT] ${text} (confidence: ${confidence.toFixed(2)})`);
           
           if (isHarmful) {
             // 서버에서 키워드 정보를 제공하지 않으므로, 텍스트 전체를 사용
             const matchedKeywords = message.matched_keywords || [rawText];
-            console.warn(`[OnVoiceService] 🚨 유해 표현 감지 (confidence: ${confidence}): ${matchedKeywords.join(', ')}`);
+            console.warn(`[OnVoiceService] 🚨 유해 표현 감지 (confidence: ${confidence.toFixed(2)}): ${matchedKeywords.join(', ')}`);
             this.broadcastHarmfulDetection(text, matchedKeywords);
           }
-        } else {
-          console.log(`[OnVoiceService] STT 결과 없음 (버퍼링 중일 수 있음)`);
         }
       } else if (message.status === 'buffering') {
-        console.log(`[OnVoiceService] 서버 버퍼링 중... (size: ${message.size || 'unknown'})`);
+        // 버퍼링 메시지는 DEBUG 레벨로만 출력 (너무 많이 출력됨)
+        // console.debug(`[OnVoiceService] 서버 버퍼링 중... (size: ${message.size || 'unknown'})`);
       } else if (message.status === 'connected') {
         console.log(`[OnVoiceService] ✅ 서버 연결 확인: ${message.message || ''}`);
       } else if (message.status === 'error') {
         console.error(`[OnVoiceService] ❌ 서버 오류: ${message.detail || message.message || 'Unknown error'}`);
-      } else {
-        console.log(`[OnVoiceService] 서버 메시지 (처리되지 않은 형식):`, message);
       }
     } catch (err) {
       console.error('[OnVoiceService] 서버 메시지 파싱 오류:', err);

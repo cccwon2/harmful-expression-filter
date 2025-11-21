@@ -212,7 +212,8 @@ namespace OnVoiceComBridge
 
             try
             {
-                Console.WriteLine($"[OnVoiceComBridge] OnAudioData 호출됨: {buffer?.Length ?? 0} bytes, 콜백 호출 시도...");
+                // DEBUG: 반복 로그는 제거 (너무 많이 출력됨)
+                // Console.WriteLine($"[OnVoiceComBridge] OnAudioData 호출됨: {buffer?.Length ?? 0} bytes");
                 
                 // Fire-and-forget: edge-js callback returns a Task<object>
                 // JS side is responsible for handling the message and acknowledging via cb(null, res).
@@ -222,7 +223,7 @@ namespace OnVoiceComBridge
                     data = buffer
                 });
                 
-                Console.WriteLine("[OnVoiceComBridge] 콜백 호출 완료 (비동기)");
+                // DEBUG: 콜백 호출 완료 로그 제거
             }
             catch (Exception ex)
             {

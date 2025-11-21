@@ -73,21 +73,19 @@ export function createOnVoiceCapture(
         try {
           // 초기화 (한 번만)
           if (!isInitialized) {
+            // Note: onAudioData 콜백과 audio 이벤트가 모두 호출되므로 중복 방지
+            // audio 이벤트만 사용하고 콜백은 빈 함수로 설정
             await onVoiceBridge.init((buf: Buffer) => {
-              try {
-                onData(buf);
-              } catch (err) {
-                const error = err instanceof Error ? err : new Error(String(err));
-                console.error('[OnVoiceBridgeAdapter] onData 콜백 오류:', error);
-                if (onError) {
-                  onError(error);
-                }
-              }
+              // 콜백은 사용하지 않고 audio 이벤트만 사용
+              // 중복 호출 방지
             });
 
-            // 오디오 이벤트 리스너 등록
+            // 오디오 이벤트 리스너 등록 (단일 경로로 처리)
+            // Note: 중복 로그 방지를 위해 콜백과 이벤트 중 하나만 사용
             onVoiceBridge.events.on('audio', (buf: Buffer) => {
               try {
+                // DEBUG: 반복 로그는 제거 (너무 많이 출력됨)
+                // console.debug(`[OnVoiceBridgeAdapter] 오디오 데이터 수신: ${buf.length} bytes`);
                 onData(buf);
               } catch (err) {
                 const error = err instanceof Error ? err : new Error(String(err));
@@ -99,7 +97,7 @@ export function createOnVoiceCapture(
             });
 
             isInitialized = true;
-            console.log('[OnVoiceBridgeAdapter] 초기화 완료');
+            console.log('[OnVoiceBridgeAdapter] ✅ 초기화 완료');
           }
 
           // PID 해결
