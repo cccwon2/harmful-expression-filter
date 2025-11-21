@@ -3,7 +3,7 @@
  * 
  * electron-edge-js를 사용하여 C# COM wrapper와 통신하는 브리지 모듈
  * 
- * 이 bridge는 winax 대체 역할을 하며, Node/Electron에서는 StartCapture(pid) / StopCapture + audio 이벤트 스트림만 신경 쓰면 됩니다.
+ * Node/Electron에서는 StartCapture(pid) / StopCapture + audio 이벤트 스트림만 신경 쓰면 됩니다.
  * COM 이벤트 구현부(SubscribeComEvents / OnAudioData)는 C# 측에서 실제 OnVoice COM 인터페이스에 맞게 채워야 합니다.
  */
 
