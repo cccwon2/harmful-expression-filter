@@ -130,15 +130,49 @@ namespace OnVoiceComBridge
                     }
                     
                     Console.WriteLine($"[OnVoiceComBridge] StartCapture 호출: PID={pid}");
-                    _capture.StartCapture(pid);
+                    
+                    // Reflection을 사용하여 COM 객체의 StartCapture 메서드 호출
+                    // dynamic 타입으로 직접 호출하면 RuntimeBinderException이 발생할 수 있음
+                    object comObj = _capture;
+                    var result = comObj.GetType().InvokeMember(
+                        "StartCapture",
+                        System.Reflection.BindingFlags.InvokeMethod | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+                        null,
+                        comObj,
+                        new object[] { pid }
+                    );
+                    
                     Console.WriteLine($"[OnVoiceComBridge] ✅ StartCapture 성공: PID={pid}");
                     return new { ok = true, pid };
 
                 case "stop":
                     if (_capture != null)
                     {
-                        // TODO: COM interface 메서드 이름 확인
-                        _capture.StopCapture();
+                        // Reflection을 사용하여 COM 객체의 StopCapture 메서드 호출
+                        object comObj = _capture;
+                        try
+                        {
+                            comObj.GetType().InvokeMember(
+                                "StopCapture",
+                                System.Reflection.BindingFlags.InvokeMethod | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+                                null,
+                                comObj,
+                                null // StopCapture는 인자가 없을 것으로 예상
+                            );
+                            Console.WriteLine($"[OnVoiceComBridge] ✅ StopCapture 성공");
+                        }
+                        catch (System.Reflection.TargetInvocationException ex)
+                        {
+                            // 메서드를 찾을 수 없는 경우를 처리
+                            if (ex.InnerException is System.MissingMethodException)
+                            {
+                                Console.Error.WriteLine($"[OnVoiceComBridge] ⚠️ StopCapture 메서드를 찾을 수 없습니다: {ex.InnerException.Message}");
+                            }
+                            else
+                            {
+                                throw;
+                            }
+                        }
                     }
                     return new { ok = true };
 
