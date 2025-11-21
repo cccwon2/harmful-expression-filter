@@ -287,23 +287,50 @@ export class OnVoiceService {
   private handleServerMessage(data: Buffer): void {
     console.log(`[OnVoiceService] handleServerMessage 호출: ${data.length} bytes`);
     try {
-      const message = JSON.parse(data.toString());
+      const messageStr = data.toString();
+      console.log(`[OnVoiceService] 서버 메시지 원본: ${messageStr}`);
+      
+      const message = JSON.parse(messageStr);
+      console.log(`[OnVoiceService] 서버 메시지 파싱 완료:`, {
+        status: message.status,
+        type: message.type,
+        hasText: !!message.text,
+        hasTranscription: !!message.transcription,
+        isHarmful: message.is_harmful
+      });
       
       // 서버에서 이미 STT + 분석이 완료된 경우
-      if (message.type === 'response' && message.text) {
+      // 서버 응답 형식: status="ok", text, is_harmful, confidence 등
+      if (message.status === 'ok' && message.text) {
         const text = message.text;
-        const isHarmful = message.is_harmful || false;
-        const matchedKeywords = message.matched_keywords || [];
+        const isHarmful = message.is_harmful === 1 || message.is_harmful === true;
+        const confidence = message.confidence || 0;
+        const rawText = message.raw_text || text;
         
-        console.log(`[OnVoiceService] [STT] ${text}`);
-        
-        if (isHarmful) {
-          console.warn(`[OnVoiceService] 🚨 유해 표현 감지: ${matchedKeywords.join(', ')}`);
-          this.broadcastHarmfulDetection(text, matchedKeywords);
+        if (text && text.trim()) {
+          console.log(`[OnVoiceService] [STT] ${text} (confidence: ${confidence})`);
+          
+          if (isHarmful) {
+            // 서버에서 키워드 정보를 제공하지 않으므로, 텍스트 전체를 사용
+            const matchedKeywords = message.matched_keywords || [rawText];
+            console.warn(`[OnVoiceService] 🚨 유해 표현 감지 (confidence: ${confidence}): ${matchedKeywords.join(', ')}`);
+            this.broadcastHarmfulDetection(text, matchedKeywords);
+          }
+        } else {
+          console.log(`[OnVoiceService] STT 결과 없음 (버퍼링 중일 수 있음)`);
         }
+      } else if (message.status === 'buffering') {
+        console.log(`[OnVoiceService] 서버 버퍼링 중... (size: ${message.size || 'unknown'})`);
+      } else if (message.status === 'connected') {
+        console.log(`[OnVoiceService] ✅ 서버 연결 확인: ${message.message || ''}`);
+      } else if (message.status === 'error') {
+        console.error(`[OnVoiceService] ❌ 서버 오류: ${message.detail || message.message || 'Unknown error'}`);
+      } else {
+        console.log(`[OnVoiceService] 서버 메시지 (처리되지 않은 형식):`, message);
       }
     } catch (err) {
       console.error('[OnVoiceService] 서버 메시지 파싱 오류:', err);
+      console.error('[OnVoiceService] 원본 데이터:', data.toString());
     }
   }
 
