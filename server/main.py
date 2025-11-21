@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import os
-import sys
 import time
 from pathlib import Path
 import io
@@ -16,14 +15,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from PIL import Image
 
-# Deepgram SDK V3+ (실시간 스트리밍용)
-from deepgram import (
-    DeepgramClient,
-    LiveTranscriptionEvents,
-    LiveOptions,
-)
+# ✅ websockets: legacy asyncio API 사용 (extra_headers 지원)
+from websockets.legacy.client import connect as ws_connect
 
-# OCR 서비스 (기존 유지)
+# OCR 서비스
 from services.paddle_ocr_service import get_ocr_service
 
 # 로깅 설정
@@ -31,8 +26,8 @@ LOGGER = logging.getLogger("harmful-filter")
 logging.basicConfig(level=logging.INFO)
 
 # .env 파일 위치 확인 및 로드
-server_env_path = Path(__file__).parent / '.env'
-parent_env_path = Path(__file__).parent.parent / '.env'
+server_env_path = Path(__file__).parent / ".env"
+parent_env_path = Path(__file__).parent.parent / ".env"
 
 if server_env_path.exists():
     load_dotenv(dotenv_path=server_env_path)
@@ -52,12 +47,13 @@ if not DEEPGRAM_API_KEY:
 # ============== 전역 변수 ==============
 BAD_WORDS: List[str] = []
 
+
 # ============== 유틸리티 함수 ==============
 def load_keywords() -> None:
     """키워드 파일 로드"""
     global BAD_WORDS
     keywords_path = os.path.join(os.path.dirname(__file__), "data", "bad_words.json")
-    
+
     default_keywords = ["새끼", "시발", "씨발", "병신", "존나", "미친", "니미", "좆", "도 아니고"]
 
     if os.path.exists(keywords_path):
@@ -65,12 +61,12 @@ def load_keywords() -> None:
             with open(keywords_path, "r", encoding="utf-8") as file:
                 data = json.load(file)
                 BAD_WORDS = data.get("keywords", default_keywords)
-                LOGGER.info(f"[Keywords] ✅ {len(BAD_WORDS)}개 키워드 로드 완료")
+                LOGGER.info("[Keywords] ✅ %d개 키워드 로드 완료", len(BAD_WORDS))
         except Exception:
             BAD_WORDS = default_keywords
     else:
         BAD_WORDS = default_keywords
-        # 기본 파일 생성 로직 생략 (간소화)
+
 
 def check_keywords(text: str) -> List[str]:
     """단순 키워드 매칭"""
@@ -78,139 +74,207 @@ def check_keywords(text: str) -> List[str]:
         return []
     return [word for word in BAD_WORDS if word in text]
 
+
 # ============== Deepgram WebSocket 핸들러 클래스 ==============
 class DeepgramWebSocketManager:
     """
-    FastAPI WebSocket(Electron)과 Deepgram WebSocket 사이를 중계하는 클래스
+    FastAPI WebSocket(Electron)과 Deepgram STT WebSocket(v1 / nova-2, ko)을 중계하는 클래스
     """
+
     def __init__(self, websocket: WebSocket, api_key: str, keywords: List[str]):
         self.websocket = websocket
         self.api_key = api_key
         self.keywords = keywords
-        self.dg_client = DeepgramClient(api_key)
-        self.dg_connection = None
-        self.result_queue = asyncio.Queue() # Deepgram(Sync) -> FastAPI(Async) 브릿지용 큐
-        self.is_running = False
 
-    async def start(self):
-        """Deepgram 연결 시작"""
+        self.dg_ws = None  # websockets.legacy.client.WebSocketClientProtocol
+        self.receive_task: Optional[asyncio.Task] = None
+
+        self.result_queue: asyncio.Queue = asyncio.Queue()
+        self.is_running: bool = False
+
+    async def start(self) -> bool:
+        """Deepgram WebSocket 연결 시작"""
+        if not self.api_key:
+            LOGGER.error("[Deepgram] ❌ API Key 없음")
+            return False
+
+        # 한국어 인식을 위한 nova-2 모델 (16kHz mono PCM)
+        url = (
+            "wss://api.deepgram.com/v1/listen"
+            "?model=nova-2"
+            "&language=ko"
+            "&smart_format=true"
+            "&encoding=linear16"
+            "&channels=1"
+            "&sample_rate=16000"
+            "&interim_results=true"
+        )
+
         try:
-            self.dg_connection = self.dg_client.listen.live.v("1")
-            
-            # 이벤트 핸들러 등록
-            self.dg_connection.on(LiveTranscriptionEvents.Transcript, self._on_message)
-            self.dg_connection.on(LiveTranscriptionEvents.Error, self._on_error)
-
-            # 옵션 설정 (Electron 오디오 설정과 일치해야 함: 16kHz, Mono, Int16)
-            options = LiveOptions(
-                model="nova-2",
-                language="ko",
-                smart_format=True,
-                encoding="linear16",
-                channels=1,
-                sample_rate=16000,
-                interim_results=True, # ✨ 속도의 핵심: 중간 결과 받기
+            LOGGER.info("[Deepgram] 🌐 WebSocket 연결 시도(legacy): %s", url)
+            # ✅ legacy asyncio API: extra_headers 사용
+            self.dg_ws = await ws_connect(
+                url,
+                extra_headers={"Authorization": f"Token {self.api_key}"},
             )
-
-            if self.dg_connection.start(options) is False:
-                LOGGER.error("❌ Deepgram 연결 실패")
-                return False
-
+            LOGGER.info("[Deepgram] ✅ WebSocket 연결 성공 (nova-2, ko)")
             self.is_running = True
-            LOGGER.info("✅ Deepgram 실시간 스트리밍 연결 성공")
-            
-            # 결과 전송 루프를 백그라운드 태스크로 실행
+
+            # Deepgram → Electron 전송 루프
             asyncio.create_task(self._send_results_to_client())
+            # Deepgram 수신 루프
+            self.receive_task = asyncio.create_task(self._receive_loop())
+
             return True
         except Exception as e:
-            LOGGER.error(f"Deepgram 시작 오류: {e}")
+            LOGGER.error("[Deepgram] ❌ WebSocket 연결 실패: %s", e, exc_info=True)
+            self.is_running = False
             return False
 
     async def stop(self):
         """연결 종료"""
         self.is_running = False
-        if self.dg_connection:
-            self.dg_connection.finish()
-            LOGGER.info("Deepgram 연결 종료")
+
+        # Deepgram WS 종료
+        if self.dg_ws is not None:
+            try:
+                await self.dg_ws.close()
+                LOGGER.info("[Deepgram] 🔌 WebSocket 연결 종료")
+            except Exception as e:
+                LOGGER.warning("[Deepgram] WebSocket 종료 중 오류: %s", e)
+
+        # 수신 태스크 정리
+        if self.receive_task is not None:
+            self.receive_task.cancel()
+            try:
+                await self.receive_task
+            except asyncio.CancelledError:
+                pass
 
     async def process_audio(self, audio_bytes: bytes):
-        """오디오 데이터를 Deepgram으로 전송"""
-        if self.is_running and self.dg_connection:
-            self.dg_connection.send(audio_bytes)
-
-    def _on_message(self, result, **kwargs):
-        """Deepgram에서 텍스트가 오면 호출됨 (동기 함수)"""
+        """Electron에서 들어온 오디오 데이터를 Deepgram으로 전송"""
+        if not self.is_running or self.dg_ws is None:
+            return
         try:
-            alternatives = result.channel.alternatives
-            if not alternatives: return
-            
-            transcript = alternatives[0].transcript
-            if len(transcript.strip()) == 0: return
-
-            # 유해성 검사
-            matched = check_keywords(transcript)
-            is_harmful = len(matched) > 0
-            confidence = alternatives[0].confidence
-            is_final = result.is_final
-
-            # 결과 데이터 구성
-            response_data = {
-                "status": "ok",
-                "text": transcript,
-                "is_harmful": int(is_harmful),
-                "confidence": float(confidence),
-                "matched_keywords": matched,
-                "is_final": is_final,
-                "timestamp": time.time()
-            }
-
-            # 로그 출력 (디버깅)
-            status_tag = "[확정]" if is_final else "[진행]"
-            print(f"[STT] {status_tag} {transcript}", flush=True)
-            if is_harmful:
-                print(f"🚨 유해 표현 감지: {matched}", flush=True)
-
-            # 비동기 큐에 넣기 (put_nowait은 이벤트 루프를 블로킹하지 않음)
-            # run_coroutine_threadsafe를 쓰지 않고 Queue를 쓰는 것이 더 안전함
-            self.result_queue.put_nowait(response_data)
-
+            await self.dg_ws.send(audio_bytes)
         except Exception as e:
-            LOGGER.error(f"메시지 처리 오류: {e}")
+            LOGGER.error("[Deepgram] 오디오 전송 오류: %s", e)
 
-    def _on_error(self, error, **kwargs):
-        LOGGER.error(f"Deepgram 오류: {error}")
+    async def _receive_loop(self):
+        """Deepgram → 서버 수신 루프"""
+        if self.dg_ws is None:
+            return
+
+        try:
+            async for message in self.dg_ws:
+                # Deepgram은 text frame(JSON)로 결과를 보냄
+                if isinstance(message, bytes):
+                    # 혹시 모를 바이너리는 무시
+                    continue
+                try:
+                    payload = json.loads(message)
+                except json.JSONDecodeError:
+                    LOGGER.warning("[Deepgram] JSON 파싱 실패: %r", message[:200])
+                    continue
+
+                self._handle_result_payload(payload)
+        except asyncio.CancelledError:
+            # 정상 종료
+            pass
+        except Exception as e:
+            LOGGER.error("[Deepgram] 수신 루프 오류: %s", e, exc_info=True)
+        finally:
+            self.is_running = False
+            LOGGER.info("[Deepgram] 수신 루프 종료")
+
+    def _handle_result_payload(self, payload: dict):
+        """
+        Deepgram STT 응답(JSON)을 파싱해서 result_queue에 넣기
+        docs 기준 형태:
+        {
+          "is_final": bool,
+          "channel": {
+            "alternatives": [
+              {
+                "transcript": "...",
+                "confidence": 0.98,
+                ...
+              }
+            ]
+          },
+          ...
+        }
+        """
+        channel = payload.get("channel")
+        if not isinstance(channel, dict):
+            return
+
+        alternatives = channel.get("alternatives")
+        if not alternatives:
+            return
+
+        alt0 = alternatives[0]
+        if not isinstance(alt0, dict):
+            return
+
+        transcript = str(alt0.get("transcript", "")).strip()
+        if not transcript:
+            return
+
+        confidence_raw = alt0.get("confidence", 0.0)
+        try:
+            confidence = float(confidence_raw)
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        is_final = bool(payload.get("is_final", False))
+
+        matched = check_keywords(transcript)
+        is_harmful = len(matched) > 0
+
+        response_data = {
+            "status": "ok",
+            "text": transcript,
+            "is_harmful": int(is_harmful),
+            "confidence": confidence,
+            "matched_keywords": matched,
+            "is_final": is_final,
+            "timestamp": time.time(),
+        }
+
+        status_tag = "[확정]" if is_final else "[진행]"
+        print(f"[STT] {status_tag} {transcript}", flush=True)
+        if is_harmful:
+            print(f"🚨 유해 표현 감지: {matched}", flush=True)
+
+        self.result_queue.put_nowait(response_data)
 
     async def _send_results_to_client(self):
-        """큐에 쌓인 결과를 Electron으로 전송하는 비동기 루프"""
+        """큐에 쌓인 Deepgram 결과를 Electron WebSocket으로 전송"""
         while self.is_running:
             try:
-                # 큐에서 결과 대기
                 result = await self.result_queue.get()
-                
-                # WebSocket으로 전송
                 await self.websocket.send_json(result)
             except Exception as e:
-                LOGGER.error(f"결과 전송 오류: {e}")
+                LOGGER.error("[WS] 결과 전송 오류: %s", e)
                 break
+
 
 # ============== FastAPI 앱 설정 ==============
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. 시작 시
     load_keywords()
-    
-    # OCR 지연 초기화 준비
     try:
         get_ocr_service()
         LOGGER.info("[INFO] ✅ OCR 서비스 준비 완료")
     except Exception as e:
-        LOGGER.warning(f"[WARN] OCR 서비스 초기화 오류: {e}")
+        LOGGER.warning("[WARN] OCR 서비스 초기화 오류: %s", e)
 
     LOGGER.info("[INFO] 🚀 서버 시작 완료 (Deepgram Streaming Mode)")
     yield
-    # 2. 종료 시
     LOGGER.info("[INFO] 👋 서버 종료")
+
 
 app = FastAPI(title="OnVoice Filter API", lifespan=lifespan)
 
@@ -224,78 +288,75 @@ app.add_middleware(
 
 # ============== 엔드포인트 ==============
 
+
 @app.websocket("/ws/audio")
 async def audio_stream(websocket: WebSocket):
-    """
-    실시간 오디오 스트리밍 엔드포인트
-    Electron -> FastAPI -> Deepgram -> FastAPI -> Electron
-    """
     await websocket.accept()
     print("[WS] Electron 연결됨", flush=True)
-    
+
     if not DEEPGRAM_API_KEY:
         await websocket.close(code=1008, reason="API Key missing")
         return
 
-    # Deepgram 매니저 생성 및 시작
     dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, BAD_WORDS)
     success = await dg_manager.start()
-    
+
     if not success:
         await websocket.send_json({"status": "error", "detail": "Deepgram Connection Failed"})
         await websocket.close()
         return
 
-    # 연결 성공 메시지
-    await websocket.send_json({
-        "status": "connected", 
-        "message": "Deepgram Streaming Ready",
-        "mode": "Real-time (Nova-2)"
-    })
+    await websocket.send_json(
+        {
+            "status": "connected",
+            "message": "Deepgram Streaming Ready",
+            "mode": "Real-time (nova-2, ko)",
+        }
+    )
 
     try:
         while True:
-            # Electron에서 오디오 데이터 수신
             message = await websocket.receive()
-            
             if message["type"] == "websocket.disconnect":
                 break
-            
+
             if "bytes" in message and message["bytes"]:
-                # 받은 오디오를 즉시 Deepgram으로 전송
                 await dg_manager.process_audio(message["bytes"])
-                
+
     except WebSocketDisconnect:
         print("[WS] Electron 연결 종료됨", flush=True)
     except Exception as e:
-        LOGGER.error(f"[WS] 오류 발생: {e}")
+        LOGGER.error("[WS] 오류 발생: %s", e)
     finally:
         await dg_manager.stop()
 
-# --- 기존 HTTP 엔드포인트 유지 ---
 
 @app.get("/health")
 async def health_check():
     return {
-        "status": "ok", 
+        "status": "ok",
         "keywords": len(BAD_WORDS),
-        "service": "Deepgram Streaming"
+        "service": "Deepgram Streaming (nova-2, ko)",
     }
+
 
 @app.get("/keywords")
 async def get_keywords():
     return {"keywords": BAD_WORDS}
 
+
 class AnalyzeRequest(BaseModel):
     text: str
+
 
 @app.post("/analyze")
 async def analyze_text(request: AnalyzeRequest):
     matched = check_keywords(request.text)
     return {
         "has_violation": len(matched) > 0,
-        "matched_keywords": matched
+        "matched_keywords": matched,
     }
+
 
 @app.post("/api/ocr")
 async def ocr_endpoint(file: UploadFile = File(...)):
@@ -308,6 +369,8 @@ async def ocr_endpoint(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
