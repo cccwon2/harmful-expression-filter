@@ -264,15 +264,22 @@ namespace OnVoiceComBridge
     /// COM 이벤트 싱크 구현
     /// OnVoice COM 객체의 _IOnVoiceCaptureEvents 인터페이스를 구현합니다.
     /// GUID: 52b4a16b-9f83-4a3e-9240-4dd6676540ea (IDL에서 확인됨)
+    /// 
+    /// dispinterface를 구현하기 위해 IDispatch를 직접 구현합니다.
     /// </summary>
     [ComVisible(true)]
     [SupportedOSPlatform("windows")]
     [Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea")]
+    [ClassInterface(ClassInterfaceType.None)] // 인터페이스를 통해서만 노출
     public class OnVoiceCaptureEventSink : IOnVoiceCaptureEvents
     {
-        public void OnAudioData(byte[] data)
+        [DispId(1)] // IDL에서 [id(1)]로 정의됨
+        public void OnAudioData(
+            [MarshalAs(UnmanagedType.SafeArray, SafeArraySubType = VarEnum.VT_UI1)] 
+            byte[] pcmData
+        )
         {
-            Startup.OnAudioData(data);
+            Startup.OnAudioData(pcmData);
         }
     }
 
@@ -332,13 +339,15 @@ namespace OnVoiceComBridge
     /// }
     /// 
     /// SAFEARRAY(unsigned char)는 C#에서 byte[]로 매핑됩니다.
+    /// 
+    /// 주의: [ComImport]가 아닌 일반 인터페이스로 정의하여 C#에서 구현 가능하도록 함
     /// </summary>
-    [ComImport]
+    [ComVisible(true)]
     [Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea")]
     [InterfaceType(ComInterfaceType.InterfaceIsIDispatch)] // dispinterface이므로 IDispatch
-    internal interface IOnVoiceCaptureEvents
+    public interface IOnVoiceCaptureEvents
     {
-        [DispId(1)] // IDL에서 [id(1)]로 정의됨
+        [DispId(1)] // IDL에서 [id(1)]로 정의됨 - C++의 Invoke 호출 ID와 일치해야 함
         void OnAudioData(
             [MarshalAs(UnmanagedType.SafeArray, SafeArraySubType = VarEnum.VT_UI1)] 
             byte[] pcmData
