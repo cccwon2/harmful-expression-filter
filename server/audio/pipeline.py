@@ -86,6 +86,15 @@ class AudioProcessingPipeline:
 
         # 1. 버퍼에 추가 및 청크 가져오기
         buffer_start = time.time()
+        
+        # 원본 바이너리 데이터 통계 확인 (처음 몇 번만)
+        if should_log_buffer:
+            raw_audio = np.frombuffer(audio_bytes, dtype=np.int16)
+            raw_mean = float(np.mean(np.abs(raw_audio)))
+            raw_max = float(np.max(np.abs(raw_audio)))
+            raw_min = float(np.min(raw_audio))
+            print(f"[Pipeline] 원본 오디오 통계: size={len(raw_audio)} samples, mean_abs={raw_mean:.4f}, max={raw_max}, min={raw_min}", flush=True)
+        
         self.buffer_manager.add_chunk(audio_bytes)
         
         # 버퍼 상태 확인 (처음 몇 번만 로그)
@@ -105,6 +114,12 @@ class AudioProcessingPipeline:
                        buffer_samples, buffer_bytes, required_samples, required_bytes, percent)
             print(f"[Pipeline] 버퍼 상태: {buffer_samples} 샘플 ({buffer_bytes} bytes) / {required_samples} 샘플 ({required_bytes} bytes) 필요 ({percent:.1f}%)", flush=True)
         
+        # 버퍼에서 청크 가져오기 전에 샘플 미리보기 (처음 몇 번만)
+        if should_log_buffer and len(self.buffer_manager.buffer) >= self.buffer_manager.chunk_size:
+            # 정규화 전 원본 샘플 값 확인 (처음 10개만)
+            sample_preview = list(self.buffer_manager.buffer)[:10]
+            print(f"[Pipeline] 버퍼 샘플 미리보기 (정규화 전, 처음 10개): {sample_preview}", flush=True)
+        
         audio_chunk = self.buffer_manager.get_processed_chunk()
         buffer_time = (time.time() - buffer_start) * 1000
 
@@ -115,7 +130,18 @@ class AudioProcessingPipeline:
             return None
         
         if should_log_buffer:
+            # 오디오 청크 통계 확인 (정규화 후)
+            chunk_mean = float(np.mean(np.abs(audio_chunk)))
+            chunk_max = float(np.max(np.abs(audio_chunk)))
+            chunk_min = float(np.min(audio_chunk))
+            chunk_std = float(np.std(audio_chunk))
             print(f"[Pipeline] ✅ 버퍼 충분! STT 처리 시작 (청크 크기: {len(audio_chunk)} samples)", flush=True)
+            print(f"[Pipeline] 오디오 청크 통계 (정규화 후): mean_abs={chunk_mean:.6f}, max={chunk_max:.6f}, min={chunk_min:.6f}, std={chunk_std:.6f}", flush=True)
+            
+            # 정규화 전 원본 값 확인 (청크에서 역변환)
+            chunk_int16 = (audio_chunk * 32768.0).astype(np.int16)
+            chunk_int16_preview = chunk_int16[:10].tolist()
+            print(f"[Pipeline] 오디오 청크 샘플 미리보기 (정규화 전, 처음 10개): {chunk_int16_preview}", flush=True)
 
         # 2. STT 변환
         stt_start = time.time()
