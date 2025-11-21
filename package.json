@@ -13,7 +13,7 @@
     "dev": "cross-env EDGE_USE_CORECLR=1 concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
     "typecheck": "tsc --noEmit",
     "start": "cross-env NODE_ENV=production DOTNET_ROOT=\"C:\\Program Files\\dotnet\" EDGE_USE_CORECLR=1 electron .",
-    "postinstall": "electron-rebuild -f --only native-sound-mixer || echo 'Rebuild skipped'",
+    "postinstall": "electron-rebuild -f || echo 'Rebuild skipped'",
     "rebuild": "electron-rebuild -f --only native-sound-mixer"
   },
   "keywords": [
@@ -28,7 +28,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "dotenv": "^16.3.1",
-    "electron-edge-js": "^37.0.0",
+    "electron-edge-js": "^28.0.0",
     "form-data": "^4.0.0",
     "native-sound-mixer": "^3.4.6-win",
     "react": "^18.2.0",
@@ -44,7 +44,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
-    "electron": "^37.10.2",
+    "electron": "^28.0.0",
     "electron-builder": "^26.0.12",
     "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
