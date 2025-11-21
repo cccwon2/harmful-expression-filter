@@ -2,137 +2,134 @@
  * 프로세스 검색 유틸리티
  *
  * Windows에서 실행 중인 프로세스의 PID를 찾는 유틸리티 함수
- *
- * TODO: node-process-list 같은 패키지를 사용하면 더 효율적일 수 있습니다.
  */
 
 import { exec } from "child_process";
 import { promisify } from "util";
 
+// execAsync는 기본적으로 Buffer가 아닌 string을 반환합니다.
+// 한글 윈도우에서 인코딩 문제가 발생할 수 있으나, PID 추출 로직에는 영향이 적습니다.
+// 만약 로그에 한글이 깨져 나온다면 'iconv-lite'를 사용하여 decoding 해야 합니다.
 const execAsync = promisify(exec);
 
 interface ProcessInfo {
   pid: number;
   name: string;
+  title: string;
 }
 
 /**
- * 프로세스 이름으로 PID 찾기
+ * Window Title이 있는 메인 프로세스 찾기 (공용 함수)
+ * Chrome, Edge, Discord 등 멀티 프로세스 앱의 메인 PID를 찾을 때 사용합니다.
  */
-export async function findProcessByName(processName: string): Promise<number | null> {
+async function findWindowedProcess(imageName: string): Promise<number | null> {
   try {
-    // PowerShell을 사용하여 프로세스 검색
-    // Get-Process | Where-Object {$_.ProcessName -like "*chrome*"} | Select-Object -First 1 Id
-    const command = `powershell -Command "Get-Process | Where-Object {$_.ProcessName -like '*${processName}*'} | Select-Object -First 1 -ExpandProperty Id"`;
-
-    const { stdout, stderr } = await execAsync(command);
-
-    if (stderr && stderr.trim()) {
-      console.warn(`[ProcessFinder] PowerShell 오류: ${stderr}`);
-      return null;
-    }
-
-    const pidStr = stdout.trim();
-    if (!pidStr || isNaN(Number(pidStr))) {
-      return null;
-    }
-
-    const pid = parseInt(pidStr, 10);
-    return pid > 0 ? pid : null;
-  } catch (error) {
-    console.error(`[ProcessFinder] 프로세스 검색 실패 (${processName}):`, error);
-    return null;
-  }
-}
-
-/**
- * Chrome 프로세스 찾기
- * Chrome은 여러 프로세스를 사용하므로, 메인 프로세스를 찾습니다.
- * 메인 프로세스는 Window Title을 가지고 있으므로 이를 기준으로 찾습니다.
- */
-export async function findChromeProcess(): Promise<number | null> {
-  try {
-    // tasklist /v 옵션으로 Window Title 정보 포함하여 검색
-    // /fi "imagename eq chrome.exe" : chrome.exe만 필터링
+    // /fi "imagename eq ..." : 프로세스 이름 필터
     // /fi "status eq running" : 실행 중인 것만
-    // /fo csv : CSV 포맷으로 파싱하기 쉽게
+    // /fo csv : CSV 포맷
     // /nh : 헤더 제거
     // /v : 상세 정보(Window Title 포함) 출력
-    const command = `tasklist /fi "imagename eq chrome.exe" /fi "status eq running" /fo csv /nh /v`;
+    const command = `tasklist /fi "imagename eq ${imageName}" /fi "status eq running" /fo csv /nh /v`;
 
     const { stdout, stderr } = await execAsync(command);
 
-    if (stderr && stderr.trim()) {
-      console.warn(`[ProcessFinder] tasklist 오류: ${stderr}`);
-      // 오류가 있어도 stdout이 있으면 계속 진행
-    }
+    // tasklist는 찾는 프로세스가 없으면 stderr가 아니라 stdout에 "정보: ..." 메시지를 띄우기도 하므로
+    // stderr 체크보다는 파싱 결과로 판단하는 것이 낫습니다.
 
     const lines = stdout
       .trim()
       .split("\r\n")
       .filter((line) => line.trim() !== "");
 
-    if (lines.length === 0) {
-      console.warn("[ProcessFinder] Chrome 프로세스를 찾을 수 없습니다.");
+    // "정보: 지정된 조건에 맞는 작업이 실행되고 있지 않습니다." 메시지 처리
+    if (lines.length === 0 || lines[0].startsWith("INFO:") || lines[0].startsWith("정보:")) {
+      console.warn(`[ProcessFinder] ${imageName} 프로세스를 찾을 수 없습니다.`);
       return null;
     }
 
-    // Window Title이 있는 메인 프로세스 찾기
+    // Window Title이 있는 메인 프로세스 탐색
     for (const line of lines) {
       // CSV 파싱: "imagename","pid","session","mem","status","username","cpu","window title"
-      // 간이 파싱: "로 구분된 컬럼들
       const cols = line.split('","');
 
       if (cols.length < 2) continue;
 
-      // PID 추출 (두 번째 컬럼, 앞뒤 따옴표 제거)
+      // PID 추출 (두 번째 컬럼)
       const pidStr = cols[1].replace(/"/g, "");
       const pid = parseInt(pidStr, 10);
 
       if (isNaN(pid) || pid <= 0) continue;
 
-      // Window Title 추출 (마지막 컬럼, 앞뒤 따옴표 제거)
-      const windowTitle = cols[cols.length - 1].replace(/"/g, "").trim();
+      // Window Title 추출 (마지막 컬럼)
+      // cols가 8개 미만일 수도 있으므로 마지막 요소를 가져옴
+      let windowTitle = cols[cols.length - 1].replace(/"/g, "").trim();
 
-      // 💡 핵심: Window Title이 "N/A"가 아니고, 비어있지 않은 것이 메인 프로세스
+      // 한글 윈도우 등에서 깨진 문자가 올 수 있으나, 길이와 N/A 여부만 확인하면 됨
       if (windowTitle !== "N/A" && windowTitle !== "") {
-        console.log(`[ProcessFinder] ✅ 메인 Chrome 발견! PID: ${pid}, Title: ${windowTitle}`);
+        console.log(`[ProcessFinder] ✅ 메인 ${imageName} 발견! PID: ${pid}, Title: ${windowTitle}`);
         return pid;
       }
     }
 
-    // 메인 프로세스를 찾지 못했으면 첫 번째 프로세스라도 반환
-    console.warn("[ProcessFinder] ⚠️ 메인 프로세스를 특정하지 못해 첫 번째 프로세스를 반환합니다.");
+    // 메인 프로세스(창이 있는 것)를 못 찾았지만 리스트에는 있는 경우
+    // (예: 트레이에만 있고 창은 닫힌 상태)
+    // 첫 번째 프로세스를 반환하거나 null을 반환
+    console.warn(`[ProcessFinder] ⚠️ ${imageName}의 메인 창을 찾지 못해 첫 번째 PID를 반환합니다.`);
+
     const firstLine = lines[0].split('","');
     if (firstLine.length > 1) {
       const pidStr = firstLine[1].replace(/"/g, "");
       const pid = parseInt(pidStr, 10);
-      if (!isNaN(pid) && pid > 0) {
-        return pid;
-      }
+      return !isNaN(pid) && pid > 0 ? pid : null;
     }
 
     return null;
   } catch (error) {
-    console.error("[ProcessFinder] Chrome 프로세스 검색 실패:", error);
-    // 폴백: 기존 방식으로 시도
-    return findProcessByName("chrome");
+    console.error(`[ProcessFinder] ${imageName} 검색 실패:`, error);
+    return null;
   }
 }
 
 /**
+ * Chrome 프로세스 찾기
+ */
+export async function findChromeProcess(): Promise<number | null> {
+  return findWindowedProcess("chrome.exe");
+}
+
+/**
  * Edge 프로세스 찾기
- * Edge는 Chromium 기반이므로 msedge.exe를 찾습니다.
+ * Edge도 Chromium 기반이므로 Window Title 로직을 사용해야 정확합니다.
  */
 export async function findEdgeProcess(): Promise<number | null> {
-  return findProcessByName("msedge");
+  return findWindowedProcess("msedge.exe");
 }
 
 /**
  * Discord 프로세스 찾기
+ * Discord도 Electron 기반(멀티 프로세스)이므로 Window Title 로직이 안전합니다.
  */
 export async function findDiscordProcess(): Promise<number | null> {
-  return findProcessByName("Discord");
+  // Discord는 설치 버전에 따라 Discord.exe, DiscordCanary.exe 등일 수 있음
+  // 보통 Discord.exe를 찾으면 됩니다.
+  return findWindowedProcess("Discord.exe");
+}
+
+/**
+ * 일반 프로세스 찾기 (PowerShell Fallback)
+ * Window Title 로직이 필요 없는 단일 프로세스 앱용
+ */
+export async function findProcessByName(processName: string): Promise<number | null> {
+  try {
+    // PowerShell이 tasklist보다 느릴 수 있지만, 복잡한 필터링엔 유리함
+    const command = `powershell -Command "Get-Process | Where-Object {$_.ProcessName -like '*${processName}*'} | Select-Object -First 1 -ExpandProperty Id"`;
+    const { stdout } = await execAsync(command);
+
+    const pid = parseInt(stdout.trim(), 10);
+    return pid > 0 ? pid : null;
+  } catch (error) {
+    return null;
+  }
 }
 
 /**
@@ -160,14 +157,15 @@ export async function findProcessByType(type: "edge" | "chrome" | "discord" | nu
  */
 export async function isProcessRunning(pid: number): Promise<boolean> {
   try {
-    // tasklist 명령어로 프로세스 확인
+    // /NH (No Header) 옵션 사용
     const command = `tasklist /FI "PID eq ${pid}" /NH`;
     const { stdout } = await execAsync(command);
 
-    // PID가 있으면 stdout에 프로세스 정보가 포함됨
-    return stdout.includes(`${pid}`);
+    // PID가 없으면 "정보: 지정된 조건에 맞는 작업이 실행되고 있지 않습니다." 같은 메시지가 뜸
+    // PID가 있으면 해당 라인이 출력됨
+    return stdout.includes(pid.toString());
   } catch (error) {
-    console.error(`[ProcessFinder] 프로세스 확인 실패 (PID: ${pid}):`, error);
+    // 프로세스가 없어서 에러가 나는 경우도 있으므로 false 반환
     return false;
   }
 }
