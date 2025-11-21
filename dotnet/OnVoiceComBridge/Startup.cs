@@ -201,27 +201,34 @@ namespace OnVoiceComBridge
         /// ⚠️ 실제 COM 이벤트 시그니처에 맞춰 이 메서드의 시그니처를 수정해야 할 수 있습니다.
         /// </summary>
         /// <param name="buffer">PCM audio data from COM (e.g., 16kHz mono)</param>
+        private static int _onAudioDataCallCount = 0;
+        
         internal static void OnAudioData(byte[] buffer)
         {
+            var callId = System.Threading.Interlocked.Increment(ref _onAudioDataCallCount);
+            
+            // 처음 몇 번만 로그 출력 (너무 많이 출력되지 않도록)
+            if (callId <= 3 || callId % 100 == 0)
+            {
+                Console.WriteLine($"[OnVoiceComBridge] OnAudioData 호출됨 (callId={callId}, size={buffer?.Length ?? 0})");
+            }
+            
             // Null 체크
             if (buffer == null)
             {
-                Console.Error.WriteLine("[OnVoiceComBridge] WARN: buffer가 null입니다!");
+                Console.Error.WriteLine($"[OnVoiceComBridge] WARN: buffer가 null입니다! (callId={callId})");
                 return;
             }
 
             var cb = _audioCallback;
             if (cb == null)
             {
-                Console.WriteLine("[OnVoiceComBridge] WARN: _audioCallback이 null입니다!");
+                Console.WriteLine($"[OnVoiceComBridge] WARN: _audioCallback이 null입니다! (callId={callId})");
                 return;
             }
 
             try
             {
-                // DEBUG: 반복 로그는 제거 (너무 많이 출력됨)
-                // Console.WriteLine($"[OnVoiceComBridge] OnAudioData 호출됨: {buffer?.Length ?? 0} bytes");
-                
                 // Fire-and-forget: edge-js callback returns a Task<object>
                 // JS side is responsible for handling the message and acknowledging via cb(null, res).
                 // 비동기 작업의 예외를 처리하기 위해 ContinueWith 사용
@@ -238,18 +245,22 @@ namespace OnVoiceComBridge
                     {
                         if (t.IsFaulted && t.Exception != null)
                         {
-                            Console.Error.WriteLine($"[OnVoiceComBridge] 비동기 콜백 오류: {t.Exception.GetBaseException().Message}");
+                            Console.Error.WriteLine($"[OnVoiceComBridge] 비동기 콜백 오류 (callId={callId}): {t.Exception.GetBaseException().Message}");
                             foreach (var innerEx in t.Exception.InnerExceptions)
                             {
                                 Console.Error.WriteLine($"[OnVoiceComBridge] 내부 예외: {innerEx.Message}");
                             }
+                        }
+                        else if (callId <= 3 || callId % 100 == 0)
+                        {
+                            Console.WriteLine($"[OnVoiceComBridge] OnAudioData 콜백 완료 (callId={callId})");
                         }
                     }, TaskContinuationOptions.OnlyOnFaulted);
                 }
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[OnVoiceComBridge] 콜백 호출 오류: {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceComBridge] 콜백 호출 오류 (callId={callId}): {ex.Message}");
                 Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
             }
         }
@@ -301,21 +312,42 @@ namespace OnVoiceComBridge
     [ClassInterface(ClassInterfaceType.None)] // 인터페이스를 통해서만 노출
     public class OnVoiceCaptureEventSink : IOnVoiceCaptureEvents
     {
+        private static int _callCount = 0;
+        
         [DispId(1)] // IDL에서 [id(1)]로 정의됨
         public void OnAudioData(
             [MarshalAs(UnmanagedType.SafeArray, SafeArraySubType = VarEnum.VT_UI1)] 
             byte[] pcmData
         )
         {
+            var callId = System.Threading.Interlocked.Increment(ref _callCount);
+            
+            // 처음 몇 번만 로그 출력 (너무 많이 출력되지 않도록)
+            if (callId <= 3 || callId % 100 == 0)
+            {
+                Console.WriteLine($"[OnVoiceCaptureEventSink] OnAudioData 호출됨 (callId={callId}, size={pcmData?.Length ?? 0})");
+            }
+            
             try
             {
+                if (pcmData == null)
+                {
+                    Console.Error.WriteLine($"[OnVoiceCaptureEventSink] WARN: pcmData가 null입니다! (callId={callId})");
+                    return;
+                }
+                
                 Startup.OnAudioData(pcmData);
+                
+                if (callId <= 3 || callId % 100 == 0)
+                {
+                    Console.WriteLine($"[OnVoiceCaptureEventSink] OnAudioData 완료 (callId={callId})");
+                }
             }
             catch (Exception ex)
             {
                 // COM 스레드에서 호출되므로 예외를 잡아서 로그만 남기고 전파하지 않음
                 // 예외를 전파하면 COM 객체에 문제가 생길 수 있음
-                Console.Error.WriteLine($"[OnVoiceCaptureEventSink] OnAudioData 예외: {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceCaptureEventSink] OnAudioData 예외 (callId={callId}): {ex.Message}");
                 Console.Error.WriteLine($"[OnVoiceCaptureEventSink] 스택 트레이스: {ex.StackTrace}");
             }
         }
