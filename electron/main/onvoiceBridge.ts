@@ -34,8 +34,10 @@ function getBridgeFunc(): EdgeFunc {
 
   // NOTE: DLL은 dist-electron/dotnet/OnVoiceComBridge.dll에 복사됨
   // __dirname은 빌드된 JavaScript 파일의 위치 (dist-electron/main/)
+  // 상위 디렉토리로 올라가서 dotnet 폴더 접근
   const assemblyFile = path.join(
     __dirname,
+    "..",
     "dotnet",
     "OnVoiceComBridge.dll"
   );
