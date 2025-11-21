@@ -64,13 +64,74 @@ namespace OnVoiceComBridge
 
                 case "start":
                     EnsureComObject();
-                    // 테스트용 하드코딩: Chrome PID 19020
-                    int pid = 19020;
-                    // int pid = (int)input.pid; // 원래 코드
-                    // TODO: COM interface 메서드 이름이 다르면 여기 수정
                     if (_capture == null)
                         throw new InvalidOperationException("COM object not initialized");
+                    
+                    // PID 추출 및 검증
+                    int pid = 0;
+                    try
+                    {
+                        // dynamic에서 PID 추출 (여러 타입 지원)
+                        if (input.pid != null)
+                        {
+                            // int, long, double 등 다양한 타입 지원
+                            var pidValue = input.pid;
+                            if (pidValue is int intPid)
+                            {
+                                pid = intPid;
+                            }
+                            else if (pidValue is long longPid)
+                            {
+                                pid = (int)longPid;
+                            }
+                            else if (pidValue is double doublePid)
+                            {
+                                pid = (int)doublePid;
+                            }
+                            else
+                            {
+                                // 문자열로 변환 후 파싱 시도
+                                pid = Convert.ToInt32(pidValue);
+                            }
+                        }
+                        else
+                        {
+                            throw new ArgumentException("PID가 전달되지 않았습니다. input.pid가 null입니다.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[OnVoiceComBridge] PID 추출 실패: {ex.Message}");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] input.pid 타입: {input.pid?.GetType()?.Name ?? "null"}");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] input.pid 값: {input.pid}");
+                        throw new ArgumentException($"PID를 추출할 수 없습니다: {ex.Message}", ex);
+                    }
+                    
+                    // PID 유효성 검증
+                    if (pid <= 0)
+                    {
+                        throw new ArgumentException($"유효하지 않은 PID: {pid}. PID는 0보다 큰 값이어야 합니다.");
+                    }
+                    
+                    // 프로세스 존재 여부 확인 (선택적)
+                    try
+                    {
+                        var process = System.Diagnostics.Process.GetProcessById(pid);
+                        var processName = process.ProcessName;
+                        Console.WriteLine($"[OnVoiceComBridge] ✅ 프로세스 확인: PID={pid}, 이름={processName}");
+                    }
+                    catch (ArgumentException)
+                    {
+                        Console.WriteLine($"[OnVoiceComBridge] ⚠️ 경고: PID {pid}에 해당하는 프로세스를 찾을 수 없습니다. 계속 진행합니다...");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[OnVoiceComBridge] ⚠️ 프로세스 확인 중 오류 (무시): {ex.Message}");
+                    }
+                    
+                    Console.WriteLine($"[OnVoiceComBridge] StartCapture 호출: PID={pid}");
                     _capture.StartCapture(pid);
+                    Console.WriteLine($"[OnVoiceComBridge] ✅ StartCapture 성공: PID={pid}");
                     return new { ok = true, pid };
 
                 case "stop":

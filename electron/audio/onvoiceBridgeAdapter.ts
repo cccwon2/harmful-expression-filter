@@ -95,6 +95,7 @@ export function createOnVoiceCapture(options: CreateOnVoiceCaptureOptions): OnVo
           let pid: number;
           if (typeof findPid === "number") {
             pid = findPid;
+            console.log(`[OnVoiceBridgeAdapter] PID 직접 지정: ${pid} (타입: ${typeof pid})`);
           } else {
             // TODO: 프로세스 자동 검색 구현 필요
             const error = new Error("프로세스 자동 검색은 아직 구현되지 않았습니다. PID를 직접 지정하세요.");
@@ -106,7 +107,7 @@ export function createOnVoiceCapture(options: CreateOnVoiceCaptureOptions): OnVo
           }
 
           if (pid <= 0) {
-            const error = new Error(`프로세스를 찾을 수 없습니다. (PID: ${pid})`);
+            const error = new Error(`유효하지 않은 PID: ${pid}. PID는 0보다 큰 값이어야 합니다.`);
             console.error(`[OnVoiceBridgeAdapter] ${error.message}`);
             if (onError) {
               onError(error);
@@ -114,10 +115,18 @@ export function createOnVoiceCapture(options: CreateOnVoiceCaptureOptions): OnVo
             return;
           }
 
+          console.log(`[OnVoiceBridgeAdapter] 캡처 시작 시도: PID=${pid} (유효성 검증 통과)`);
           currentPid = pid;
-          await onVoiceBridge.startCapture(pid);
-          isCapturing = true;
-          console.log(`[OnVoiceBridgeAdapter] 캡처 시작 (PID: ${pid})`);
+          
+          try {
+            await onVoiceBridge.startCapture(pid);
+            isCapturing = true;
+            console.log(`[OnVoiceBridgeAdapter] ✅ 캡처 시작 성공 (PID: ${pid})`);
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error(`[OnVoiceBridgeAdapter] ❌ startCapture 호출 실패 (PID: ${pid}):`, error);
+            throw error;
+          }
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err));
           console.error("[OnVoiceBridgeAdapter] StartCapture 실패:", error);

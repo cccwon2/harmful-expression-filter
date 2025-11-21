@@ -150,7 +150,9 @@ export const onVoiceBridge: OnVoiceBridge = {
   },
 
   async startCapture(pid: number): Promise<void> {
-    await callBridge({ command: "start", pid });
+    console.log(`[OnVoiceBridge] startCapture 호출: PID=${pid} (타입: ${typeof pid})`);
+    const result = await callBridge({ command: "start", pid });
+    console.log(`[OnVoiceBridge] startCapture 결과:`, result);
   },
 
   async stopCapture(): Promise<void> {
