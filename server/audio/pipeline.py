@@ -119,15 +119,34 @@ class AudioProcessingPipeline:
 
         # 2. STT 변환
         stt_start = time.time()
+        audio_duration_sec = len(audio_chunk) / self.buffer_manager.sample_rate
+        print(f"[Pipeline] 🎤 STT 변환 시작... (청크: {len(audio_chunk)} samples, {audio_duration_sec:.2f}초)", flush=True)
         LOGGER.info("[Pipeline] Starting STT conversion (audio chunk: %d samples, %.2f sec)", 
-                    len(audio_chunk), len(audio_chunk) / self.buffer_manager.sample_rate)
-        text = await asyncio.to_thread(self.stt_service.transcribe, audio_chunk)
-        stt_time = (time.time() - stt_start) * 1000
+                    len(audio_chunk), audio_duration_sec)
+        
+        try:
+            # STT 서비스 타입 확인
+            stt_service_name = type(self.stt_service).__name__
+            print(f"[Pipeline] STT 서비스: {stt_service_name}", flush=True)
+            
+            # asyncio.to_thread로 별도 스레드에서 실행
+            print(f"[Pipeline] asyncio.to_thread 호출 중...", flush=True)
+            text = await asyncio.to_thread(self.stt_service.transcribe, audio_chunk)
+            stt_time = (time.time() - stt_start) * 1000
+            print(f"[Pipeline] ✅ STT 완료! (소요 시간: {stt_time:.2f}ms)", flush=True)
+            
+        except Exception as stt_err:
+            stt_time = (time.time() - stt_start) * 1000
+            print(f"[Pipeline] ❌ STT 오류 발생! (소요 시간: {stt_time:.2f}ms): {stt_err}", flush=True)
+            LOGGER.error("[Pipeline] STT conversion error after %.2fms: %s", stt_time, stt_err, exc_info=True)
+            return None
 
         if not text or len(text.strip()) == 0:
+            print(f"[Pipeline] ⚠️ STT 결과가 비어있음 (텍스트 없음)", flush=True)
             LOGGER.info("[Pipeline] STT completed (%.2fms) but no text detected, skipping classification", stt_time)
             return None
         
+        print(f"[Pipeline] 📝 STT 결과: '{text[:100]}'", flush=True)
         LOGGER.info("[Pipeline] STT completed (%.2fms): '%s'", stt_time, text[:100])
 
         # 3. 유해성 판단

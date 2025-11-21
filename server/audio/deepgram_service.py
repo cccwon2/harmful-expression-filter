@@ -190,16 +190,22 @@ class DeepgramSTTService:
         새 Deepgram 클라이언트를 생성하여 transcription 수행.
         이벤트 루프 문제를 피하기 위해 각 호출마다 새 클라이언트를 사용.
         """
+        start_time = time.time()
         try:
             from deepgram import AsyncDeepgramClient
+            print(f"[Deepgram] 새 클라이언트 생성 중...", flush=True)
             # 새 클라이언트 생성 (이벤트 루프 문제 방지)
             temp_client = AsyncDeepgramClient(api_key=self.api_key)
+            print(f"[Deepgram] ✅ 클라이언트 생성 완료", flush=True)
             
             # 오디오 처리
             audio = np.asarray(audio_np, dtype=np.float32)
             audio_mean = float(np.mean(np.abs(audio)))
             
+            print(f"[Deepgram] 오디오 통계: size={len(audio)}, mean_abs={audio_mean:.4f}", flush=True)
+            
             if audio_mean < 0.001:
+                print(f"[Deepgram] ⚠️ 오디오가 너무 조용함 (mean={audio_mean:.4f}), API 호출 건너뜀", flush=True)
                 logger.info("[Deepgram] Audio too quiet (mean=%.4f), skipping API call", audio_mean)
                 return ""
             
@@ -217,8 +223,11 @@ class DeepgramSTTService:
                 wav_file.writeframes(audio_int16.tobytes())
             
             audio_bytes = wav_buffer.getvalue()
+            print(f"[Deepgram] WAV 변환 완료: {len(audio_bytes)} bytes", flush=True)
             
             # API 호출
+            print(f"[Deepgram] 📤 Deepgram API 호출 중... (model={self.model}, language={self.language})", flush=True)
+            api_start = time.time()
             response = await temp_client.listen.v1.media.transcribe_file(
                 request=audio_bytes,
                 model=self.model,
@@ -227,6 +236,8 @@ class DeepgramSTTService:
                 punctuate=False,
                 diarize=False,
             )
+            api_time = (time.time() - api_start) * 1000
+            print(f"[Deepgram] ✅ API 응답 수신! (소요 시간: {api_time:.2f}ms)", flush=True)
             
             # 응답 파싱
             transcript = ""
@@ -237,8 +248,17 @@ class DeepgramSTTService:
                     if alternatives and len(alternatives) > 0:
                         transcript = alternatives[0].transcript.strip()
             
+            elapsed_ms = (time.time() - start_time) * 1000
+            if transcript:
+                print(f"[Deepgram] 📝 Transcription 완료 ({elapsed_ms:.2f}ms): '{transcript[:100]}'", flush=True)
+            else:
+                print(f"[Deepgram] ⚠️ Transcription 완료 ({elapsed_ms:.2f}ms) but no text", flush=True)
+            logger.info("[Deepgram] Transcription: %.2fms | Text: '%s'", elapsed_ms, transcript[:50])
+            
             return transcript
         except Exception as exc:
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"[Deepgram] ❌ 오류 발생 ({elapsed_ms:.2f}ms): {exc}", flush=True)
             logger.exception("[Deepgram] _transcribe_with_new_client error")
             return ""
 
