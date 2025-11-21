@@ -217,6 +217,7 @@ export class OnVoiceService {
       });
 
       ws.on('message', (data: Buffer) => {
+        console.log(`[OnVoiceService] 서버로부터 메시지 수신: ${data.length} bytes`);
         this.handleServerMessage(data);
       });
 
@@ -284,6 +285,7 @@ export class OnVoiceService {
    * 서버 메시지 처리 (STT + 분석 결과)
    */
   private handleServerMessage(data: Buffer): void {
+    console.log(`[OnVoiceService] handleServerMessage 호출: ${data.length} bytes`);
     try {
       const message = JSON.parse(data.toString());
       
