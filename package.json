@@ -12,7 +12,7 @@
     "dev:renderer": "vite",
     "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
     "typecheck": "tsc --noEmit",
-    "start": "electron .",
+    "start": "cross-env NODE_ENV=production electron .",
     "postinstall": "electron-rebuild || echo 'Rebuild skipped'",
     "rebuild": "electron-rebuild -f -w"
   },
@@ -44,6 +44,7 @@
     "@types/ws": "^8.5.8",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
     "electron": "^37.10.2",
     "electron-builder": "^26.0.12",
     "rimraf": "^5.0.5",

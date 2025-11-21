@@ -1,9 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ROI } from './ipc/roi';
-// sandbox 환경에서는 path 모듈을 사용할 수 없으므로 상대 경로 require만 사용
-// TypeScript import 대신 런타임 require 사용 (sandbox 호환성)
-const channels = require('./ipc/channels');
-const { SERVER_CHANNELS, AUDIO_CHANNELS, ONVOICE_CHANNELS, IPC_CHANNELS } = channels;
+// TypeScript import 사용 (CommonJS로 컴파일됨)
+import { SERVER_CHANNELS, AUDIO_CHANNELS, ONVOICE_CHANNELS, IPC_CHANNELS } from './ipc/channels';
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
