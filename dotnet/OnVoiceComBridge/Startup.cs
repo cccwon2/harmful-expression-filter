@@ -203,6 +203,13 @@ namespace OnVoiceComBridge
         /// <param name="buffer">PCM audio data from COM (e.g., 16kHz mono)</param>
         internal static void OnAudioData(byte[] buffer)
         {
+            // Null 체크
+            if (buffer == null)
+            {
+                Console.Error.WriteLine("[OnVoiceComBridge] WARN: buffer가 null입니다!");
+                return;
+            }
+
             var cb = _audioCallback;
             if (cb == null)
             {
@@ -217,13 +224,28 @@ namespace OnVoiceComBridge
                 
                 // Fire-and-forget: edge-js callback returns a Task<object>
                 // JS side is responsible for handling the message and acknowledging via cb(null, res).
+                // 비동기 작업의 예외를 처리하기 위해 ContinueWith 사용
                 var task = cb(new
                 {
                     type = "audio",
                     data = buffer
                 });
                 
-                // DEBUG: 콜백 호출 완료 로그 제거
+                // 비동기 작업의 예외를 처리 (COM 스레드에서 호출되므로 안전하게 처리)
+                if (task != null)
+                {
+                    task.ContinueWith(t =>
+                    {
+                        if (t.IsFaulted && t.Exception != null)
+                        {
+                            Console.Error.WriteLine($"[OnVoiceComBridge] 비동기 콜백 오류: {t.Exception.GetBaseException().Message}");
+                            foreach (var innerEx in t.Exception.InnerExceptions)
+                            {
+                                Console.Error.WriteLine($"[OnVoiceComBridge] 내부 예외: {innerEx.Message}");
+                            }
+                        }
+                    }, TaskContinuationOptions.OnlyOnFaulted);
+                }
             }
             catch (Exception ex)
             {
@@ -285,7 +307,17 @@ namespace OnVoiceComBridge
             byte[] pcmData
         )
         {
-            Startup.OnAudioData(pcmData);
+            try
+            {
+                Startup.OnAudioData(pcmData);
+            }
+            catch (Exception ex)
+            {
+                // COM 스레드에서 호출되므로 예외를 잡아서 로그만 남기고 전파하지 않음
+                // 예외를 전파하면 COM 객체에 문제가 생길 수 있음
+                Console.Error.WriteLine($"[OnVoiceCaptureEventSink] OnAudioData 예외: {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceCaptureEventSink] 스택 트레이스: {ex.StackTrace}");
+            }
         }
     }
 

@@ -74,24 +74,46 @@ export const onVoiceBridge: OnVoiceBridge = {
       // C# will call it with: { type: "audio", data: byte[] }
       onAudioData: function (msg: any, cb: EdgeCallback) {
         try {
-          if (msg && msg.type === "audio" && msg.data) {
-            const buf = Buffer.from(msg.data);
-            // DEBUG: 반복 로그는 디버그 레벨로만 출력 (프로덕션에서는 표시되지 않음)
-            // console.debug(`[OnVoiceBridge] 오디오 데이터 수신: ${buf.length} bytes`);
-            
-            // Emit event for listeners
-            events.emit("audio", buf);
-            
-            // Invoke user callback
-            onAudioData(buf);
+          // Null 체크
+          if (!msg) {
+            console.warn('[OnVoiceBridge] 메시지가 null입니다.');
+            cb(null, { ok: true });
+            return;
+          }
+
+          if (msg.type === "audio" && msg.data) {
+            try {
+              const buf = Buffer.from(msg.data);
+              
+              // DEBUG: 반복 로그는 디버그 레벨로만 출력 (프로덕션에서는 표시되지 않음)
+              // console.debug(`[OnVoiceBridge] 오디오 데이터 수신: ${buf.length} bytes`);
+              
+              // Emit event for listeners (예외가 발생해도 계속 진행)
+              try {
+                events.emit("audio", buf);
+              } catch (emitErr) {
+                console.error('[OnVoiceBridge] events.emit 오류:', emitErr);
+              }
+              
+              // Invoke user callback (예외가 발생해도 계속 진행)
+              try {
+                onAudioData(buf);
+              } catch (callbackErr) {
+                console.error('[OnVoiceBridge] onAudioData 콜백 오류:', callbackErr);
+              }
+            } catch (bufErr) {
+              console.error('[OnVoiceBridge] Buffer.from 오류:', bufErr);
+            }
           } else {
             console.warn('[OnVoiceBridge] 예상하지 못한 메시지 형식:', msg);
           }
 
+          // 항상 성공 응답 (예외가 발생해도 C#에 성공 응답을 보내서 COM 스레드가 블록되지 않도록 함)
           cb(null, { ok: true });
         } catch (e: any) {
           console.error('[OnVoiceBridge] 콜백 처리 오류:', e);
-          cb(e instanceof Error ? e : new Error(String(e)));
+          // 예외가 발생해도 성공 응답을 보냄 (COM 스레드가 블록되지 않도록)
+          cb(null, { ok: false, error: e instanceof Error ? e.message : String(e) });
         }
       },
     });
