@@ -705,15 +705,15 @@ async def audio_stream(websocket: WebSocket) -> None:
         LOGGER.error("[ERROR] BAD_WORDS is empty! Keywords will not be checked.")
 
     # 파이프라인 생성 (빠르게 완료되어야 함 - 블로킹 최소화)
-    # ✅ 청크 크기 조정: 1초 → 3초로 늘려서 STT 인식률 향상
-    # 1초는 너무 짧아서 Deepgram이 텍스트를 반환하지 않는 경우가 많음
-    # 3초(48,000 샘플)는 충분한 문맥을 제공하여 인식률이 급상승함
-    # 필요시 5초(80,000 샘플)로 더 늘릴 수 있음
+    # ✅ 청크 크기 조정: 실시간 필터링을 위해 1초로 설정
+    # 1초(16,000 샘플)는 실시간성과 인식률의 균형점
+    # 더 빠른 응답이 필요하면 0.5초(8,000 샘플)로 줄일 수 있음
+    # 인식률이 낮다면 2~3초로 늘릴 수 있음 (단, 지연 시간 증가)
     pipeline = AudioProcessingPipeline(
         stt_service=STT_SERVICE,
         classifier=CLASSIFIER,
         sample_rate=16_000,
-        chunk_duration_sec=3.0,  # 1.0 → 3.0 (1초 → 3초로 증가)
+        chunk_duration_sec=1.0,  # 실시간 필터링을 위해 1초로 설정
         keywords=BAD_WORDS,  # 전역 키워드 목록 전달
     )
     
