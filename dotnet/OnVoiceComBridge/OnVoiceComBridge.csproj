@@ -5,7 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>OnVoiceComBridge</AssemblyName>
-    <SupportedOSPlatform>windows</SupportedOSPlatform> 
+    <SupportedOSPlatform>windows</SupportedOSPlatform>
+    <UseWindowsSdkPackage>true</UseWindowsSdkPackage>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
   </PropertyGroup>
 
   <ItemGroup>

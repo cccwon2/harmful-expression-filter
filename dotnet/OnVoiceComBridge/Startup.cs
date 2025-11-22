@@ -37,6 +37,63 @@ namespace OnVoiceComBridge
         private static readonly HttpClient _httpClient = new HttpClient();
         private static string _serverUrl = LoadServerUrlFromEnv();
 
+        static Startup()
+        {
+            // Windows SDK 런타임 DLL 로드를 위한 AssemblyResolve 이벤트 핸들러
+            AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+        }
+
+        private static System.Reflection.Assembly? OnAssemblyResolve(object? sender, ResolveEventArgs args)
+        {
+            string assemblyName = new System.Reflection.AssemblyName(args.Name).Name ?? "";
+            
+            // Windows SDK 런타임 DLL 찾기
+            if (assemblyName == "Microsoft.Windows.SDK.NET" || assemblyName == "WinRT.Runtime")
+            {
+                // .NET 런타임 팩 경로에서 찾기
+                string? dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? 
+                                    Environment.GetEnvironmentVariable("ProgramFiles") + @"\dotnet";
+                string[] searchPaths = new[]
+                {
+                    Path.Combine(dotnetRoot, "packs", "Microsoft.Windows.SDK.NET.Ref", "10.0.19041.52", "ref", "net6.0"),
+                    Path.Combine(dotnetRoot, "packs", "Microsoft.Windows.SDK.NET.Ref", "10.0.19041.52", "ref"),
+                    Path.Combine(dotnetRoot, "shared", "Microsoft.WindowsDesktop.App", "6.0.0"),
+                };
+
+                foreach (string searchPath in searchPaths)
+                {
+                    if (!Directory.Exists(searchPath)) continue;
+                    
+                    string dllPath = Path.Combine(searchPath, assemblyName + ".dll");
+                    if (File.Exists(dllPath))
+                    {
+                        try
+                        {
+                            return System.Reflection.Assembly.LoadFrom(dllPath);
+                        }
+                        catch { }
+                    }
+                }
+
+                // 현재 어셈블리 디렉토리에서 찾기
+                string? currentDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                if (!string.IsNullOrEmpty(currentDir))
+                {
+                    string localPath = Path.Combine(currentDir, assemblyName + ".dll");
+                    if (File.Exists(localPath))
+                    {
+                        try
+                        {
+                            return System.Reflection.Assembly.LoadFrom(localPath);
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public async Task<object> Invoke(dynamic input)
         {
             string command = (string)input.command;
