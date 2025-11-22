@@ -1,0 +1,5 @@
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.csproj.AssemblyReference.cache
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.GeneratedMSBuildEditorConfig.editorconfig
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.AssemblyInfoInputs.cache
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.AssemblyInfo.cs
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.csproj.CoreCompileInputs.cache

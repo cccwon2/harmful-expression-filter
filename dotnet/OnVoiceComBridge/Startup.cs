@@ -12,7 +12,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 
-// ✅ Windows OCR 및 이미지 처리용 네임스페이스 (WinRT)
+// Windows API (WinRT)
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 using Windows.Media.Ocr; 
@@ -20,22 +20,18 @@ using Windows.Globalization;
 
 namespace OnVoiceComBridge
 {
-    // Windows 10 2004 (Build 19041) 이상 타겟팅
     [SupportedOSPlatform("windows10.0.19041.0")]
     public class Startup
     {
         private static object? _capture;
         private static uint _connectionCookie = 0;
         private static IConnectionPoint? _connectionPoint;
-        
-        // GC 방지용 이벤트 싱크 보관
         private static OnVoiceCaptureEventSink? _eventSink;
         
         private static Func<object, Task<object>>? _audioCallback;
         private static SynchronizationContext? _mainThreadContext;
         private static int _mainThreadId = -1;
         
-        // ✅ [수정] Microsoft.Windows.AI 대신 OS 내장 OcrEngine 사용
         private static OcrEngine? _ocrEngine;
         
         private static readonly HttpClient _httpClient = new HttpClient();
@@ -71,7 +67,7 @@ namespace OnVoiceComBridge
                     {
                         var capturer = (IOnVoiceCapture)_capture;
                         capturer.StartCapture(pid);
-                        Console.WriteLine($"[OnVoiceComBridge] ✅ StartCapture 성공 (Interface Casting)");
+                        Console.WriteLine($"[OnVoiceComBridge] ✅ StartCapture 성공");
                     }
                     catch (Exception ex)
                     {
@@ -100,7 +96,6 @@ namespace OnVoiceComBridge
                     if (_capture == null) throw new InvalidOperationException("COM object not initialized");
                     
                     string target = (string)input.target;
-                    Console.WriteLine($"[OnVoiceComBridge] 프로세스 찾기 요청: {target}");
                     
                     int foundPid = 0;
                     try
@@ -130,23 +125,18 @@ namespace OnVoiceComBridge
                     {
                         var ocrStartTime = DateTime.UtcNow;
                         byte[] imageBytes = (byte[])input.imageData;
-                        Console.WriteLine($"[OnVoiceComBridge] OCR 요청: 이미지 크기 {imageBytes.Length} bytes");
                         
-                        // ✅ [수정] SoftwareBitmap 변환 (Bgra8 포맷 필수)
                         SoftwareBitmap? softwareBitmap = await ConvertBytesToSoftwareBitmap(imageBytes);
                         if (softwareBitmap == null) return new { ok = false, error = "이미지 변환 실패" };
                         
-                        // ✅ [수정] OCR 수행 (Windows.Media.Ocr 사용)
                         string recognizedText = await RecognizeTextFromSoftwareBitmap(softwareBitmap);
                         var ocrEndTime = DateTime.UtcNow;
                         var ocrTime = (ocrEndTime - ocrStartTime).TotalSeconds;
                         
                         Console.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText.Length}자 추출 ({ocrTime:F3}초)");
                         
-                        // 텍스트 줄 분리
                         var texts = SplitTextToLines(recognizedText);
                         
-                        // 유해성 검사
                         var analysisStartTime = DateTime.UtcNow;
                         var analysisResult = await AnalyzeTextForHarmfulContent(recognizedText);
                         var analysisTime = (DateTime.UtcNow - analysisStartTime).TotalSeconds;
@@ -170,9 +160,8 @@ namespace OnVoiceComBridge
                 case "ocrAndBlur":
                     try
                     {
-                        var ocrStartTime = DateTime.UtcNow;
                         byte[] imageBytes = (byte[])input.imageData;
-                        var roi = input.roi; // { x, y, width, height }
+                        var roi = input.roi;
                         int roiX = Convert.ToInt32(roi.x);
                         int roiY = Convert.ToInt32(roi.y);
                         int roiWidth = Convert.ToInt32(roi.width);
@@ -221,63 +210,46 @@ namespace OnVoiceComBridge
             }
         }
 
-        // =========================================================
-        // ✅ [핵심 수정] Windows.Media.Ocr 엔진 관련 메서드
-        // =========================================================
-
         private static void EnsureOcrEngine()
         {
             if (_ocrEngine != null) return;
-
-            // 1. 사용자 언어 설정 기반 시도
             _ocrEngine = OcrEngine.TryCreateFromUserProfileLanguages();
-
-            // 2. 실패 시 영어로 강제 시도
             if (_ocrEngine == null)
             {
                 var lang = new Language("en-US");
-                if (OcrEngine.IsLanguageSupported(lang))
-                {
-                    _ocrEngine = OcrEngine.TryCreateFromLanguage(lang);
-                }
+                if (OcrEngine.IsLanguageSupported(lang)) _ocrEngine = OcrEngine.TryCreateFromLanguage(lang);
             }
-
-            if (_ocrEngine == null)
-            {
-                throw new InvalidOperationException("OCR 엔진 생성 실패. Windows 설정에서 언어팩을 확인하세요.");
-            }
+            if (_ocrEngine == null) throw new InvalidOperationException("OCR 엔진 생성 실패.");
         }
 
         public static async Task<string> RecognizeTextFromSoftwareBitmap(SoftwareBitmap bitmap)
         {
             EnsureOcrEngine();
-
-            // OcrEngine은 Bgra8 포맷을 가장 선호합니다.
             if (bitmap.BitmapPixelFormat != BitmapPixelFormat.Bgra8)
             {
                 bitmap = SoftwareBitmap.Convert(bitmap, BitmapPixelFormat.Bgra8);
             }
-
             var result = await _ocrEngine!.RecognizeAsync(bitmap);
-            return result.Text; // 전체 텍스트 반환
+            return result.Text; 
         }
 
+        // ✅ [핵심 수정] DataWriter를 사용하여 AsBuffer() 없이 구현
         private static async Task<SoftwareBitmap?> ConvertBytesToSoftwareBitmap(byte[] imageBytes)
         {
             try
             {
                 using (var stream = new InMemoryRandomAccessStream())
                 {
-                    await stream.WriteAsync(imageBytes.AsBuffer());
-                    stream.Seek(0);
+                    // DataWriter를 사용하여 byte[]를 WinRT 스트림에 씁니다.
+                    using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+                    {
+                        writer.WriteBytes(imageBytes);
+                        await writer.StoreAsync();
+                    }
 
+                    // 스트림을 다시 디코딩
                     var decoder = await BitmapDecoder.CreateAsync(stream);
-                    
-                    // ✅ 중요: OCR 정확도를 위해 Bgra8 포맷으로 디코딩
-                    return await decoder.GetSoftwareBitmapAsync(
-                        BitmapPixelFormat.Bgra8, 
-                        BitmapAlphaMode.Premultiplied
-                    );
+                    return await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
                 }
             }
             catch (Exception ex)
@@ -287,7 +259,6 @@ namespace OnVoiceComBridge
             }
         }
         
-        // 헬퍼: 텍스트 줄 분리
         private static string[] SplitTextToLines(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return Array.Empty<string>();
@@ -300,10 +271,6 @@ namespace OnVoiceComBridge
             }
             return list.ToArray();
         }
-
-        // =========================================================
-        // 기타 유틸리티 및 COM 관련 (기존 코드 유지)
-        // =========================================================
 
         private static void EnsureComObject()
         {
@@ -325,11 +292,7 @@ namespace OnVoiceComBridge
                 IConnectionPoint? connectionPoint;
                 cpContainer.FindConnectionPoint(ref eventIID, out connectionPoint);
 
-                if (connectionPoint == null)
-                {
-                    Console.Error.WriteLine("[OnVoiceComBridge] ConnectionPoint를 찾을 수 없습니다.");
-                    return;
-                }
+                if (connectionPoint == null) return;
 
                 _connectionPoint = connectionPoint;
                 _eventSink = new OnVoiceCaptureEventSink();
@@ -380,9 +343,7 @@ namespace OnVoiceComBridge
 
                 var envVars = ParseEnvFile(envPath);
                 if (envVars.TryGetValue("SERVER_URL", out string? serverUrl) && !string.IsNullOrWhiteSpace(serverUrl))
-                {
                     return serverUrl.Trim();
-                }
                 return "http://127.0.0.1:8000";
             }
             catch { return "http://127.0.0.1:8000"; }
@@ -399,9 +360,7 @@ namespace OnVoiceComBridge
                 {
                     if (currentDir == null) break;
                     if (File.Exists(Path.Combine(currentDir, ".env")) || File.Exists(Path.Combine(currentDir, "package.json")))
-                    {
                         return currentDir;
-                    }
                     var parent = Directory.GetParent(currentDir);
                     if (parent == null) break;
                     currentDir = parent.FullName;
@@ -423,17 +382,12 @@ namespace OnVoiceComBridge
                 {
                     var trimmedLine = line.Trim();
                     if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("#")) continue;
-
                     var equalIndex = trimmedLine.IndexOf('=');
                     if (equalIndex <= 0) continue;
-
                     var key = trimmedLine.Substring(0, equalIndex).Trim();
                     var value = trimmedLine.Substring(equalIndex + 1).Trim();
-
                     if (value.Length >= 2 && ((value.StartsWith("\"") && value.EndsWith("\"")) || (value.StartsWith("'") && value.EndsWith("'"))))
-                    {
                         value = value.Substring(1, value.Length - 2);
-                    }
                     if (!string.IsNullOrWhiteSpace(key)) envVars[key] = value;
                 }
             }
@@ -476,7 +430,7 @@ namespace OnVoiceComBridge
 
         private static async Task<byte[]> BlurROI(byte[] imageBytes, int x, int y, int width, int height)
         {
-            await Task.Yield(); // 비동기 흉내 (System.Drawing은 동기식)
+            await Task.Yield();
             try
             {
                 using (var ms = new MemoryStream(imageBytes))
@@ -534,7 +488,6 @@ namespace OnVoiceComBridge
         }
     }
 
-    // --- COM Interfaces & Event Sink (기존 유지) ---
     [ComImport, Guid("43a468da-7889-46c9-99de-38cb93e4e649"), InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
     public interface IOnVoiceCapture
     {

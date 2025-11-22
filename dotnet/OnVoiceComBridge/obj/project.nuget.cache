@@ -1,18 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "b4DEFZ2tuXPXeZXku6x+ibAzknOq/kIAulB3TTG9z0wnZB0RhCG7uqrZpbhkUMB6nmzSbAaAy1IGOk4GJEHeYA==",
+  "dgSpecHash": "IQkJ+3yczYO5K/yR4u65cQ7i5W2JE5SQ/PPgLtl3Uw1zsh4rq1TinHu6Odtpk/vzCoxUrt8T5bJe4KjjCyF3rA==",
   "success": true,
   "projectFilePath": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\김원\\.nuget\\packages\\microsoft.netcore.platforms\\3.0.0\\microsoft.netcore.platforms.3.0.0.nupkg.sha512",
-    "C:\\Users\\김원\\.nuget\\packages\\microsoft.netcore.targets\\1.1.0\\microsoft.netcore.targets.1.1.0.nupkg.sha512",
     "C:\\Users\\김원\\.nuget\\packages\\microsoft.win32.systemevents\\7.0.0\\microsoft.win32.systemevents.7.0.0.nupkg.sha512",
-    "C:\\Users\\김원\\.nuget\\packages\\microsoft.windows.sdk.contracts\\10.0.22621.2428\\microsoft.windows.sdk.contracts.10.0.22621.2428.nupkg.sha512",
     "C:\\Users\\김원\\.nuget\\packages\\system.drawing.common\\7.0.0\\system.drawing.common.7.0.0.nupkg.sha512",
-    "C:\\Users\\김원\\.nuget\\packages\\system.runtime\\4.3.0\\system.runtime.4.3.0.nupkg.sha512",
-    "C:\\Users\\김원\\.nuget\\packages\\system.runtime.interopservices.windowsruntime\\4.3.0\\system.runtime.interopservices.windowsruntime.4.3.0.nupkg.sha512",
-    "C:\\Users\\김원\\.nuget\\packages\\system.runtime.windowsruntime\\4.6.0\\system.runtime.windowsruntime.4.6.0.nupkg.sha512",
-    "C:\\Users\\김원\\.nuget\\packages\\system.runtime.windowsruntime.ui.xaml\\4.6.0\\system.runtime.windowsruntime.ui.xaml.4.6.0.nupkg.sha512"
+    "C:\\Users\\김원\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\system.text.encodings.web\\6.0.0\\system.text.encodings.web.6.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\system.text.json\\6.0.0\\system.text.json.6.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.52\\microsoft.windows.sdk.net.ref.10.0.19041.52.nupkg.sha512"
   ],
   "logs": []
 }
