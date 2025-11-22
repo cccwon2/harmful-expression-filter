@@ -333,16 +333,8 @@ app.whenReady().then(async () => {
         height: cropHeight,
       });
 
-      // 3. 이미지 리사이징 (성능 최적화)
-      let finalImage = croppedImage;
-      const currentSize = finalImage.getSize();
-      if (currentSize.width > 1500) {
-        finalImage = finalImage.resize({ width: 1500 });
-        // console.log(`[OCR] 이미지 리사이징: ${currentSize.width}px -> 1500px`);
-      }
-
-      // 4. JPEG Buffer로 변환 (PNG보다 빠르고 가벼움)
-      const imageBuffer = finalImage.toJPEG(80);
+      // 3. PNG Buffer로 변환
+      const imageBuffer = croppedImage.toPNG();
 
       // 4. 서버로 OCR + 분석 요청
       const ocrStartTime = Date.now();
