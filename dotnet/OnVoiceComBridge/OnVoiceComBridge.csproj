@@ -7,6 +7,12 @@
     <AssemblyName>OnVoiceComBridge</AssemblyName>
     <SupportedOSPlatform>windows</SupportedOSPlatform>
     <UseWindowsSdkPackage>true</UseWindowsSdkPackage>
+    
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
   </PropertyGroup>
 
