@@ -11,11 +11,10 @@ const edge = require("electron-edge-js");
 type EdgeCallback = (error: Error | null, result?: any) => void;
 type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 
-// 타임아웃: 3초 (3초 내 응답 없으면 강제 실패 처리)
+// 타임아웃: 3초
 const BRIDGE_TIMEOUT_MS = 3000;
 
-// 🔥 [핵심] 유해어 리스트를 Node.js에서 직접 관리 (C# 의존성 제거)
-// 필요한 단어를 여기에 추가하세요. 정규식도 가능합니다.
+// 🔥 유해어 리스트 (Node.js 로컬 분석용)
 const HARMFUL_KEYWORDS = [
   "새끼",
   "시발",
@@ -30,7 +29,9 @@ const HARMFUL_KEYWORDS = [
   "느금마",
   "애미",
   "느개비",
-  // ... 추가 필터링 단어
+  "놈",
+  "년",
+  // 필요한 단어 추가
 ];
 
 export interface OCRResult {
@@ -39,7 +40,7 @@ export interface OCRResult {
   isHarmful?: boolean;
   matchedKeywords?: string[];
   confidence?: number;
-  blurredImage?: Buffer; // 이제 사용하지 않음 (React CSS로 대체)
+  blurredImage?: Buffer;
   error?: string;
 }
 
@@ -90,13 +91,10 @@ function getBridgeFunc(): EdgeFunc {
 function callBridge(payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
     let isCompleted = false;
-
-    // 타임아웃 타이머
     const timer = setTimeout(() => {
       if (!isCompleted) {
         isCompleted = true;
-        const errorMsg = `[OnVoiceBridge] Timeout: C# Bridge did not respond within ${BRIDGE_TIMEOUT_MS}ms`;
-        // console.error(errorMsg); // 로그 과다 방지
+        // console.error(`[OnVoiceBridge] Timeout...`); // 로그 과다 방지
         reject(new Error("BRIDGE_TIMEOUT"));
       }
     }, BRIDGE_TIMEOUT_MS);
@@ -124,26 +122,14 @@ function callBridge(payload: any): Promise<any> {
   });
 }
 
-/**
- * 텍스트 내 유해어 검사 함수 (Node.js 실행)
- */
 function analyzeTextLocally(text: string): { isHarmful: boolean; matched: string[] } {
   if (!text || !text.trim()) return { isHarmful: false, matched: [] };
-
   const matched: string[] = [];
-  // 공백 제거 후 검사하거나, 원본 텍스트로 검사
   const cleanText = text.replace(/\s+/g, " ");
-
   for (const keyword of HARMFUL_KEYWORDS) {
-    if (cleanText.includes(keyword)) {
-      matched.push(keyword);
-    }
+    if (cleanText.includes(keyword)) matched.push(keyword);
   }
-
-  return {
-    isHarmful: matched.length > 0,
-    matched: matched,
-  };
+  return { isHarmful: matched.length > 0, matched };
 }
 
 export const onVoiceBridge: OnVoiceBridge = {
@@ -157,7 +143,6 @@ export const onVoiceBridge: OnVoiceBridge = {
         try {
           if (msg && msg.type === "audio" && msg.data) {
             const buf = Buffer.from(msg.data);
-            // events.emit("audio", buf); // 필요 시 활성화
             onAudioData(buf);
           }
           cb(null, { ok: true });
@@ -184,41 +169,28 @@ export const onVoiceBridge: OnVoiceBridge = {
     await callBridge({ command: "stop" });
   },
 
-  // 단순 OCR (기존 유지)
   async performOCR(imageBuffer: Buffer): Promise<OCRResult> {
-    try {
-      const result = await callBridge({ command: "ocr", imageData: imageBuffer });
-      return {
-        ok: true,
-        text: result.text || "",
-        // OCR 커맨드가 유해성 분석을 안 해준다면 기본값 false
-        isHarmful: false,
-        matchedKeywords: [],
-        confidence: result.confidence || 0,
-      };
-    } catch (error: any) {
-      return { ok: false, error: error.message };
-    }
+    // 기존 함수도 로컬 분석 사용하도록 통일
+    return this.performOCRAndAnalyze(imageBuffer);
   },
 
-  // 🔥 [수정됨] OCR + 분석 (C# Blur 우회)
+  // 🔥 [수정됨] C#에 ROI를 보내지 않음 (순수 OCR 모드 강제)
   async performOCRAndAnalyze(
     imageBuffer: Buffer,
     roi?: { x: number; y: number; width: number; height: number }
   ): Promise<OCRResult> {
     try {
-      console.log(`[OnVoiceBridge] OCR + 분석 요청: 이미지 크기 ${imageBuffer.length} bytes`);
+      // console.log(`[OnVoiceBridge] OCR 요청: ${imageBuffer.length} bytes`);
 
-      // 1. C#에는 단순 'ocr' 명령만 보냅니다. (이미지 처리 부하 제거)
-      // 'ocrAndBlur' 대신 'ocr'을 사용하면 멈춤 현상이 사라집니다.
+      // 1. Payload 생성: command는 'ocr', roi 정보는 '제거'
+      // ROI 정보를 보내면 C# DLL이 좌표 계산이나 블러링을 시도하다가 죽을 수 있음
       const payload: any = {
         command: "ocr",
         imageData: imageBuffer,
+        // roi: roi,  <-- ❌ 제거함! Node가 이미 자른 이미지를 보내므로 C#은 몰라도 됨
       };
 
-      if (roi) payload.roi = roi;
-
-      // 2. 텍스트 추출 실행
+      // 2. C# 호출
       const result = await callBridge(payload);
 
       if (!result || result.ok === false) {
@@ -227,25 +199,25 @@ export const onVoiceBridge: OnVoiceBridge = {
 
       const extractedText = result.text || "";
 
-      // 3. 🔥 Node.js에서 직접 유해어 분석 수행
+      // 3. Node.js 로컬 분석
       const analysis = analyzeTextLocally(extractedText);
 
       if (extractedText.trim().length > 0) {
-        console.log(`[OnVoiceBridge] OCR 완료: "${extractedText.substring(0, 20)}..." / 유해: ${analysis.isHarmful}`);
-      } else {
-        console.log(`[OnVoiceBridge] OCR 완료: 텍스트 없음`);
+        console.log(
+          `[OnVoiceBridge] 결과: "${extractedText.substring(0, 20)}..." (${analysis.isHarmful ? "🚨유해" : "✅정상"})`
+        );
       }
 
       return {
         ok: true,
         text: extractedText,
-        isHarmful: analysis.isHarmful, // 로컬 분석 결과 사용
-        matchedKeywords: analysis.matched, // 로컬 분석 결과 사용
+        isHarmful: analysis.isHarmful,
+        matchedKeywords: analysis.matched,
         confidence: result.confidence || 0,
-        blurredImage: undefined, // C#에서 이미지를 받지 않음 (React CSS 사용)
+        blurredImage: undefined,
       };
     } catch (error: any) {
-      console.error(`[OnVoiceBridge] OCR + 분석 오류:`, error.message);
+      // console.error(`[OnVoiceBridge] 오류:`, error.message);
       return {
         ok: false,
         error: error.message || "처리 중 오류",
