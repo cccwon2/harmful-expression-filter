@@ -34,7 +34,10 @@ namespace OnVoiceComBridge
         
         private static OcrEngine? _ocrEngine;
         
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient()
+        {
+            Timeout = TimeSpan.FromSeconds(2) // 2초 타임아웃 설정
+        };
         private static string _serverUrl = LoadServerUrlFromEnv();
 
         static Startup()
@@ -194,18 +197,15 @@ namespace OnVoiceComBridge
                         
                         var texts = SplitTextToLines(recognizedText);
                         
-                        var analysisStartTime = DateTime.UtcNow;
-                        var analysisResult = await AnalyzeTextForHarmfulContent(recognizedText);
-                        var analysisTime = (DateTime.UtcNow - analysisStartTime).TotalSeconds;
+                        // ✅ 서버 분석 제거: Node.js에서 이미 로컬 분석을 수행하므로 중복 제거
+                        // 이렇게 하면 C#은 OCR만 수행하고 빠르게 반환하여 타임아웃 방지
                         
                         return new { 
                             ok = true, 
                             texts = texts,
                             text = recognizedText,
-                            is_harmful = analysisResult.isHarmful,
-                            harmful_words = analysisResult.matchedKeywords,
-                            confidence = analysisResult.confidence,
-                            processing_time = new { ocr = ocrTime, analysis = analysisTime, total = (DateTime.UtcNow - ocrStartTime).TotalSeconds }
+                            confidence = 0.0, // Node.js에서 분석하므로 여기서는 기본값만 반환
+                            processing_time = new { ocr = ocrTime, analysis = 0.0, total = ocrTime }
                         };
                     }
                     catch (Exception ex)
