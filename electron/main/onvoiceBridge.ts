@@ -69,7 +69,7 @@ function callBridge(payload: any): Promise<any> {
           // C# 내부 로직 에러 처리
           return reject(new Error(result.error || "Unknown C# Error"));
         }
-        resolve(result);
+        resolve(result || {});
       });
     } catch (e) {
       reject(e);
@@ -82,8 +82,12 @@ export const onVoiceBridge: OnVoiceBridge = {
 
   async init(onAudioData: (pcm: Buffer) => void): Promise<void> {
     if (initialized) {
-      console.log("[OnVoiceBridge] 이미 초기화되었습니다.");
+      console.log("[OnVoiceBridge] 이미 초기화되었습니다. 새로운 콜백은 무시됩니다.");
       return;
+    }
+
+    if (typeof onAudioData !== "function") {
+      throw new Error("onAudioData는 함수여야 합니다.");
     }
 
     await callBridge({
@@ -129,21 +133,50 @@ export const onVoiceBridge: OnVoiceBridge = {
     console.log(`[OnVoiceBridge] 찾는 중: ${target}...`);
     const result = await callBridge({ command: "find", target });
 
-    // result = { ok: true, pid: 1234 }
+    // result = { ok: true, pid: 1234 } 또는 { ok: false, error: "..." }
+    if (!result || typeof result.pid !== "number") {
+      const error = new Error(`프로세스를 찾을 수 없습니다: ${target}`);
+      console.error(`[OnVoiceBridge] ${error.message}`);
+      throw error;
+    }
+
     const pid = result.pid;
     console.log(`[OnVoiceBridge] ${target} PID 발견: ${pid}`);
     return pid;
   },
 
   async startCapture(pid: number): Promise<void> {
+    if (!initialized) {
+      throw new Error("초기화되지 않았습니다. 먼저 init()을 호출하세요.");
+    }
+
+    if (typeof pid !== "number" || pid <= 0 || !Number.isInteger(pid)) {
+      throw new Error(`유효하지 않은 PID: ${pid}. PID는 양의 정수여야 합니다.`);
+    }
+
     console.log(`[OnVoiceBridge] 캡처 시작 요청: PID=${pid}`);
-    await callBridge({ command: "start", pid });
-    console.log(`[OnVoiceBridge] 캡처 시작됨`);
+    try {
+      await callBridge({ command: "start", pid });
+      console.log(`[OnVoiceBridge] 캡처 시작됨`);
+    } catch (error) {
+      console.error(`[OnVoiceBridge] 캡처 시작 실패: PID=${pid}`, error);
+      throw error;
+    }
   },
 
   async stopCapture(): Promise<void> {
+    if (!initialized) {
+      console.warn("[OnVoiceBridge] 초기화되지 않았습니다. stopCapture를 건너뜁니다.");
+      return;
+    }
+
     console.log(`[OnVoiceBridge] 캡처 중지 요청`);
-    await callBridge({ command: "stop" });
-    console.log(`[OnVoiceBridge] 캡처 중지됨`);
+    try {
+      await callBridge({ command: "stop" });
+      console.log(`[OnVoiceBridge] 캡처 중지됨`);
+    } catch (error) {
+      console.error(`[OnVoiceBridge] 캡처 중지 실패:`, error);
+      throw error;
+    }
   },
 };
