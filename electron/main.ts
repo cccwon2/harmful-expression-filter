@@ -16,7 +16,7 @@ import { registerOnVoiceHandlers } from './ipc/onVoiceHandlers';
 import { setTrayAudioUpdateCallback } from './tray';
 import AudioManager from './main/AudioManager';
 
-const CAPTURE_INTERVAL_MS = 3000; // 3초 간격 (서버 OCR 처리 시간 고려)
+const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
@@ -214,8 +214,6 @@ app.whenReady().then(async () => {
       const { onVoiceBridge } = await import('./main/onVoiceBridge');
       const roi = currentROI;
       
-      console.log(`[OCR] Windows OCR 시작: 이미지 크기 ${imageBuffer.length} bytes (${(imageBuffer.length / 1024).toFixed(2)} KB)`);
-      
       const requestStartTime = Date.now();
       
       // Windows OCR + 분석 수행 (ROI 정보 포함)
@@ -229,7 +227,6 @@ app.whenReady().then(async () => {
         : await onVoiceBridge.performOCR(imageBuffer);
 
       const requestTime = Date.now() - requestStartTime;
-      console.log(`[OCR] Windows OCR 완료 (${requestTime}ms)`);
 
       if (!result.ok) {
         console.error(`[OCR] Windows OCR 실패: ${result.error}`);
@@ -289,8 +286,6 @@ app.whenReady().then(async () => {
       return;
     }
 
-    const captureStartTime = Date.now();
-    console.log(`[OCR] ROI 캡처 시작: x=${roi.x}, y=${roi.y}, width=${roi.width}, height=${roi.height} (${new Date(captureStartTime).toLocaleTimeString()})`);
     isCaptureInProgress = true;
     try {
       // 1. 화면 캡처
@@ -312,8 +307,6 @@ app.whenReady().then(async () => {
         isCaptureInProgress = false;
         return;
       }
-
-      console.log(`[OCR] 화면 캡처 완료: ${screenshot.getSize().width}x${screenshot.getSize().height}`);
 
       // 2. ROI 영역만 크롭
       const screenshotSize = screenshot.getSize();
@@ -339,8 +332,6 @@ app.whenReady().then(async () => {
         return;
       }
 
-      console.log(`[OCR] ROI 영역 크롭: ${cropX}, ${cropY}, ${cropWidth}x${cropHeight}`);
-
       const croppedImage = screenshot.crop({
         x: cropX,
         y: cropY,
@@ -350,17 +341,12 @@ app.whenReady().then(async () => {
 
       // 3. PNG Buffer로 변환
       const imageBuffer = croppedImage.toPNG();
-      console.log(`[OCR] 이미지 버퍼 생성 완료: ${imageBuffer.length} bytes (${(imageBuffer.length / 1024).toFixed(2)} KB)`);
 
       // 4. 서버로 OCR + 분석 요청
-      console.log(`[OCR] 서버로 이미지 전송 시작...`);
       const result = await sendImageToServer(imageBuffer);
 
       if (result.success && result.data) {
         const { texts, is_harmful, harmful_words, processing_time } = result.data;
-        
-        console.log(`[OCR] 추출 완료: ${texts.length}개 텍스트, 총 ${processing_time.total.toFixed(3)}초 (OCR: ${processing_time.ocr.toFixed(3)}초, 분석: ${processing_time.analysis.toFixed(3)}초)`);
-        console.log(`[OCR] 텍스트: ${texts.join(' ')}`);
         
         // 5. 유해성 감지 시 알림 (harmful=true/false 모두 전송)
         if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -371,7 +357,6 @@ app.whenReady().then(async () => {
               words: harmful_words,
             });
           } else {
-            console.log('[OCR] ✅ 유해 표현 없음');
             // harmful=false도 전송하여 블라인드 해제 타이머 시작
             overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: false,
@@ -449,14 +434,10 @@ app.whenReady().then(async () => {
       return;
     }
 
-    console.log('[OCR] ROI 모니터링 시작:', currentROI);
-    console.log(`[OCR] 캡처 간격: ${CAPTURE_INTERVAL_MS}ms (${CAPTURE_INTERVAL_MS / 1000}초)`);
     isMonitoring = true;
     pushOverlayState({ mode: 'detect', roi: currentROI });
     
     // 즉시 한 번 실행
-    const initialStartTime = Date.now();
-    console.log(`[OCR] 초기 캡처 시작 (${new Date(initialStartTime).toLocaleTimeString()})`);
     captureAndProcessROI().catch((error) => {
       console.error('[OCR] 초기 캡처 오류:', error);
     });
@@ -466,12 +447,10 @@ app.whenReady().then(async () => {
     monitoringInterval = setInterval(() => {
       captureCount++;
       const intervalStartTime = Date.now();
-      console.log(`[OCR] 정기 캡처 #${captureCount} 시작 (${new Date(intervalStartTime).toLocaleTimeString()}, 간격: ${CAPTURE_INTERVAL_MS}ms)`);
       captureAndProcessROI()
         .then(() => {
           const intervalEndTime = Date.now();
           const elapsed = intervalEndTime - intervalStartTime;
-          console.log(`[OCR] 정기 캡처 #${captureCount} 완료 (소요 시간: ${elapsed}ms)`);
         })
         .catch((error) => {
           console.error(`[OCR] 정기 캡처 #${captureCount} 오류:`, error);
