@@ -6,6 +6,8 @@
 
 import WebSocket from "ws";
 import { onVoiceBridge } from "./onVoiceBridge";
+import { VolumeController } from "../audio/volumeController";
+import { getVolumeLevel } from "../store";
 
 type TargetApp = "chrome" | "edge" | "discord";
 
@@ -26,11 +28,22 @@ class AudioManager {
   private wsUrl: string;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isReconnecting = false;
+  private volumeController: VolumeController | null = null;
+  private harmfulDetectionCount: number = 0; // 유해 표현 감지 횟수 추적
 
   private constructor() {
     // 환경 변수에서 WebSocket URL 가져오기 (기본값: ws://localhost:8000/ws/audio)
     this.wsUrl = process.env.SERVER_WS_URL || "ws://localhost:8000/ws/audio";
     console.log(`[AudioManager] WebSocket URL: ${this.wsUrl}`);
+
+    // 볼륨 컨트롤러 초기화
+    this.volumeController = new VolumeController();
+    // 저장된 볼륨 레벨 로드 및 설정
+    const savedLevel = getVolumeLevel();
+    this.volumeController.setVolumeLevel(savedLevel).catch((err) => {
+      console.error("[AudioManager] Failed to load saved volume level:", err);
+    });
+    console.log(`[AudioManager] VolumeController initialized with level ${savedLevel} (${savedLevel * 10}%)`);
   }
 
   /**
@@ -123,7 +136,26 @@ class AudioManager {
           // JSON 파싱 시도 (서버가 JSON으로 보낼 경우)
           try {
             const parsed = JSON.parse(message);
-            if (parsed.text) {
+            
+            // 서버 응답 형식: status="ok", text, is_harmful, confidence 등
+            if (parsed.status === "ok" && parsed.text) {
+              const text = parsed.text;
+              const isHarmful = parsed.is_harmful === 1 || parsed.is_harmful === true;
+              const confidence = parsed.confidence || 0;
+              const matchedKeywords = parsed.matched_keywords || [];
+
+              if (text && text.trim()) {
+                console.log(`[AudioManager] [STT] ${text} (confidence: ${confidence.toFixed(2)})`);
+
+                if (isHarmful) {
+                  console.warn(
+                    `[AudioManager] 🚨 유해 표현 감지 (confidence: ${confidence.toFixed(2)}): ${matchedKeywords.join(", ")}`
+                  );
+                  this.handleHarmfulExpressionDetected();
+                }
+              }
+            } else if (parsed.text) {
+              // 단순 텍스트만 있는 경우
               console.log("[AudioManager] 전사 텍스트:", parsed.text);
             }
           } catch {
@@ -228,7 +260,12 @@ class AudioManager {
       // 2. WebSocket 연결
       await this.connectWebSocket();
 
-      // 3. 캡처 시작
+      // 3. 볼륨 컨트롤러에 대상 앱 이름 설정
+      if (this.volumeController) {
+        this.volumeController.setTargetApp(target);
+      }
+
+      // 4. 캡처 시작
       console.log(`[AudioManager] 캡처 시작: PID=${pid}`);
       await onVoiceBridge.startCapture(pid);
 
@@ -325,6 +362,32 @@ class AudioManager {
   public setWebSocketUrl(url: string): void {
     this.wsUrl = url;
     console.log(`[AudioManager] WebSocket URL 변경: ${this.wsUrl}`);
+  }
+
+  /**
+   * 유해 표현 감지 시 볼륨 조절 처리
+   * 설정된 볼륨 레벨로 조절
+   */
+  private async handleHarmfulExpressionDetected(): Promise<void> {
+    if (!this.volumeController) {
+      console.warn("[AudioManager] VolumeController가 초기화되지 않았습니다.");
+      return;
+    }
+
+    try {
+      this.harmfulDetectionCount++;
+
+      // 현재 설정된 볼륨 레벨로 조절
+      const currentLevel = this.volumeController.getCurrentVolumeLevel();
+      await this.volumeController.setVolumeLevel(currentLevel);
+
+      const percent = this.volumeController.getCurrentVolumePercent();
+      console.log(
+        `[AudioManager] 🔊 Volume adjusted due to harmful expression (detection #${this.harmfulDetectionCount}): Level ${currentLevel} (${percent}%)`
+      );
+    } catch (error) {
+      console.error("[AudioManager] Failed to adjust volume on harmful detection:", error);
+    }
   }
 }
 
