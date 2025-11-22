@@ -352,25 +352,28 @@ export const OverlayApp: React.FC = () => {
             top: roi.y,
             width: roi.width,
             height: roi.height,
-            // 1. 배경을 흐리게 처리 (Blur) - 강도 15px
-            backdropFilter: "blur(15px)",
-            WebkitBackdropFilter: "blur(15px)",
-            // 2. 약간의 반투명 레이어를 추가하여 텍스트 가독성을 더 떨어뜨림
-            backgroundColor: "rgba(255, 255, 255, 0.15)",
-            // 3. 경계선 및 그림자 효과
-            border: "2px solid rgba(255, 0, 0, 0.3)",
-            boxShadow: "0 0 15px rgba(255, 255, 255, 0.2)",
+
+            // 1. 블러 강도 대폭 증가 (15px -> 40px)
+            // 글자가 거의 식별 불가능하게 뭉개집니다.
+            backdropFilter: "blur(40px)",
+            WebkitBackdropFilter: "blur(40px)",
+
+            // 2. 배경을 어둡고 진하게 변경 (흰색 -> 검은색 투명도 60%)
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+
+            // 3. 테두리는 유지하되 약간 더 선명하게 (영역 구분용)
+            border: "2px solid rgba(255, 0, 0, 0.5)",
+
+            // 4. 그림자 효과로 깊이감 추가
+            boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
+
             zIndex: 1003,
             transition: "all 0.3s ease",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             pointerEvents: "none",
+
+            // 이모티콘 제거로 인해 flex 관련 속성 삭제
           }}
-        >
-          {/* 아이콘은 선택사항 (필요 없으면 제거 가능) */}
-          <span style={{ fontSize: "24px", filter: "drop-shadow(0 0 2px rgba(0,0,0,0.5))" }}>⚠️</span>
-        </div>
+        />
       )}
 
       {/* Setup 안내 */}
