@@ -18,6 +18,9 @@ from PIL import Image
 # ✅ websockets: legacy asyncio API 사용 (extra_headers 지원)
 from websockets.legacy.client import connect as ws_connect
 
+# NLP Classifier
+from nlp.harmful_classifier import HarmfulTextClassifier
+
 # OCR 서비스 (현재는 사용하지 않음 - Windows SDK OCR을 Electron에서 직접 사용)
 # from services.paddle_ocr_service import get_ocr_service
 
@@ -46,6 +49,7 @@ if not DEEPGRAM_API_KEY:
 
 # ============== 전역 변수 ==============
 BAD_WORDS: List[str] = []
+classifier: Optional[HarmfulTextClassifier] = None
 
 
 # ============== 유틸리티 함수 ==============
@@ -81,10 +85,11 @@ class DeepgramWebSocketManager:
     FastAPI WebSocket(Electron)과 Deepgram STT WebSocket(v1 / nova-2, ko)을 중계하는 클래스
     """
 
-    def __init__(self, websocket: WebSocket, api_key: str, keywords: List[str]):
+    def __init__(self, websocket: WebSocket, api_key: str, keywords: List[str], classifier_instance: Optional[HarmfulTextClassifier]):
         self.websocket = websocket
         self.api_key = api_key
         self.keywords = keywords
+        self.classifier = classifier_instance
 
         self.dg_ws = None  # websockets.legacy.client.WebSocketClientProtocol
         self.receive_task: Optional[asyncio.Task] = None
@@ -194,20 +199,6 @@ class DeepgramWebSocketManager:
     def _handle_result_payload(self, payload: dict):
         """
         Deepgram STT 응답(JSON)을 파싱해서 result_queue에 넣기
-        docs 기준 형태:
-        {
-          "is_final": bool,
-          "channel": {
-            "alternatives": [
-              {
-                "transcript": "...",
-                "confidence": 0.98,
-                ...
-              }
-            ]
-          },
-          ...
-        }
         """
         channel = payload.get("channel")
         if not isinstance(channel, dict):
@@ -234,11 +225,9 @@ class DeepgramWebSocketManager:
         is_final = bool(payload.get("is_final", False))
 
         # ✅ 1단계: 중복/노이즈 필터링
-        # - 직전과 문장이 완전히 같고, 둘 다 진행 or 둘 다 확정이면 스킵
         if transcript == self.last_transcript and is_final == self.last_is_final:
             return
 
-        # - 진행(임시)인데, 길이가 줄어들거나 같으면 스킵 (Deepgram이 가끔 리셋하는 케이스 방지)
         if not is_final and len(transcript) <= len(self.last_transcript):
             return
 
@@ -246,23 +235,52 @@ class DeepgramWebSocketManager:
         self.last_transcript = transcript
         self.last_is_final = is_final
 
+        # 1차: 키워드 검사
         matched = check_keywords(transcript)
-        is_harmful = len(matched) > 0
+        is_harmful_keyword = len(matched) > 0
+
+        # 2차: AI 모델 검사 (확정된 문장이고, 키워드 감지가 안 되었을 때만 수행)
+        # (옵션: 키워드 감지 되어도 AI 돌릴 수 있지만, 성능상 키워드 우선)
+        is_harmful_ai = False
+        ai_confidence = 0.0
+        
+        if is_final and self.classifier:
+            # 키워드로 이미 잡혔으면 굳이 AI 안 돌려도 되지만, 
+            # "Hybrid" 로직(OR)이므로 둘 중 하나라도 유해하면 유해함.
+            # 여기서는 키워드가 안 잡혔을 때 AI로 2차 검증하는 흐름이 자연스러움.
+            # 하지만 분석 정보 제공을 위해 항상 돌릴 수도 있음. 
+            # 일단 성능 고려하여 키워드 없을 때만 돌리거나, 
+            # 사용자 요청대로 "2차로 판단" 하려면 항상 돌리는게 맞을 수도 있음.
+            # 여기서는 "키워드 OR AI" 논리이므로, 키워드가 없으면 AI를 돌려본다.
+            if not is_harmful_keyword:
+                try:
+                    result = self.classifier.predict(transcript)
+                    if result.is_harmful:
+                        is_harmful_ai = True
+                        ai_confidence = result.confidence
+                        # AI가 감지했다면 matched에 가상의 키워드 추가 (클라이언트 알림용)
+                        matched.append(f"[AI] {transcript[:10]}...") 
+                except Exception as e:
+                    LOGGER.error("[AI] 분류 에러: %s", e)
+
+        is_harmful = is_harmful_keyword or is_harmful_ai
 
         response_data = {
             "status": "ok",
             "text": transcript,
             "is_harmful": int(is_harmful),
-            "confidence": confidence,
+            "confidence": max(confidence, ai_confidence) if is_harmful_ai else confidence,
             "matched_keywords": matched,
             "is_final": is_final,
             "timestamp": time.time(),
+            "ai_checked": is_final and (self.classifier is not None),
         }
 
         status_tag = "[확정]" if is_final else "[진행]"
         print(f"[STT] {status_tag} {transcript}", flush=True)
         if is_harmful:
-            print(f"🚨 유해 표현 감지: {matched}", flush=True)
+            source = "키워드" if is_harmful_keyword else "AI"
+            print(f"🚨 유해 표현 감지({source}): {matched}", flush=True)
 
         # ✅ 2단계: 진행 중 결과는 로그만 찍고, 클라이언트로는 확정만 보냄
         if not is_final:
@@ -285,15 +303,20 @@ class DeepgramWebSocketManager:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global classifier
+    
     load_keywords()
-    # OCR은 Electron에서 Windows SDK OCR을 직접 사용하므로 서버에서 초기화하지 않음
-    # try:
-    #     get_ocr_service()
-    #     LOGGER.info("[INFO] ✅ OCR 서비스 준비 완료")
-    # except Exception as e:
-    #     LOGGER.warning("[WARN] OCR 서비스 초기화 오류: %s", e)
+    
+    # KoELECTRA 모델 로드
+    try:
+        LOGGER.info("[Init] KoELECTRA 모델 로딩 시작...")
+        classifier = HarmfulTextClassifier()
+        LOGGER.info("[Init] ✅ KoELECTRA 모델 로드 완료")
+    except Exception as e:
+        LOGGER.error("[Init] ❌ KoELECTRA 모델 로드 실패: %s", e)
+        classifier = None
 
-    LOGGER.info("[INFO] 🚀 서버 시작 완료 (Deepgram Streaming Mode)")
+    LOGGER.info("[INFO] 🚀 서버 시작 완료 (Deepgram Streaming Mode + KoELECTRA)")
     yield
     LOGGER.info("[INFO] 👋 서버 종료")
 
@@ -320,7 +343,8 @@ async def audio_stream(websocket: WebSocket):
         await websocket.close(code=1008, reason="API Key missing")
         return
 
-    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, BAD_WORDS)
+    # classifier 전역 변수 전달
+    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, BAD_WORDS, classifier)
     success = await dg_manager.start()
 
     if not success:
@@ -332,7 +356,7 @@ async def audio_stream(websocket: WebSocket):
         {
             "status": "connected",
             "message": "Deepgram Streaming Ready",
-            "mode": "Real-time (nova-2, ko)",
+            "mode": "Real-time (nova-2, ko) + AI Filter",
         }
     )
 
@@ -359,6 +383,7 @@ async def health_check():
         "status": "ok",
         "keywords": len(BAD_WORDS),
         "service": "Deepgram Streaming (nova-2, ko)",
+        "ai_model": "KoELECTRA" if classifier else "Not Loaded",
     }
 
 
@@ -373,25 +398,33 @@ class AnalyzeRequest(BaseModel):
 
 @app.post("/analyze")
 async def analyze_text(request: AnalyzeRequest):
+    # 1차: 키워드
     matched = check_keywords(request.text)
+    is_harmful_keyword = len(matched) > 0
+    
+    # 2차: AI
+    is_harmful_ai = False
+    ai_confidence = 0.0
+    
+    if classifier:
+        try:
+            result = classifier.predict(request.text)
+            if result.is_harmful:
+                is_harmful_ai = True
+                ai_confidence = result.confidence
+                if not is_harmful_keyword:
+                    matched.append("[AI Detected]")
+        except Exception as e:
+            LOGGER.error("AI Analysis failed: %s", e)
+
     return {
-        "has_violation": len(matched) > 0,
+        "has_violation": is_harmful_keyword or is_harmful_ai,
         "matched_keywords": matched,
+        "ai_analysis": {
+            "is_harmful": is_harmful_ai,
+            "confidence": ai_confidence
+        } if classifier else None
     }
-
-
-# OCR은 현재 Electron에서 Windows SDK OCR을 직접 사용하므로 이 엔드포인트는 사용되지 않음
-# (하위 호환성을 위해 주석 처리)
-# @app.post("/api/ocr")
-# async def ocr_endpoint(file: UploadFile = File(...)):
-#     try:
-#         image_data = await file.read()
-#         image = Image.open(io.BytesIO(image_data))
-#         ocr = get_ocr_service()
-#         texts, time_taken = ocr.extract_text(image)
-#         return {"texts": texts, "processing_time": time_taken}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
