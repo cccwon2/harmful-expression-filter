@@ -78,10 +78,10 @@ npm start
 ```
 harmful-expression-filter/
 ├── README.md                # 프로젝트 개요 및 빠른 시작 가이드
-├── docs/                    # 작업/문서 모음 (Task 00~33)
+├── docs/                    # 작업/문서 모음
 │   ├── PROJECT_SPEC.md      # 마스터 플랜 (전체 프로젝트 명세서)
 │   ├── INTERFACES.md        # 핵심 인터페이스 및 연결부 코드
-│   └── ...                  # 각 작업 문서 (01~33)
+│   └── ...                  # 각 작업 문서 (00~34)
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 │   ├── main/                # 메인 프로세스 핵심 모듈
 │   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)
