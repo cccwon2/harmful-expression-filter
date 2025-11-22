@@ -11,8 +11,8 @@ const edge = require("electron-edge-js");
 type EdgeCallback = (error: Error | null, result?: any) => void;
 type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 
-// 타임아웃: 3초
-const BRIDGE_TIMEOUT_MS = 3000;
+// 타임아웃: 5초
+const BRIDGE_TIMEOUT_MS = 5000;
 
 // 🔥 유해어 리스트 (Node.js 로컬 분석용)
 const HARMFUL_KEYWORDS = [
