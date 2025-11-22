@@ -28,7 +28,10 @@ export interface OnVoiceBridge {
   startCapture(pid: number): Promise<void>;
   stopCapture(): Promise<void>;
   performOCR(imageBuffer: Buffer): Promise<OCRResult>;
-  performOCRAndAnalyze(imageBuffer: Buffer, roi?: { x: number; y: number; width: number; height: number }): Promise<OCRResult>;
+  performOCRAndAnalyze(
+    imageBuffer: Buffer,
+    roi?: { x: number; y: number; width: number; height: number }
+  ): Promise<OCRResult>;
 }
 
 const events = new EventEmitter();
@@ -198,13 +201,11 @@ export const onVoiceBridge: OnVoiceBridge = {
   async performOCR(imageBuffer: Buffer): Promise<OCRResult> {
     try {
       console.log(`[OnVoiceBridge] OCR 요청: 이미지 크기 ${imageBuffer.length} bytes`);
-      
-      // Buffer를 byte 배열로 변환
-      const imageBytes = Array.from(imageBuffer);
-      
+
+      // Buffer를 직접 전달 (electron-edge-js가 자동으로 byte[]로 변환)
       const result = await callBridge({
         command: "ocr",
-        imageData: imageBytes,
+        imageData: imageBuffer,
       });
 
       if (!result || result.ok === false) {
@@ -239,13 +240,11 @@ export const onVoiceBridge: OnVoiceBridge = {
   ): Promise<OCRResult> {
     try {
       console.log(`[OnVoiceBridge] OCR + 분석 요청: 이미지 크기 ${imageBuffer.length} bytes`);
-      
-      // Buffer를 byte 배열로 변환
-      const imageBytes = Array.from(imageBuffer);
-      
+
+      // Buffer를 직접 전달 (electron-edge-js가 자동으로 byte[]로 변환)
       const payload: any = {
         command: "ocrAndBlur",
-        imageData: imageBytes,
+        imageData: imageBuffer,
       };
 
       if (roi) {
