@@ -106,6 +106,11 @@ export class OnVoiceService {
 
       console.log(`[OnVoiceService] 프로세스 PID: ${pid} (target: ${target})`);
 
+      // 볼륨 컨트롤러에 대상 앱 이름 설정
+      if (this.volumeController && typeof target === "string") {
+        this.volumeController.setTargetApp(target);
+      }
+
       // WebSocket 연결 (Deepgram 또는 서버)
       if (this.options.deepgramApiKey) {
         await this.connectDeepgram();
