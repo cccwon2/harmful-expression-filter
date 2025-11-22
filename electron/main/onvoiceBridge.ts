@@ -11,8 +11,8 @@ const edge = require("electron-edge-js");
 type EdgeCallback = (error: Error | null, result?: any) => void;
 type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 
-// C# 응답 대기 타임아웃 (15초)
-const BRIDGE_TIMEOUT_MS = 15000;
+// C# 응답 대기 타임아웃 (3초)
+const BRIDGE_TIMEOUT_MS = 3000;
 
 export interface OCRResult {
   ok: boolean;
