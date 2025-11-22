@@ -14,6 +14,7 @@ import { registerServerHandlers, checkServerConnection } from './ipc/serverHandl
 import { registerAudioHandlers, getAudioService } from './ipc/audioHandlers';
 import { registerOnVoiceHandlers } from './ipc/onvoiceHandlers';
 import { setTrayAudioUpdateCallback } from './tray';
+import AudioManager from './main/AudioManager';
 
 const CAPTURE_INTERVAL_MS = 3000; // 3초 간격 (서버 OCR 처리 시간 고려)
 
@@ -99,6 +100,15 @@ app.whenReady().then(async () => {
     console.warn('[Main] FastAPI server가 실행 중이 아닙니다. `server` 폴더에서 `python main.py`를 실행하세요.');
   } else {
     console.log('[Main] FastAPI server 연결이 확인되었습니다.');
+  }
+
+  // AudioManager 초기화
+  try {
+    const audioManager = AudioManager.getInstance();
+    await audioManager.init();
+    console.log('[Main] AudioManager 초기화 완료');
+  } catch (error) {
+    console.error('[Main] AudioManager 초기화 실패:', error);
   }
 
   // 메인 윈도우 생성 (AudioMonitor UI용 - 개발/디버깅 목적으로만 사용, 기본적으로 숨김)
@@ -896,6 +906,15 @@ app.whenReady().then(async () => {
     if (onVoiceService) {
       onVoiceService.stopMonitoring();
       console.log('[Main] OnVoice monitoring stopped (app quitting)');
+    }
+    
+    // AudioManager 스트리밍 중지 (앱 종료 시)
+    const audioManager = AudioManager.getInstance();
+    if (audioManager.getStatus().isStreaming) {
+      audioManager.stopStream().catch((err) => {
+        console.error('[Main] AudioManager stopStream 실패:', err);
+      });
+      console.log('[Main] AudioManager 스트리밍 중지 (app quitting)');
     }
   });
 

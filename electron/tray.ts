@@ -3,7 +3,7 @@ import type { NativeImage } from 'electron';
 import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
 import { IPC_CHANNELS } from './ipc/channels';
-import { getOnVoiceServiceInstance } from './ipc/onvoiceHandlers';
+import AudioManager from './main/AudioManager';
 
 let tray: Tray | null = null;
 let trayUpdateCallback: (() => void) | null = null;
@@ -105,60 +105,25 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
   // tray는 위에서 초기화되었으므로 null이 아님을 보장
   const trayInstance = tray;
 
-  // 타겟 표시 이름 가져오기
-  const getTargetDisplayName = (target: 'edge' | 'chrome' | 'discord' | number): string => {
-    switch (target) {
-      case 'edge': return 'Edge';
-      case 'chrome': return 'Chrome';
-      case 'discord': return 'Discord';
-      default: return `PID ${target}`;
-    }
-  };
-
   // 컨텍스트 메뉴 생성
   const updateContextMenu = () => {
     const isOverlayVisible = overlayWindow.isVisible();
     const isEditMode = getEditModeState();
     
-    // OnVoice 오디오 모니터링 상태 가져오기
-    const onVoiceService = getOnVoiceServiceInstance();
-    const onVoiceStatus = onVoiceService ? onVoiceService.getStatus() : null;
-    const isAudioMonitoring = onVoiceStatus?.isMonitoring || false;
-    const currentTarget = onVoiceStatus?.targetPid || 'chrome';
+    // AudioManager 상태 가져오기
+    const audioManager = AudioManager.getInstance();
+    const audioStatus = audioManager.getStatus();
+    const isStreaming = audioStatus.isStreaming || false;
+    const currentTarget = audioStatus.target || null;
 
-    // OnVoice 캡처 시작 헬퍼 함수
-    const startOnVoiceCapture = async (target: 'edge' | 'chrome' | 'discord') => {
-      const service = getOnVoiceServiceInstance();
-      if (service) {
-        try {
-          const currentStatus = service.getStatus();
-          if (currentStatus.isMonitoring) {
-            // 이미 모니터링 중이면 중지 후 새 타겟으로 시작
-            service.stopMonitoring();
-            await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
-          }
-          await service.startMonitoring(target);
-          console.log(`[Tray] OnVoice monitoring started for ${target}`);
-          // 메뉴 업데이트
-          setTimeout(() => {
-            updateContextMenu();
-          }, 100);
-        } catch (err) {
-          console.error(`[Tray] Failed to start OnVoice capture for ${target}:`, err);
-        }
-      } else {
-        console.warn('[Tray] OnVoiceService is not available');
-      }
-    };
-    
-    // 트레이 아이콘 업데이트 (모니터링 상태에 따라 색상 변경)
-    const newIcon = createTrayIcon(isAudioMonitoring);
+    // 트레이 아이콘 업데이트 (스트리밍 상태에 따라 색상 변경)
+    const newIcon = createTrayIcon(isStreaming);
     trayInstance.setImage(newIcon);
     
     // 트레이 툴팁 업데이트
-    const tooltip = isAudioMonitoring 
-      ? 'Harmful Expression Filter - 오디오 모니터링 중'
-      : 'Harmful Expression Filter - 오디오 모니터링 중지';
+    const tooltip = isStreaming 
+      ? `Harmful Expression Filter - 스트리밍 중 (${currentTarget || 'Unknown'})`
+      : 'Harmful Expression Filter - 대기 중';
     trayInstance.setToolTip(tooltip);
     
     const contextMenu = Menu.buildFromTemplate([
@@ -336,67 +301,90 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'separator',
       },
       {
-        label: '--- 오디오 모니터링 (OnVoice) ---',
+        label: '--- 오디오 캡처 (Audio Capture) ---',
         enabled: false,
       },
       {
-        label: isAudioMonitoring ? `🟢 모니터링 중 (${getTargetDisplayName(currentTarget)})` : '⚪ 모니터링 중지',
+        label: isStreaming ? `🟢 스트리밍 중 (${currentTarget || 'Unknown'})` : '⚪ 스트리밍 중지',
         enabled: false,
       },
       {
-        label: '앱 선택',
-        type: 'submenu',
-        submenu: [
-          {
-            label: 'Google Chrome',
-            type: 'radio',
-            checked: currentTarget === 'chrome',
-            click: async () => {
-              await startOnVoiceCapture('chrome');
-            },
-          },
-          {
-            label: 'Microsoft Edge',
-            type: 'radio',
-            checked: currentTarget === 'edge',
-            click: async () => {
-              await startOnVoiceCapture('edge');
-            },
-          },
-          {
-            label: 'Discord',
-            type: 'radio',
-            checked: currentTarget === 'discord',
-            click: async () => {
-              await startOnVoiceCapture('discord');
-            },
-          },
-        ],
-      },
-      {
-        label: isAudioMonitoring ? '⏸️ 모니터링 중지' : '▶️ 모니터링 시작',
+        label: 'Capture Chrome',
         type: 'normal',
         click: async () => {
-          const onVoiceService = getOnVoiceServiceInstance();
-          if (onVoiceService) {
-            try {
-              if (isAudioMonitoring) {
-                onVoiceService.stopMonitoring();
-                console.log('[Tray] OnVoice monitoring stopped');
-              } else {
-                // 기본값으로 Chrome 시작
-                await onVoiceService.startMonitoring('chrome');
-                console.log('[Tray] OnVoice monitoring started (Chrome)');
-              }
-              // 메뉴 업데이트 (상태 변경 후)
-              setTimeout(() => {
-                updateContextMenu();
-              }, 100);
-            } catch (err) {
-              console.error('[Tray] Failed to toggle OnVoice monitoring:', err);
+          const audioManager = AudioManager.getInstance();
+          try {
+            if (isStreaming) {
+              await audioManager.stopStream();
+              await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
             }
-          } else {
-            console.warn('[Tray] OnVoiceService is not available');
+            await audioManager.startStream('chrome');
+            console.log('[Tray] Chrome 캡처 시작');
+            setTimeout(() => {
+              updateContextMenu();
+            }, 100);
+          } catch (err) {
+            console.error('[Tray] Chrome 캡처 실패:', err);
+          }
+        },
+      },
+      {
+        label: 'Capture Edge',
+        type: 'normal',
+        click: async () => {
+          const audioManager = AudioManager.getInstance();
+          try {
+            if (isStreaming) {
+              await audioManager.stopStream();
+              await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
+            }
+            await audioManager.startStream('edge');
+            console.log('[Tray] Edge 캡처 시작');
+            setTimeout(() => {
+              updateContextMenu();
+            }, 100);
+          } catch (err) {
+            console.error('[Tray] Edge 캡처 실패:', err);
+          }
+        },
+      },
+      {
+        label: 'Capture Discord',
+        type: 'normal',
+        click: async () => {
+          const audioManager = AudioManager.getInstance();
+          try {
+            if (isStreaming) {
+              await audioManager.stopStream();
+              await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
+            }
+            await audioManager.startStream('discord');
+            console.log('[Tray] Discord 캡처 시작');
+            setTimeout(() => {
+              updateContextMenu();
+            }, 100);
+          } catch (err) {
+            console.error('[Tray] Discord 캡처 실패:', err);
+          }
+        },
+      },
+      {
+        type: 'separator',
+      },
+      {
+        label: 'Stop Capture',
+        type: 'normal',
+        enabled: isStreaming,
+        click: async () => {
+          const audioManager = AudioManager.getInstance();
+          try {
+            await audioManager.stopStream();
+            console.log('[Tray] 캡처 중지');
+            setTimeout(() => {
+              updateContextMenu();
+            }, 100);
+          } catch (err) {
+            console.error('[Tray] 캡처 중지 실패:', err);
           }
         },
       },

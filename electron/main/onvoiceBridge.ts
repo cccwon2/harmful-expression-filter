@@ -1,14 +1,8 @@
 /**
  * OnVoice Electron Main Bridge Module
- * 
- * electron-edge-js를 사용하여 C# COM wrapper와 통신하는 브리지 모듈
- * 
- * Node/Electron에서는 StartCapture(pid) / StopCapture + audio 이벤트 스트림만 신경 쓰면 됩니다.
- * COM 이벤트 구현부(SubscribeComEvents / OnAudioData)는 C# 측에서 실제 OnVoice COM 인터페이스에 맞게 채워야 합니다.
  */
-
-// electron/main/onvoiceBridge.ts
 import path from "node:path";
+import { app } from "electron"; // app.isPackaged 확인용
 import { EventEmitter } from "events";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -20,6 +14,7 @@ type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 export interface OnVoiceBridge {
   events: EventEmitter;
   init(onAudioData: (pcm: Buffer) => void): Promise<void>;
+  findProcess(target: "chrome" | "edge" | "discord"): Promise<number>;
   startCapture(pid: number): Promise<void>;
   stopCapture(): Promise<void>;
 }
@@ -32,32 +27,53 @@ let initialized = false;
 function getBridgeFunc(): EdgeFunc {
   if (bridgeFunc) return bridgeFunc;
 
-  // NOTE: DLL은 dist-electron/dotnet/OnVoiceComBridge.dll에 복사됨
-  // __dirname은 빌드된 JavaScript 파일의 위치 (dist-electron/main/)
-  // 상위 디렉토리로 올라가서 dotnet 폴더 접근
-  const assemblyFile = path.join(
-    __dirname,
-    "..",
-    "dotnet",
-    "OnVoiceComBridge.dll"
-  );
+  // 🛠️ DLL 경로 전략:
+  // 1. 개발 모드: dist-electron/main/../../dotnet/... (프로젝트 루트의 dotnet 폴더 참조 or 복사된 폴더)
+  // 2. 배포 모드(Production): resources/dotnet/... (electron-builder의 extraResources 설정 필요)
 
-  bridgeFunc = edge.func({
-    assemblyFile,
-    typeName: "OnVoiceComBridge.Startup",
-    methodName: "Invoke",
-  });
+  let assemblyFile: string;
+
+  if (app.isPackaged) {
+    // 프로덕션: resources/dotnet/OnVoiceComBridge.dll
+    assemblyFile = path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.dll");
+  } else {
+    // 개발: dist-electron/dotnet/OnVoiceComBridge.dll (copy:dll 스크립트 의존)
+    // 현재 파일 위치: dist-electron/main/onvoiceBridge.js
+    assemblyFile = path.join(__dirname, "..", "dotnet", "OnVoiceComBridge.dll");
+  }
+
+  // 디버깅용 경로 출력
+  console.log(`[OnVoiceBridge] Loading DLL from: ${assemblyFile}`);
+
+  try {
+    bridgeFunc = edge.func({
+      assemblyFile,
+      typeName: "OnVoiceComBridge.Startup",
+      methodName: "Invoke",
+    });
+  } catch (e) {
+    console.error(`[OnVoiceBridge] ❌ DLL 로드 실패. 경로를 확인하세요: ${assemblyFile}`, e);
+    throw e;
+  }
 
   return bridgeFunc!;
 }
 
 function callBridge(payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
-    const func = getBridgeFunc();
-    func(payload, (err: Error | null, result?: any) => {
-      if (err) return reject(err);
-      resolve(result);
-    });
+    try {
+      const func = getBridgeFunc();
+      func(payload, (err: Error | null, result?: any) => {
+        if (err) return reject(err);
+        if (result && result.ok === false) {
+          // C# 내부 로직 에러 처리
+          return reject(new Error(result.error || "Unknown C# Error"));
+        }
+        resolve(result);
+      });
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
@@ -65,98 +81,69 @@ export const onVoiceBridge: OnVoiceBridge = {
   events,
 
   async init(onAudioData: (pcm: Buffer) => void): Promise<void> {
-    if (initialized) return;
+    if (initialized) {
+      console.log("[OnVoiceBridge] 이미 초기화되었습니다.");
+      return;
+    }
 
     await callBridge({
       command: "init",
-
-      // This function is marshalled to C# as Func<object, Task<object>>
-      // C# will call it with: { type: "audio", data: byte[] }
-      // ⚠️ 이 콜백은 COM 스레드에서 호출될 수 있으므로 스레드 안전성을 고려해야 함
+      // C# -> Node.js 역방향 콜백
       onAudioData: function (msg: any, cb: EdgeCallback) {
-        const callId = Math.floor(Math.random() * 1000000);
-        const threadId = process.pid; // Node.js 메인 스레드 ID (대략적인 표시)
-        
-        // 처음 몇 번만 상세 로그 출력
-        const shouldLog = callId % 100 < 3;
-        
-        if (shouldLog) {
-          console.log(`[OnVoiceBridge] ⚡ JavaScript 콜백 호출됨! (callId=${callId}, threadId=${threadId})`);
-        }
-        
+        // 로깅 스로틀링 (너무 많은 로그 방지)
+        const callId = Math.floor(Math.random() * 10000);
+        const shouldLog = callId % 200 === 0; // 약 0.5% 확률로만 로그
+
         try {
-          // Null 체크
-          if (!msg) {
-            console.warn(`[OnVoiceBridge] 메시지가 null입니다. (callId=${callId})`);
-            cb(null, { ok: true });
-            return;
-          }
+          if (msg && msg.type === "audio" && msg.data) {
+            // Buffer 변환
+            const buf = Buffer.from(msg.data);
 
-          if (msg.type === "audio" && msg.data) {
-            try {
-              const buf = Buffer.from(msg.data);
-              
-              if (shouldLog) {
-                console.log(`[OnVoiceBridge] ✅ 오디오 데이터 수신 성공! (callId=${callId}, size=${buf.length} bytes)`);
-              }
-              
-              // Emit event for listeners (예외가 발생해도 계속 진행)
-              try {
-                const listenerCount = events.listenerCount('audio');
-                if (shouldLog) {
-                  console.log(`[OnVoiceBridge] events.emit 호출 (listeners=${listenerCount}, callId=${callId})`);
-                }
-                events.emit("audio", buf);
-                if (shouldLog) {
-                  console.log(`[OnVoiceBridge] ✅ events.emit 완료 (callId=${callId})`);
-                }
-              } catch (emitErr) {
-                console.error(`[OnVoiceBridge] ❌ events.emit 오류 (callId=${callId}):`, emitErr);
-              }
-              
-              // Invoke user callback (예외가 발생해도 계속 진행)
-              try {
-                if (shouldLog) {
-                  console.log(`[OnVoiceBridge] onAudioData 콜백 호출 (callId=${callId})`);
-                }
-                onAudioData(buf);
-                if (shouldLog) {
-                  console.log(`[OnVoiceBridge] ✅ onAudioData 콜백 완료 (callId=${callId})`);
-                }
-              } catch (callbackErr) {
-                console.error(`[OnVoiceBridge] ❌ onAudioData 콜백 오류 (callId=${callId}):`, callbackErr);
-              }
-            } catch (bufErr) {
-              console.error(`[OnVoiceBridge] ❌ Buffer.from 오류 (callId=${callId}):`, bufErr);
+            if (shouldLog) {
+              console.log(`[AudioStream] 🎵 ${buf.length} bytes received.`);
             }
-          } else {
-            console.warn(`[OnVoiceBridge] 예상하지 못한 메시지 형식 (callId=${callId}):`, msg);
+
+            // 1. 이벤트 방식 (옵션)
+            events.emit("audio", buf);
+
+            // 2. 직접 콜백 호출
+            onAudioData(buf);
           }
 
-          // 항상 성공 응답 (예외가 발생해도 C#에 성공 응답을 보내서 COM 스레드가 블록되지 않도록 함)
-          if (shouldLog) {
-            console.log(`[OnVoiceBridge] ✅ C#에 성공 응답 전송 (callId=${callId})`);
-          }
+          // ✅ C# Task 완료 신호 전송 (필수)
           cb(null, { ok: true });
         } catch (e: any) {
-          console.error(`[OnVoiceBridge] ❌ 콜백 처리 오류 (callId=${callId}):`, e);
-          // 예외가 발생해도 성공 응답을 보냄 (COM 스레드가 블록되지 않도록)
-          cb(null, { ok: false, error: e instanceof Error ? e.message : String(e) });
+          console.error(`[OnVoiceBridge] Callback Error:`, e);
+          // 에러가 나도 C# 쪽 스레드가 멈추지 않게 성공으로 응답
+          cb(null, { ok: false });
         }
       },
     });
 
     initialized = true;
+    console.log("[OnVoiceBridge] 초기화 완료");
+  },
+
+  // 🔍 프로세스 찾기 기능 추가
+  async findProcess(target: "chrome" | "edge" | "discord"): Promise<number> {
+    console.log(`[OnVoiceBridge] 찾는 중: ${target}...`);
+    const result = await callBridge({ command: "find", target });
+
+    // result = { ok: true, pid: 1234 }
+    const pid = result.pid;
+    console.log(`[OnVoiceBridge] ${target} PID 발견: ${pid}`);
+    return pid;
   },
 
   async startCapture(pid: number): Promise<void> {
-    console.log(`[OnVoiceBridge] startCapture 호출: PID=${pid} (타입: ${typeof pid})`);
-    const result = await callBridge({ command: "start", pid });
-    console.log(`[OnVoiceBridge] startCapture 결과:`, result);
+    console.log(`[OnVoiceBridge] 캡처 시작 요청: PID=${pid}`);
+    await callBridge({ command: "start", pid });
+    console.log(`[OnVoiceBridge] 캡처 시작됨`);
   },
 
   async stopCapture(): Promise<void> {
+    console.log(`[OnVoiceBridge] 캡처 중지 요청`);
     await callBridge({ command: "stop" });
+    console.log(`[OnVoiceBridge] 캡처 중지됨`);
   },
 };
-

@@ -1,10 +1,11 @@
 # Harmful Expression Filter
 
-라이브 플랫폼 유해 표현 필터링, 블라인드, 비프음, 볼륨 조절 Electron 애플리케이션. FastAPI 백엔드와 연동해 텍스트 분석과 알림 흐름을 처리합니다.
+라이브 플랫폼 유해 표현 필터링, 블러, 볼륨 조절 Electron 애플리케이션. FastAPI 백엔드와 연동해 텍스트 분석과 알림 흐름을 처리합니다.
 
 ## 📚 시작하기
 
 ### 필수 문서
+
 새로운 작업을 시작하기 전에 **반드시** 다음 문서를 확인하세요:
 
 1. **[docs/PROJECT_SPEC.md](./docs/PROJECT_SPEC.md)**: 전체 프로젝트 명세서 및 요구사항
@@ -13,22 +14,21 @@
 4. **[docs/00-overview.md](./docs/00-overview.md)**: 현재 작업 현황 및 상태 요약
 
 ### 작업 문서
+
 각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. Task 24~29까지 음성 STT API, Electron 오디오 연동, OnVoice COM 브리지 통합 작업이 완료되어 있으며, 시스템 트레이에 오디오 모니터링 상태 표시 기능이 추가되었습니다.
 
 ## 🚀 빠른 시작
 
 ```bash
 # FastAPI 백엔드 (터미널 1)
-# ⚠️ 중요: server 폴더의 모든 Python 라이브러리는 venv311 가상환경에서만 관리합니다
+# ⚠️ 중요: server 폴더의 모든 Python 라이브러리는 venv310 가상환경에서만 관리합니다
 cd server
 
 # Windows
-venv311\Scripts\activate
-# Linux/Mac
-# source venv311/bin/activate
+venv310\Scripts\activate
 
-# 의존성 설치 (venv311 활성화 후)
-.\venv311\Scripts\python.exe -m pip install -r requirements.txt
+# 의존성 설치 (venv310 활성화 후)
+.\venv310\Scripts\python.exe -m pip install -r requirements.txt
 # 또는
 # python -m pip install -r requirements.txt
 
@@ -41,6 +41,7 @@ npm run dev
 ```
 
 ### 주요 스크립트
+
 ```bash
 # 메인 프로세스 타입 체크 및 빌드
 npm run typecheck
