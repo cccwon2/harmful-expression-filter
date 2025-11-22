@@ -77,6 +77,75 @@ namespace OnVoiceComBridge
                     }
                     return new { ok = true };
 
+                case "find":
+                    EnsureComObject();
+                    if (_capture == null) throw new InvalidOperationException("COM object not initialized");
+                    
+                    string target = (string)input.target;
+                    Console.WriteLine($"[OnVoiceComBridge] 프로세스 찾기 요청: {target}");
+                    
+                    try
+                    {
+                        var capturer = (IOnVoiceCapture)_capture;
+                        int pid = 0;
+                        
+                        switch (target?.ToLower())
+                        {
+                            case "chrome":
+                                pid = capturer.FindChromeProcess();
+                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindChromeProcess 성공: PID={pid}");
+                                break;
+                            case "edge":
+                                pid = capturer.FindEdgeProcess();
+                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindEdgeProcess 성공: PID={pid}");
+                                break;
+                            case "discord":
+                                pid = capturer.FindDiscordProcess();
+                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindDiscordProcess 성공: PID={pid}");
+                                break;
+                            default:
+                                return new { ok = false, error = $"Unknown target: {target}" };
+                        }
+                        
+                        if (pid <= 0)
+                        {
+                            return new { ok = false, error = $"프로세스를 찾을 수 없습니다: {target}" };
+                        }
+                        
+                        return new { ok = true, pid = pid };
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[OnVoiceComBridge] ❌ 프로세스 찾기 오류: {ex.Message}");
+                        // Reflection 시도
+                        try
+                        {
+                            string methodName = target?.ToLower() switch
+                            {
+                                "chrome" => "FindChromeProcess",
+                                "edge" => "FindEdgeProcess",
+                                "discord" => "FindDiscordProcess",
+                                _ => throw new ArgumentException($"Unknown target: {target}")
+                            };
+                            
+                            object? result = _capture.GetType().InvokeMember(methodName, BindingFlags.InvokeMethod, null, _capture, null);
+                            int pid = result != null ? Convert.ToInt32(result) : 0;
+                            
+                            if (pid <= 0)
+                            {
+                                return new { ok = false, error = $"프로세스를 찾을 수 없습니다: {target}" };
+                            }
+                            
+                            Console.WriteLine($"[OnVoiceComBridge] ✅ {methodName} 성공 (Reflection): PID={pid}");
+                            return new { ok = true, pid = pid };
+                        }
+                        catch (Exception refEx)
+                        {
+                            Console.Error.WriteLine($"[OnVoiceComBridge] ❌ Reflection 시도 실패: {refEx.Message}");
+                            return new { ok = false, error = $"프로세스 찾기 실패: {ex.Message}" };
+                        }
+                    }
+
                 default:
                     return new { ok = false, error = $"Unknown command: {command}" };
             }
@@ -171,6 +240,9 @@ namespace OnVoiceComBridge
         [DispId(1)] void StartCapture(int pid);
         [DispId(2)] void StopCapture();
         [DispId(3)] int GetCaptureState();
+        [DispId(4)] int FindChromeProcess();
+        [DispId(5)] int FindEdgeProcess();
+        [DispId(6)] int FindDiscordProcess();
     }
 
     // 이벤트 수신용 싱크 - IDL UUID: 52b4...
