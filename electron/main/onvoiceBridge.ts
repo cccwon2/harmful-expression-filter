@@ -11,12 +11,24 @@ const edge = require("electron-edge-js");
 type EdgeCallback = (error: Error | null, result?: any) => void;
 type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 
+export interface OCRResult {
+  ok: boolean;
+  text?: string;
+  isHarmful?: boolean;
+  matchedKeywords?: string[];
+  confidence?: number;
+  blurredImage?: Buffer;
+  error?: string;
+}
+
 export interface OnVoiceBridge {
   events: EventEmitter;
   init(onAudioData: (pcm: Buffer) => void): Promise<void>;
   findProcess(target: "chrome" | "edge" | "discord"): Promise<number>;
   startCapture(pid: number): Promise<void>;
   stopCapture(): Promise<void>;
+  performOCR(imageBuffer: Buffer): Promise<OCRResult>;
+  performOCRAndAnalyze(imageBuffer: Buffer, roi?: { x: number; y: number; width: number; height: number }): Promise<OCRResult>;
 }
 
 const events = new EventEmitter();
@@ -177,6 +189,98 @@ export const onVoiceBridge: OnVoiceBridge = {
     } catch (error) {
       console.error(`[OnVoiceBridge] 캡처 중지 실패:`, error);
       throw error;
+    }
+  },
+
+  /**
+   * Windows OCR 수행 (텍스트 추출 + 유해성 검사)
+   */
+  async performOCR(imageBuffer: Buffer): Promise<OCRResult> {
+    try {
+      console.log(`[OnVoiceBridge] OCR 요청: 이미지 크기 ${imageBuffer.length} bytes`);
+      
+      // Buffer를 byte 배열로 변환
+      const imageBytes = Array.from(imageBuffer);
+      
+      const result = await callBridge({
+        command: "ocr",
+        imageData: imageBytes,
+      });
+
+      if (!result || result.ok === false) {
+        return {
+          ok: false,
+          error: result?.error || "OCR 실패",
+        };
+      }
+
+      return {
+        ok: true,
+        text: result.text || "",
+        isHarmful: result.isHarmful || false,
+        matchedKeywords: result.matchedKeywords || [],
+        confidence: result.confidence || 0,
+      };
+    } catch (error: any) {
+      console.error(`[OnVoiceBridge] OCR 오류:`, error);
+      return {
+        ok: false,
+        error: error.message || "OCR 처리 중 오류 발생",
+      };
+    }
+  },
+
+  /**
+   * Windows OCR 수행 + 블러 처리 (ROI 영역)
+   */
+  async performOCRAndAnalyze(
+    imageBuffer: Buffer,
+    roi?: { x: number; y: number; width: number; height: number }
+  ): Promise<OCRResult> {
+    try {
+      console.log(`[OnVoiceBridge] OCR + 분석 요청: 이미지 크기 ${imageBuffer.length} bytes`);
+      
+      // Buffer를 byte 배열로 변환
+      const imageBytes = Array.from(imageBuffer);
+      
+      const payload: any = {
+        command: "ocrAndBlur",
+        imageData: imageBytes,
+      };
+
+      if (roi) {
+        payload.roi = roi;
+      }
+
+      const result = await callBridge(payload);
+
+      if (!result || result.ok === false) {
+        return {
+          ok: false,
+          error: result?.error || "OCR + 분석 실패",
+        };
+      }
+
+      // blurredImage가 있으면 Buffer로 변환
+      let blurredImageBuffer: Buffer | undefined;
+      if (result.blurredImage && Array.isArray(result.blurredImage)) {
+        blurredImageBuffer = Buffer.from(result.blurredImage);
+      }
+
+      return {
+        ok: true,
+        text: result.text || "",
+        isHarmful: result.isHarmful || false,
+        matchedKeywords: result.matchedKeywords || [],
+        confidence: result.confidence || 0,
+        blurredImage: blurredImageBuffer,
+      };
+    } catch (error: any) {
+      console.error(`[OnVoiceBridge] OCR + 분석 오류:`, error);
+      return {
+        ok: false,
+        error: error.message || "OCR + 분석 처리 중 오류 발생",
+      };
     }
   },
 };

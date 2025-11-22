@@ -196,6 +196,10 @@ app.whenReady().then(async () => {
   /**
    * 이미지를 서버로 전송하여 OCR + 분석 수행
    */
+  /**
+   * Windows OCR을 사용하여 이미지에서 텍스트 추출 및 유해성 분석
+   * 기존 서버 OCR 방식을 Windows OCR로 대체
+   */
   const sendImageToServer = async (imageBuffer: Buffer): Promise<{
     success: boolean;
     data?: {
@@ -206,74 +210,56 @@ app.whenReady().then(async () => {
     };
     error?: string;
   }> => {
-    const axios = require('axios');
-    const FormData = require('form-data');
-    const SERVER_URL = process.env.SERVER_URL || 'http://localhost:8000';
-    const REQUEST_TIMEOUT = 30000; // 30초로 증가 (OCR 처리 시간 고려)
-
     try {
-      console.log(`[OCR] 서버로 이미지 전송 시작: ${SERVER_URL}/api/ocr-and-analyze`);
-      console.log(`[OCR] 이미지 크기: ${imageBuffer.length} bytes (${(imageBuffer.length / 1024).toFixed(2)} KB)`);
+      const { onVoiceBridge } = await import('./main/onVoiceBridge');
+      const roi = currentROI;
       
-      const formData = new FormData();
-      formData.append('file', imageBuffer, {
-        filename: 'screenshot.png',
-        contentType: 'image/png',
-      });
-
+      console.log(`[OCR] Windows OCR 시작: 이미지 크기 ${imageBuffer.length} bytes (${(imageBuffer.length / 1024).toFixed(2)} KB)`);
+      
       const requestStartTime = Date.now();
-      console.log(`[OCR] HTTP 요청 전송 중... (타임아웃: ${REQUEST_TIMEOUT}ms)`);
-      console.log(`[OCR] 요청 URL: ${SERVER_URL}/api/ocr-and-analyze`);
-      console.log(`[OCR] FormData 헤더:`, formData.getHeaders());
-      console.log(`[OCR] axios 요청 시작 시간: ${new Date(requestStartTime).toISOString()}`);
       
-      let response;
-      try {
-        response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
-          headers: formData.getHeaders(),
-          timeout: REQUEST_TIMEOUT,
-          validateStatus: (status: any) => status < 500, // 500 이상만 에러로 처리
-        });
-        console.log(`[OCR] axios 요청 성공: HTTP ${response.status}`);
-      } catch (axiosError: any) {
-        console.error(`[OCR] axios 요청 자체 실패 (서버 도달 전):`, axiosError.code, axiosError.message);
-        throw axiosError; // 상위 catch로 전달
-      }
+      // Windows OCR + 분석 수행 (ROI 정보 포함)
+      const result = roi 
+        ? await onVoiceBridge.performOCRAndAnalyze(imageBuffer, {
+            x: roi.x,
+            y: roi.y,
+            width: roi.width,
+            height: roi.height,
+          })
+        : await onVoiceBridge.performOCR(imageBuffer);
 
       const requestTime = Date.now() - requestStartTime;
-      console.log(`[OCR] 서버 응답 수신 완료 (${requestTime}ms)`);
-      console.log(`[OCR] 서버 응답 상태: ${response.status}, 데이터 크기: ${JSON.stringify(response.data).length} bytes`);
+      console.log(`[OCR] Windows OCR 완료 (${requestTime}ms)`);
+
+      if (!result.ok) {
+        console.error(`[OCR] Windows OCR 실패: ${result.error}`);
+        return {
+          success: false,
+          error: result.error || 'OCR 처리 실패',
+        };
+      }
+
+      // 결과를 서버 응답 형식으로 변환
+      const texts = result.text 
+        ? result.text.split(/\r?\n/).filter(line => line.trim().length > 0)
+        : [];
 
       return {
         success: true,
-        data: response.data,
+        data: {
+          texts: texts,
+          is_harmful: result.isHarmful || false,
+          harmful_words: result.matchedKeywords || [],
+          processing_time: {
+            ocr: 0, // Windows OCR은 처리 시간을 별도로 제공하지 않음
+            analysis: 0,
+            total: requestTime / 1000, // 밀리초를 초로 변환
+          },
+        },
       };
     } catch (error: any) {
       const errorMessage = error?.message ?? 'Unknown error';
-      const errorStatus = error?.response?.status;
-      const errorData = error?.response?.data;
-      
-      console.error('[OCR] 서버 OCR 요청 실패:', errorMessage);
-      if (errorStatus) {
-        console.error(`[OCR] HTTP 상태 코드: ${errorStatus}`);
-      }
-      if (errorData) {
-        console.error(`[OCR] 서버 응답 데이터:`, JSON.stringify(errorData, null, 2));
-      }
-      if (error?.code === 'ECONNREFUSED') {
-        console.error(`[OCR] 서버 연결 거부됨 - 서버가 실행 중인지 확인하세요: ${SERVER_URL}`);
-        console.error(`[OCR] 해결 방법:`);
-        console.error(`[OCR]   1. server 폴더로 이동: cd server`);
-        console.error(`[OCR]   2. venv311 가상환경 활성화: venv311\\Scripts\\activate`);
-        console.error(`[OCR]   3. 서버 실행: uvicorn main:app --reload`);
-      }
-      if (error?.code === 'ETIMEDOUT' || errorMessage.includes('timeout')) {
-        console.error(`[OCR] 요청 타임아웃 (${REQUEST_TIMEOUT}ms) - 서버 응답이 너무 느립니다.`);
-      }
-      if (error?.code === 'ENOTFOUND') {
-        console.error(`[OCR] 호스트를 찾을 수 없음: ${SERVER_URL}`);
-        console.error(`[OCR] SERVER_URL이 올바른지 확인하세요.`);
-      }
+      console.error('[OCR] Windows OCR 요청 실패:', errorMessage);
       console.error(`[OCR] 전체 에러 객체:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       
       return {

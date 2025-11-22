@@ -152,28 +152,38 @@ export function registerServerHandlers(): void {
     },
   );
 
-  // OCR 전용 핸들러
+  // OCR 전용 핸들러 (Windows OCR 사용)
   ipcMain.handle(
     SERVER_CHANNELS.OCR_IMAGE,
     async (_event, imageBuffer: Buffer): Promise<{ success: boolean; data?: any; error?: string }> => {
       try {
-        const formData = new FormData();
-        formData.append('file', imageBuffer, {
-          filename: 'screenshot.png',
-          contentType: 'image/png',
-        });
+        const { onVoiceBridge } = await import('../main/onVoiceBridge');
+        
+        console.log('[IPC] Windows OCR 요청:', imageBuffer.length, 'bytes');
+        const result = await onVoiceBridge.performOCR(imageBuffer);
 
-        const response = await axios.post(`${SERVER_URL}/api/ocr`, formData, {
-          headers: formData.getHeaders(),
-          timeout: REQUEST_TIMEOUT,
-        });
+        if (!result.ok) {
+          return {
+            success: false,
+            error: result.error || 'OCR 처리 실패',
+          };
+        }
+
+        // 서버 응답 형식으로 변환
+        const texts = result.text 
+          ? result.text.split(/\r?\n/).filter(line => line.trim().length > 0)
+          : [];
 
         return {
           success: true,
-          data: response.data,
+          data: {
+            texts: texts,
+            processing_time: 0, // Windows OCR은 처리 시간을 별도로 제공하지 않음
+            text_count: texts.length,
+          },
         };
       } catch (error: any) {
-        console.error('[IPC] OCR 요청 실패:', error.message);
+        console.error('[IPC] Windows OCR 요청 실패:', error.message);
         return {
           success: false,
           error: error.message,
@@ -182,28 +192,45 @@ export function registerServerHandlers(): void {
     },
   );
 
-  // OCR + 유해성 분석 통합 핸들러
+  // OCR + 유해성 분석 통합 핸들러 (Windows OCR 사용)
   ipcMain.handle(
     SERVER_CHANNELS.OCR_AND_ANALYZE,
-    async (_event, imageBuffer: Buffer): Promise<{ success: boolean; data?: any; error?: string }> => {
+    async (_event, imageBuffer: Buffer, roi?: { x: number; y: number; width: number; height: number }): Promise<{ success: boolean; data?: any; error?: string }> => {
       try {
-        const formData = new FormData();
-        formData.append('file', imageBuffer, {
-          filename: 'screenshot.png',
-          contentType: 'image/png',
-        });
+        const { onVoiceBridge } = await import('../main/onVoiceBridge');
+        
+        console.log('[IPC] Windows OCR + 분석 요청:', imageBuffer.length, 'bytes');
+        const result = roi 
+          ? await onVoiceBridge.performOCRAndAnalyze(imageBuffer, roi)
+          : await onVoiceBridge.performOCR(imageBuffer);
 
-        const response = await axios.post(`${SERVER_URL}/api/ocr-and-analyze`, formData, {
-          headers: formData.getHeaders(),
-          timeout: REQUEST_TIMEOUT,
-        });
+        if (!result.ok) {
+          return {
+            success: false,
+            error: result.error || 'OCR + 분석 처리 실패',
+          };
+        }
+
+        // 서버 응답 형식으로 변환
+        const texts = result.text 
+          ? result.text.split(/\r?\n/).filter(line => line.trim().length > 0)
+          : [];
 
         return {
           success: true,
-          data: response.data,
+          data: {
+            texts: texts,
+            is_harmful: result.isHarmful || false,
+            harmful_words: result.matchedKeywords || [],
+            processing_time: {
+              ocr: 0, // Windows OCR은 처리 시간을 별도로 제공하지 않음
+              analysis: 0,
+              total: 0,
+            },
+          },
         };
       } catch (error: any) {
-        console.error('[IPC] OCR+분석 요청 실패:', error.message);
+        console.error('[IPC] Windows OCR+분석 요청 실패:', error.message);
         return {
           success: false,
           error: error.message,

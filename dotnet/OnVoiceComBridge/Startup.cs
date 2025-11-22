@@ -166,6 +166,7 @@ namespace OnVoiceComBridge
                 case "ocr":
                     try
                     {
+                        var ocrStartTime = DateTime.UtcNow;
                         byte[] imageBytes = (byte[])input.imageData;
                         Console.WriteLine($"[OnVoiceComBridge] OCR 요청: 이미지 크기 {imageBytes.Length} bytes");
                         
@@ -177,18 +178,47 @@ namespace OnVoiceComBridge
                         }
                         
                         // OCR 수행
+                        var ocrEndTime = DateTime.UtcNow;
                         string recognizedText = await RecognizeTextFromSoftwareBitmap(softwareBitmap);
-                        Console.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText.Length}자 추출");
+                        var ocrTime = (ocrEndTime - ocrStartTime).TotalSeconds;
+                        Console.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText.Length}자 추출 ({ocrTime:F3}초)");
+                        
+                        // 텍스트를 줄 단위로 분리 (서버 형식과 일치)
+                        var texts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(recognizedText))
+                        {
+                            var lines = recognizedText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var line in lines)
+                            {
+                                var trimmed = line.Trim();
+                                if (!string.IsNullOrWhiteSpace(trimmed))
+                                {
+                                    texts.Add(trimmed);
+                                }
+                            }
+                        }
                         
                         // 서버에 유해성 검사 요청
+                        var analysisStartTime = DateTime.UtcNow;
                         var analysisResult = await AnalyzeTextForHarmfulContent(recognizedText);
+                        var analysisTime = (DateTime.UtcNow - analysisStartTime).TotalSeconds;
+                        var totalTime = (DateTime.UtcNow - ocrStartTime).TotalSeconds;
                         
+                        // 서버 응답 형식과 일치하도록 반환
                         return new { 
                             ok = true, 
-                            text = recognizedText,
-                            isHarmful = analysisResult.isHarmful,
-                            matchedKeywords = analysisResult.matchedKeywords,
-                            confidence = analysisResult.confidence
+                            texts = texts.ToArray(),
+                            text = recognizedText, // 하위 호환성을 위해 유지
+                            is_harmful = analysisResult.isHarmful,
+                            isHarmful = analysisResult.isHarmful, // 하위 호환성
+                            harmful_words = analysisResult.matchedKeywords,
+                            matchedKeywords = analysisResult.matchedKeywords, // 하위 호환성
+                            confidence = analysisResult.confidence,
+                            processing_time = new {
+                                ocr = ocrTime,
+                                analysis = analysisTime,
+                                total = totalTime
+                            }
                         };
                     }
                     catch (Exception ex)
@@ -200,6 +230,7 @@ namespace OnVoiceComBridge
                 case "ocrAndBlur":
                     try
                     {
+                        var ocrStartTime = DateTime.UtcNow;
                         byte[] imageBytes = (byte[])input.imageData;
                         var roi = input.roi; // { x, y, width, height }
                         int roiX = Convert.ToInt32(roi.x);
@@ -217,11 +248,31 @@ namespace OnVoiceComBridge
                         }
                         
                         // OCR 수행
+                        var ocrEndTime = DateTime.UtcNow;
                         string recognizedText = await RecognizeTextFromSoftwareBitmap(softwareBitmap);
+                        var ocrTime = (ocrEndTime - ocrStartTime).TotalSeconds;
                         Console.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText}");
                         
+                        // 텍스트를 줄 단위로 분리 (서버 형식과 일치)
+                        var texts = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(recognizedText))
+                        {
+                            var lines = recognizedText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var line in lines)
+                            {
+                                var trimmed = line.Trim();
+                                if (!string.IsNullOrWhiteSpace(trimmed))
+                                {
+                                    texts.Add(trimmed);
+                                }
+                            }
+                        }
+                        
                         // 서버에 유해성 검사 요청
+                        var analysisStartTime = DateTime.UtcNow;
                         var analysisResult = await AnalyzeTextForHarmfulContent(recognizedText);
+                        var analysisTime = (DateTime.UtcNow - analysisStartTime).TotalSeconds;
+                        var totalTime = (DateTime.UtcNow - ocrStartTime).TotalSeconds;
                         
                         byte[]? blurredImage = null;
                         if (analysisResult.isHarmful)
@@ -231,12 +282,21 @@ namespace OnVoiceComBridge
                             blurredImage = await BlurROI(imageBytes, roiX, roiY, roiWidth, roiHeight);
                         }
                         
+                        // 서버 응답 형식과 일치하도록 반환
                         return new { 
                             ok = true, 
-                            text = recognizedText,
-                            isHarmful = analysisResult.isHarmful,
-                            matchedKeywords = analysisResult.matchedKeywords,
+                            texts = texts.ToArray(),
+                            text = recognizedText, // 하위 호환성
+                            is_harmful = analysisResult.isHarmful,
+                            isHarmful = analysisResult.isHarmful, // 하위 호환성
+                            harmful_words = analysisResult.matchedKeywords,
+                            matchedKeywords = analysisResult.matchedKeywords, // 하위 호환성
                             confidence = analysisResult.confidence,
+                            processing_time = new {
+                                ocr = ocrTime,
+                                analysis = analysisTime,
+                                total = totalTime
+                            },
                             blurredImage = blurredImage
                         };
                     }
