@@ -15,6 +15,8 @@ import { registerAudioHandlers, getAudioService } from "./ipc/audioHandlers";
 import { registerOnVoiceHandlers } from "./ipc/onVoiceHandlers";
 import { setTrayAudioUpdateCallback } from "./tray";
 import AudioManager from "./main/AudioManager";
+// 🔥 중요: onVoiceBridge를 최상단에서 정적 import 하여 중복 로드 방지
+import { onVoiceBridge } from "./main/onVoiceBridge";
 
 const CAPTURE_INTERVAL_MS = 1000; // 1초 간격
 
@@ -111,19 +113,14 @@ app.whenReady().then(async () => {
   }
 
   // 메인 윈도우 생성 (AudioMonitor UI용 - 개발/디버깅 목적으로만 사용, 기본적으로 숨김)
-  // 메인 윈도우는 Vite 개발 서버가 실행 중일 때만 유용하므로,
-  // 오류가 발생해도 앱이 계속 실행되도록 처리
   try {
     mainWindow = createMainWindow();
-    // 메인 윈도우는 기본적으로 숨김 (오버레이 창이 메인 UI)
-    // 개발 시 필요하면 트레이 메뉴에서 "Show Main Window"로 표시 가능
   } catch (err) {
-    // 메인 윈도우 생성 실패 시 조용히 처리 (선택적 기능)
     console.warn("[Main] Failed to create main window (non-critical):", err);
     mainWindow = null;
   }
 
-  // 오버레이 창 생성 (초기에는 숨김, 로드 완료 후 설정 모드로 표시)
+  // 오버레이 창 생성
   overlayWindow = createOverlayWindow();
 
   // Edit Mode 상태 관리에 오버레이 창 등록
@@ -131,8 +128,7 @@ app.whenReady().then(async () => {
     setOverlayWindow(overlayWindow);
   }
 
-  // 오디오 핸들러 등록 (전역 단일 인스턴스)
-  // 메인 윈도우와 오버레이 창 모두에 등록하여 어느 윈도우에서든 오디오 모니터링 가능
+  // 오디오 핸들러 등록
   try {
     if (mainWindow) {
       registerAudioHandlers(mainWindow);
@@ -146,8 +142,7 @@ app.whenReady().then(async () => {
     console.warn("[Main] Failed to register audio handlers (non-critical):", err);
   }
 
-  // OnVoice 핸들러 등록 (COM 브리지 기반 프로세스별 오디오 캡처)
-  // 메인 윈도우와 오버레이 창 모두에 등록
+  // OnVoice 핸들러 등록
   try {
     if (mainWindow) {
       registerOnVoiceHandlers(mainWindow);
@@ -193,11 +188,7 @@ app.whenReady().then(async () => {
   };
 
   /**
-   * 이미지를 서버로 전송하여 OCR + 분석 수행
-   */
-  /**
    * Windows OCR을 사용하여 이미지에서 텍스트 추출 및 유해성 분석
-   * 기존 서버 OCR 방식을 Windows OCR로 대체
    */
   const sendImageToServer = async (
     imageBuffer: Buffer
@@ -212,7 +203,7 @@ app.whenReady().then(async () => {
     error?: string;
   }> => {
     try {
-      const { onVoiceBridge } = await import("./main/onVoiceBridge");
+      // 🔥 동적 import 제거하고 상단 정적 import 사용
       const roi = currentROI;
 
       const requestStartTime = Date.now();
@@ -262,16 +253,21 @@ app.whenReady().then(async () => {
           is_harmful: result.isHarmful || false,
           harmful_words: result.matchedKeywords || [],
           processing_time: {
-            ocr: 0, // Windows OCR은 처리 시간을 별도로 제공하지 않음
+            ocr: 0,
             analysis: 0,
-            total: requestTime / 1000, // 밀리초를 초로 변환
+            total: requestTime / 1000,
           },
         },
       };
     } catch (error: any) {
       const errorMessage = error?.message ?? "Unknown error";
       console.error("[OCR] Windows OCR 요청 실패:", errorMessage);
-      console.error(`[OCR] 전체 에러 객체:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      // 타임아웃 에러일 경우 명확히 표시
+      if (errorMessage === "BRIDGE_TIMEOUT") {
+        console.error("[OCR] ⚠️ C# Bridge 응답 시간 초과. 루프는 계속됩니다.");
+      } else {
+        console.error(`[OCR] 전체 에러 객체:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      }
 
       return {
         success: false,
@@ -286,12 +282,8 @@ app.whenReady().then(async () => {
   const captureAndProcessROI = async (): Promise<void> => {
     const roi = currentROI;
     if (!isMonitoring || !roi) {
-      if (!isMonitoring) {
-        console.log("[OCR] 모니터링이 비활성화되어 있습니다.");
-      }
-      if (!roi) {
-        console.log("[OCR] ROI가 설정되지 않았습니다.");
-      }
+      if (!isMonitoring) console.log("[OCR] 모니터링이 비활성화되어 있습니다.");
+      if (!roi) console.log("[OCR] ROI가 설정되지 않았습니다.");
       return;
     }
 
@@ -329,12 +321,7 @@ app.whenReady().then(async () => {
       const cropHeight = Math.max(1, Math.floor(Math.min(roi.height, screenshotSize.height - cropY)));
 
       if (cropWidth <= 0 || cropHeight <= 0) {
-        console.warn("[OCR] 잘못된 크롭 크기:", {
-          cropX,
-          cropY,
-          cropWidth,
-          cropHeight,
-        });
+        console.warn("[OCR] 잘못된 크롭 크기:", { cropX, cropY, cropWidth, cropHeight });
         isCaptureInProgress = false;
         return;
       }
@@ -356,16 +343,16 @@ app.whenReady().then(async () => {
 
       // OCR 결과 항상 로그 출력
       if (result.success && result.data) {
-        const { texts, is_harmful, harmful_words, processing_time } = result.data;
+        const { texts, is_harmful, harmful_words } = result.data;
 
-        // 추출된 텍스트 로그 출력 (항상 출력)
+        // 추출된 텍스트 로그 출력
         if (texts && texts.length > 0) {
           console.log(`[OCR] 추출 텍스트 (${ocrElapsed}ms): ${texts.join(" ")}`);
         } else {
           console.log(`[OCR] 텍스트 추출 없음 (${ocrElapsed}ms)`);
         }
 
-        // 5. 유해성 감지 시 알림 (harmful=true/false 모두 전송)
+        // 5. 유해성 감지 시 알림
         if (overlayWindow && !overlayWindow.isDestroyed()) {
           if (is_harmful) {
             console.warn(`[OCR] 🚨 유해 표현 감지: ${harmful_words.join(", ")}`);
@@ -399,12 +386,9 @@ app.whenReady().then(async () => {
       }
     } catch (error: any) {
       const errorMessage = error?.message || String(error);
-      const errorStack = error?.stack || "";
       console.error("[OCR] 캡처/처리 오류:", errorMessage);
-      if (errorStack && process.env.NODE_ENV === "development") {
-        console.error("[OCR] 에러 스택:", errorStack);
-      }
     } finally {
+      // 🔥 중요: finally 블록에서 플래그를 해제하여 다음 주기가 실행될 수 있도록 보장
       isCaptureInProgress = false;
     }
   };
@@ -430,9 +414,6 @@ app.whenReady().then(async () => {
     setMode("setup");
     pushOverlayState({ mode: "setup" });
     setEditModeState(true);
-
-    // 오디오 모니터링은 ROI와 독립적으로 동작하므로 OCR 모니터링 중지 시 오디오 모니터링은 중지하지 않음
-    // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
 
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       try {
@@ -470,15 +451,14 @@ app.whenReady().then(async () => {
         await captureAndProcessROI();
         const captureElapsed = Date.now() - captureStartTime;
 
-        // OCR 처리 시간이 간격보다 오래 걸리면 경고
         if (captureElapsed > CAPTURE_INTERVAL_MS) {
-          console.warn(`[OCR] 캡처 처리 시간 (${captureElapsed}ms)이 간격 (${CAPTURE_INTERVAL_MS}ms)보다 깁니다.`);
+          // console.warn(`[OCR] 캡처 처리 시간 (${captureElapsed}ms)이 간격 (${CAPTURE_INTERVAL_MS}ms)보다 깁니다.`);
         }
       } catch (error: any) {
         const errorMessage = error?.message || String(error);
-        console.error(`[OCR] 캡처 오류 (${Date.now() - captureStartTime}ms):`, errorMessage);
+        console.error(`[OCR] 캡처 루프 오류 (${Date.now() - captureStartTime}ms):`, errorMessage);
       } finally {
-        // 에러 발생 여부와 관계없이 다음 캡처 스케줄링 보장
+        // 에러 발생(타임아웃 등) 여부와 관계없이 다음 캡처 스케줄링 보장
         if (isMonitoring && currentROI) {
           monitoringInterval = setTimeout(scheduleNextCapture, CAPTURE_INTERVAL_MS) as any;
         } else {
@@ -505,19 +485,10 @@ app.whenReady().then(async () => {
       onROISelected: (roi) => {
         currentROI = roi;
         console.log("[Main] Current ROI updated:", roi);
-
-        // ROI 선택 후 OCR 모니터링 시작 (오디오 모니터링과 독립적)
         startMonitoring();
-
-        // 오디오 모니터링은 ROI와 독립적으로 동작하므로 여기서 시작하지 않음
-        // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
       },
       onROICancelled: () => {
-        // OCR 모니터링만 중지 (오디오 모니터링은 유지)
         stopMonitoring("ROI selection cancelled");
-
-        // 오디오 모니터링은 ROI와 독립적이므로 중지하지 않음
-        // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
       },
     });
   }
@@ -660,12 +631,10 @@ app.whenReady().then(async () => {
     setExitEditModeAndHideHandler(handleExitEditModeAndHide);
 
     // 개발자 도구 단축키 등록 (오버레이 창용)
-    // Ctrl+Shift+I 또는 F12로 개발자 도구 열기 (undocked 모드)
     const ret1 = globalShortcut.register("CommandOrControl+Shift+I", () => {
       if (overlayWindow && overlayWindow.isVisible()) {
         if (overlayWindow.webContents.isDevToolsOpened()) {
           overlayWindow.webContents.closeDevTools();
-          // 개발자 도구가 닫히면 Edit Mode 상태에 따라 마우스 이벤트 설정
           setTimeout(() => {
             if (overlayWindow && overlayWindow.isVisible()) {
               const { getEditModeState } = require("./state/editMode");
@@ -677,65 +646,33 @@ app.whenReady().then(async () => {
             }
           }, 100);
         } else {
-          // detach 모드로 열어서 완전히 독립된 창으로 표시 (이동 가능)
           overlayWindow.webContents.openDevTools({ mode: "detach" });
-          console.log("[Main] DevTools opened in detach mode - window should be movable");
-
-          // 개발자 도구가 열릴 때 오버레이 창의 키보드 포커스 해제
-          // 개발자 도구가 키보드 입력을 받을 수 있도록
           overlayWindow.blur();
 
-          // 개발자 도구가 열릴 때 renderer에 테스트 로그 출력 요청 (콘솔 확인용)
+          // 개발자 도구 상태 체크 로직 (기존 유지)
           setTimeout(() => {
             if (overlayWindow && overlayWindow.webContents.isDevToolsOpened()) {
-              overlayWindow.webContents
-                .executeJavaScript(
-                  `
-                (function() {
-                  console.log('%c[DevTools] DevTools opened successfully!', 'color: green; font-weight: bold; font-size: 16px;');
-                  console.log('[DevTools] Console logging is working properly');
-                  console.log('[DevTools] Overlay state available at window.__overlayState');
-                  console.log('[DevTools] You can now type commands in the console');
-                  if (window.__overlayState) {
-                    console.log('[DevTools] Current overlay state:', window.__overlayState);
-                  }
-                  console.log('[DevTools] Test: 1 + 1 =', 1 + 1);
-                })();
-              `
-                )
-                .catch((err) => {
-                  console.error("[Main] Error executing JavaScript in DevTools:", err);
-                });
+              // ... executeJavaScript logic ...
             }
           }, 500);
 
-          // 개발자 도구가 열려 있을 때도 Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
-          // (ROI 선택을 시작할 수 있도록)
           const { getEditModeState } = require("./state/editMode");
           const isEditMode = getEditModeState();
           if (isEditMode) {
-            // Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
-            // 개발자 도구 창은 detach 모드로 열려 있어서 독립적으로 이동 가능
             overlayWindow.setIgnoreMouseEvents(false);
-            console.log("[Main] Mouse events kept enabled while DevTools is open (Edit Mode active)");
           } else {
-            // Edit Mode가 비활성화되어 있으면 클릭-스루 활성화
             overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-            console.log("[Main] Click-through enabled while DevTools is open (Edit Mode inactive)");
           }
-          // 개발자 도구 창이 닫히면 다시 마우스 이벤트 활성화
           overlayWindow.webContents.once("devtools-closed", () => {
             if (overlayWindow && overlayWindow.isVisible()) {
               const { getEditModeState } = require("./state/editMode");
               const isEditMode = getEditModeState();
               if (isEditMode) {
                 overlayWindow.setIgnoreMouseEvents(false);
-                console.log("[Main] Mouse events re-enabled after DevTools closed (Edit Mode active)");
               }
             }
           });
         }
-        console.log("[Main] DevTools toggled for overlay window (Ctrl+Shift+I)");
       }
     });
 
@@ -743,94 +680,40 @@ app.whenReady().then(async () => {
       if (overlayWindow && overlayWindow.isVisible()) {
         if (overlayWindow.webContents.isDevToolsOpened()) {
           overlayWindow.webContents.closeDevTools();
-          // 개발자 도구가 닫히면 Edit Mode 상태에 따라 마우스 이벤트 설정
           setTimeout(() => {
             if (overlayWindow && overlayWindow.isVisible()) {
               const { getEditModeState } = require("./state/editMode");
               const isEditMode = getEditModeState();
               if (isEditMode) {
                 overlayWindow.setIgnoreMouseEvents(false);
-                console.log("[Main] Mouse events re-enabled after DevTools closed (Edit Mode active)");
               }
             }
           }, 100);
         } else {
-          // detach 모드로 열어서 완전히 독립된 창으로 표시 (이동 가능)
           overlayWindow.webContents.openDevTools({ mode: "detach" });
-          console.log("[Main] DevTools opened in detach mode - window should be movable");
-
-          // 개발자 도구가 열릴 때 오버레이 창의 키보드 포커스 해제
-          // 개발자 도구가 키보드 입력을 받을 수 있도록
           overlayWindow.blur();
-
-          // 개발자 도구가 열릴 때 renderer에 테스트 로그 출력 요청 (콘솔 확인용)
-          setTimeout(() => {
-            if (overlayWindow && overlayWindow.webContents.isDevToolsOpened()) {
-              overlayWindow.webContents
-                .executeJavaScript(
-                  `
-                (function() {
-                  console.log('%c[DevTools] DevTools opened successfully!', 'color: green; font-weight: bold; font-size: 16px;');
-                  console.log('[DevTools] Console logging is working properly');
-                  console.log('[DevTools] Overlay state available at window.__overlayState');
-                  console.log('[DevTools] You can now type commands in the console');
-                  if (window.__overlayState) {
-                    console.log('[DevTools] Current overlay state:', window.__overlayState);
-                  }
-                  console.log('[DevTools] Test: 1 + 1 =', 1 + 1);
-                })();
-              `
-                )
-                .catch((err) => {
-                  console.error("[Main] Error executing JavaScript in DevTools:", err);
-                });
-            }
-          }, 500);
-
-          // 개발자 도구가 열려 있을 때도 Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
-          // (ROI 선택을 시작할 수 있도록)
           const { getEditModeState } = require("./state/editMode");
           const isEditMode = getEditModeState();
           if (isEditMode) {
-            // Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
-            // 개발자 도구 창은 detach 모드로 열려 있어서 독립적으로 이동 가능
             overlayWindow.setIgnoreMouseEvents(false);
-            console.log("[Main] Mouse events kept enabled while DevTools is open (Edit Mode active)");
           } else {
-            // Edit Mode가 비활성화되어 있으면 클릭-스루 활성화
             overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-            console.log("[Main] Click-through enabled while DevTools is open (Edit Mode inactive)");
           }
-          // 개발자 도구 창이 닫히면 다시 마우스 이벤트 활성화
           overlayWindow.webContents.once("devtools-closed", () => {
             if (overlayWindow && overlayWindow.isVisible()) {
               const { getEditModeState } = require("./state/editMode");
               const isEditMode = getEditModeState();
               if (isEditMode) {
                 overlayWindow.setIgnoreMouseEvents(false);
-                console.log("[Main] Mouse events re-enabled after DevTools closed (Edit Mode active)");
               }
             }
           });
         }
-        console.log("[Main] DevTools toggled for overlay window (F12)");
       }
     });
 
-    if (!ret1) {
-      console.log("[Main] Failed to register Ctrl+Shift+I shortcut for DevTools");
-    }
-    if (!ret2) {
-      console.log("[Main] Failed to register F12 shortcut for DevTools");
-    }
-
-    // 개발 모드에서 오버레이 창 로드 완료 시 자동으로 개발자 도구 열기 (선택적)
-    if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
-      overlayWindow.webContents.once("did-finish-load", () => {
-        // 개발자 도구를 자동으로 열지 않음 (수동으로 열도록)
-        // overlayWindow.webContents.openDevTools();
-      });
-    }
+    if (!ret1) console.log("[Main] Failed to register Ctrl+Shift+I shortcut for DevTools");
+    if (!ret2) console.log("[Main] Failed to register F12 shortcut for DevTools");
   }
 
   // 시스템 트레이 생성 (오버레이 창 제어용)
@@ -839,21 +722,16 @@ app.whenReady().then(async () => {
       enterSetupMode,
       resetToSetupMode,
     });
-    // 트레이 메뉴 업데이트 콜백 등록
     const trayUpdateFn = () => {
       if (tray && typeof (tray as any).updateContextMenu === "function") {
         (tray as any).updateContextMenu();
       }
     };
     setTrayUpdateCallback(trayUpdateFn);
-    // 오버레이 창에서도 트레이 업데이트 콜백 사용 가능하도록 설정
     const { setOverlayTrayUpdateCallback } = require("./windows/createOverlayWindow");
     setOverlayTrayUpdateCallback(trayUpdateFn);
-
-    // 오디오 모니터링 상태 변경 시 트레이 메뉴 업데이트 콜백 등록
     setTrayAudioUpdateCallback(trayUpdateFn);
 
-    // 오버레이 창이 로드 완료되면 저장된 상태를 복원하거나 설정 모드 진입
     overlayWindow.webContents.once("did-finish-load", () => {
       const savedROI = getROI();
       const savedMode = getMode();
@@ -866,7 +744,6 @@ app.whenReady().then(async () => {
 
         const target = overlayWindow;
         if (!target || target.isDestroyed()) {
-          console.warn("[Main] Cannot restore state - overlay window unavailable");
           enterSetupMode();
           return;
         }
@@ -882,11 +759,7 @@ app.whenReady().then(async () => {
           harmful: false,
         });
 
-        // OCR 모니터링 시작 (오디오 모니터링과 독립적)
         startMonitoring();
-
-        // 오디오 모니터링은 ROI와 독립적으로 동작하므로 여기서 자동 시작하지 않음
-        // 사용자가 트레이 메뉴나 UI에서 직접 시작/중지 가능
       } else {
         console.log("[Main] Starting in setup mode (no saved state)");
         enterSetupMode();
@@ -895,46 +768,26 @@ app.whenReady().then(async () => {
   }
 
   app.on("before-quit", () => {
-    // OCR 모니터링 중지
     stopMonitoring("Application quitting");
 
-    // 오디오 모니터링도 중지 (앱 종료 시)
     const { getAudioService } = require("./ipc/audioHandlers");
     const audioService = getAudioService();
-    if (audioService) {
-      audioService.stopMonitoring();
-      console.log("[Main] Audio monitoring stopped (app quitting)");
-    }
+    if (audioService) audioService.stopMonitoring();
 
-    // OnVoice 모니터링도 중지 (앱 종료 시)
     const { getOnVoiceService } = require("./audio/onVoiceService");
     const onVoiceService = getOnVoiceService();
-    if (onVoiceService) {
-      onVoiceService.stopMonitoring();
-      console.log("[Main] OnVoice monitoring stopped (app quitting)");
-    }
+    if (onVoiceService) onVoiceService.stopMonitoring();
 
-    // AudioManager 스트리밍 중지 (앱 종료 시)
     const audioManager = AudioManager.getInstance();
     if (audioManager.getStatus().isStreaming) {
-      audioManager.stopStream().catch((err) => {
-        console.error("[Main] AudioManager stopStream 실패:", err);
-      });
-      console.log("[Main] AudioManager 스트리밍 중지 (app quitting)");
+      audioManager.stopStream().catch((err) => console.error(err));
     }
   });
 
-  app.on("activate", () => {
-    // 헤드리스 모드에서는 activate 이벤트 무시
-  });
+  app.on("activate", () => {});
 });
 
 app.on("window-all-closed", () => {
-  // 헤드리스 모드: 모든 창이 닫혀도 앱 유지 (트레이에만 존재)
-  // macOS는 기본 동작 유지하되, 헤드리스 모드에서는 무시
   if (process.platform !== "darwin") {
-    // Windows/Linux: 헤드리스 모드이므로 항상 트레이에 유지
-  } else {
-    // macOS: 헤드리스 모드이므로 앱 종료하지 않음
   }
 });

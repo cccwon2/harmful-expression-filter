@@ -11,6 +11,9 @@ const edge = require("electron-edge-js");
 type EdgeCallback = (error: Error | null, result?: any) => void;
 type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 
+// C# 응답 대기 타임아웃 (15초)
+const BRIDGE_TIMEOUT_MS = 15000;
+
 export interface OCRResult {
   ok: boolean;
   text?: string;
@@ -76,9 +79,28 @@ function getBridgeFunc(): EdgeFunc {
 
 function callBridge(payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
+    let isCompleted = false;
+
+    // 1. 타임아웃 타이머 설정
+    const timer = setTimeout(() => {
+      if (!isCompleted) {
+        isCompleted = true;
+        const errorMsg = `[OnVoiceBridge] Timeout: C# Bridge did not respond within ${BRIDGE_TIMEOUT_MS}ms`;
+        console.error(errorMsg);
+        reject(new Error("BRIDGE_TIMEOUT"));
+      }
+    }, BRIDGE_TIMEOUT_MS);
+
     try {
       const func = getBridgeFunc();
+
+      // 2. C# 호출
       func(payload, (err: Error | null, result?: any) => {
+        if (isCompleted) return; // 이미 타임아웃 발생 시 콜백 무시
+
+        isCompleted = true;
+        clearTimeout(timer); // 타이머 해제
+
         if (err) return reject(err);
         if (result && result.ok === false) {
           // C# 내부 로직 에러 처리
@@ -87,7 +109,11 @@ function callBridge(payload: any): Promise<any> {
         resolve(result || {});
       });
     } catch (e) {
-      reject(e);
+      if (!isCompleted) {
+        isCompleted = true;
+        clearTimeout(timer);
+        reject(e);
+      }
     }
   });
 }
@@ -284,7 +310,7 @@ export const onVoiceBridge: OnVoiceBridge = {
         blurredImage: blurredImageBuffer,
       };
     } catch (error: any) {
-      console.error(`[OnVoiceBridge] OCR + 분석 오류:`, error);
+      console.error(`[OnVoiceBridge] OCR + 분석 오류:`, error.message);
       return {
         ok: false,
         error: error.message || "OCR + 분석 처리 중 오류 발생",
