@@ -212,6 +212,15 @@ class AudioManager {
     this.wsUrl = url;
   }
 
+  public getStatus(): AudioManagerStatus {
+    return {
+      isStreaming: this.isStreaming,
+      target: this.currentTarget || undefined,
+      pid: this.currentPid || undefined,
+      wsConnected: this.ws !== null && this.ws.readyState === WebSocket.OPEN,
+    };
+  }
+
   /**
    * -------------------------------------------------------
    * [수정됨] 유해 표현 감지 시 볼륨 조절 (Mute & Restore)
