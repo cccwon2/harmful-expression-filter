@@ -12,7 +12,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { registerServerHandlers, checkServerConnection } from './ipc/serverHandlers';
 import { registerAudioHandlers, getAudioService } from './ipc/audioHandlers';
-import { registerOnVoiceHandlers } from './ipc/onvoiceHandlers';
+import { registerOnVoiceHandlers } from './ipc/onVoiceHandlers';
 import { setTrayAudioUpdateCallback } from './tray';
 import AudioManager from './main/AudioManager';
 
@@ -901,7 +901,7 @@ app.whenReady().then(async () => {
     }
     
     // OnVoice 모니터링도 중지 (앱 종료 시)
-    const { getOnVoiceService } = require('./audio/onvoiceService');
+    const { getOnVoiceService } = require('./audio/onVoiceService');
     const onVoiceService = getOnVoiceService();
     if (onVoiceService) {
       onVoiceService.stopMonitoring();

@@ -1,18 +1,18 @@
 /**
  * OnVoice 서비스 (Electron Main Process)
- * 
+ *
  * OnVoice COM 브리지를 사용하여 프로세스별 오디오 캡처를 관리하고,
  * STT 및 유해 표현 분석을 수행합니다.
- * 
+ *
  * 현재는 Deepgram WebSocket을 직접 사용하거나, 서버 WebSocket을 통해 STT를 수행할 수 있습니다.
  */
 
-import { BrowserWindow } from 'electron';
-import WebSocket from 'ws';
-import { createOnVoiceCapture, OnVoiceCaptureHandle } from './onvoiceBridgeAdapter';
-import { sendTextForAnalysis, AnalysisResult } from '../utils/harmfulAnalysisClient';
-import { IPC_CHANNELS } from '../ipc/channels';
-import { findProcessByType } from '../utils/processFinder';
+import { BrowserWindow } from "electron";
+import WebSocket from "ws";
+import { createOnVoiceCapture, OnVoiceCaptureHandle } from "./onVoiceBridgeAdapter";
+import { sendTextForAnalysis, AnalysisResult } from "../utils/harmfulAnalysisClient";
+import { IPC_CHANNELS } from "../ipc/channels";
+import { findProcessByType } from "../utils/processFinder";
 
 export interface OnVoiceServiceOptions {
   /** Deepgram API 키 (Deepgram WebSocket 사용 시) */
@@ -30,12 +30,12 @@ export class OnVoiceService {
   private serverWs: WebSocket | null = null;
   private windows: Set<BrowserWindow> = new Set();
   private options: Required<OnVoiceServiceOptions>;
-  private targetPid: 'edge' | 'chrome' | 'discord' | number = 'chrome';
+  private targetPid: "edge" | "chrome" | "discord" | number = "chrome";
 
   constructor(initialWindow: BrowserWindow | null, options: OnVoiceServiceOptions = {}) {
     this.options = {
-      deepgramApiKey: options.deepgramApiKey || process.env.DEEPGRAM_API_KEY || '',
-      serverWebSocketUrl: options.serverWebSocketUrl || 'ws://127.0.0.1:8000/ws/audio',
+      deepgramApiKey: options.deepgramApiKey || process.env.DEEPGRAM_API_KEY || "",
+      serverWebSocketUrl: options.serverWebSocketUrl || "ws://127.0.0.1:8000/ws/audio",
       enableHarmfulAnalysis: options.enableHarmfulAnalysis !== false,
     };
 
@@ -63,12 +63,12 @@ export class OnVoiceService {
 
   /**
    * 모니터링 시작
-   * 
+   *
    * @param target 캡처할 프로세스 ('edge', 'chrome', 'discord', 또는 PID)
    */
-  async startMonitoring(target: 'edge' | 'chrome' | 'discord' | number = 'chrome'): Promise<void> {
+  async startMonitoring(target: "edge" | "chrome" | "discord" | number = "chrome"): Promise<void> {
     if (this.isMonitoring) {
-      console.log('[OnVoiceService] 이미 모니터링 중입니다.');
+      console.log("[OnVoiceService] 이미 모니터링 중입니다.");
       return;
     }
 
@@ -78,9 +78,7 @@ export class OnVoiceService {
       // 프로세스 PID 해결
       const pid = await findProcessByType(target);
       if (!pid || pid <= 0) {
-        const error = new Error(
-          `프로세스를 찾을 수 없습니다. (target: ${target})`
-        );
+        const error = new Error(`프로세스를 찾을 수 없습니다. (target: ${target})`);
         console.error(`[OnVoiceService] ${error.message}`);
         throw error;
       }
@@ -95,25 +93,25 @@ export class OnVoiceService {
       }
 
       // OnVoice 브리지 생성 및 시작 (새로운 bridge adapter 사용)
-              this.captureHandle = createOnVoiceCapture({
-                findPid: pid, // 숫자 PID로 전달
-                onData: (buf: Buffer) => {
-                  // DEBUG: 반복 로그 제거
-                  // console.log(`[OnVoiceService] 오디오 데이터 수신 (adapter): ${buf.length} bytes`);
-                  this.handleAudioData(buf);
-                },
+      this.captureHandle = createOnVoiceCapture({
+        findPid: pid, // 숫자 PID로 전달
+        onData: (buf: Buffer) => {
+          // DEBUG: 반복 로그 제거
+          // console.log(`[OnVoiceService] 오디오 데이터 수신 (adapter): ${buf.length} bytes`);
+          this.handleAudioData(buf);
+        },
         onError: (err: Error) => {
-          console.error('[OnVoiceService] 캡처 오류:', err);
+          console.error("[OnVoiceService] 캡처 오류:", err);
           this.stopMonitoring();
         },
       });
 
       this.captureHandle.start();
       this.isMonitoring = true;
-      console.log('[OnVoiceService] ✅ 모니터링 시작 완료');
+      console.log("[OnVoiceService] ✅ 모니터링 시작 완료");
       this.broadcastStatus();
     } catch (err) {
-      console.error('[OnVoiceService] 모니터링 시작 실패:', err);
+      console.error("[OnVoiceService] 모니터링 시작 실패:", err);
       this.stopMonitoring();
       throw err;
     }
@@ -127,7 +125,7 @@ export class OnVoiceService {
       return;
     }
 
-    console.log('[OnVoiceService] 모니터링 중지 중...');
+    console.log("[OnVoiceService] 모니터링 중지 중...");
 
     // 캡처 중지
     if (this.captureHandle) {
@@ -147,7 +145,7 @@ export class OnVoiceService {
     }
 
     this.isMonitoring = false;
-    console.log('[OnVoiceService] 모니터링 중지 완료');
+    console.log("[OnVoiceService] 모니터링 중지 완료");
     this.broadcastStatus();
   }
 
@@ -156,44 +154,44 @@ export class OnVoiceService {
    */
   private async connectDeepgram(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const url = 'wss://api.deepgram.com/v1/listen';
+      const url = "wss://api.deepgram.com/v1/listen";
       const ws = new WebSocket(url, {
         headers: {
           Authorization: `Token ${this.options.deepgramApiKey}`,
         },
       });
 
-      ws.on('open', () => {
-        console.log('[OnVoiceService] Deepgram WebSocket 연결 성공');
-        
+      ws.on("open", () => {
+        console.log("[OnVoiceService] Deepgram WebSocket 연결 성공");
+
         // 설정 전송
         const config = {
-          type: 'Settings',
+          type: "Settings",
           channels: 1,
           sample_rate: 16000,
-          encoding: 'linear16',
-          language: 'ko',
-          model: 'nova-2',
+          encoding: "linear16",
+          language: "ko",
+          model: "nova-2",
           punctuate: true,
           interim_results: true,
         };
-        
+
         ws.send(JSON.stringify(config));
         this.deepgramWs = ws;
         resolve();
       });
 
-      ws.on('message', (data: Buffer) => {
+      ws.on("message", (data: Buffer) => {
         this.handleDeepgramMessage(data);
       });
 
-      ws.on('error', (err) => {
-        console.error('[OnVoiceService] Deepgram WebSocket 오류:', err);
+      ws.on("error", (err) => {
+        console.error("[OnVoiceService] Deepgram WebSocket 오류:", err);
         reject(err);
       });
 
-      ws.on('close', () => {
-        console.log('[OnVoiceService] Deepgram WebSocket 연결 종료');
+      ws.on("close", () => {
+        console.log("[OnVoiceService] Deepgram WebSocket 연결 종료");
         if (this.isMonitoring) {
           // 재연결 시도
           setTimeout(() => {
@@ -211,25 +209,25 @@ export class OnVoiceService {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(this.options.serverWebSocketUrl);
 
-      ws.on('open', () => {
-        console.log('[OnVoiceService] 서버 WebSocket 연결 성공');
+      ws.on("open", () => {
+        console.log("[OnVoiceService] 서버 WebSocket 연결 성공");
         this.serverWs = ws;
         resolve();
       });
 
-      ws.on('message', (data: Buffer) => {
+      ws.on("message", (data: Buffer) => {
         // DEBUG: 반복 로그 제거 (버퍼링 메시지가 너무 많이 출력됨)
         // console.log(`[OnVoiceService] 서버로부터 메시지 수신: ${data.length} bytes`);
         this.handleServerMessage(data);
       });
 
-      ws.on('error', (err) => {
-        console.error('[OnVoiceService] 서버 WebSocket 오류:', err);
+      ws.on("error", (err) => {
+        console.error("[OnVoiceService] 서버 WebSocket 오류:", err);
         reject(err);
       });
 
-      ws.on('close', () => {
-        console.log('[OnVoiceService] 서버 WebSocket 연결 종료');
+      ws.on("close", () => {
+        console.log("[OnVoiceService] 서버 WebSocket 연결 종료");
         if (this.isMonitoring) {
           // 재연결 시도
           setTimeout(() => {
@@ -244,15 +242,15 @@ export class OnVoiceService {
    * 오디오 데이터 처리 (WebSocket으로 전송)
    */
   private static _audioDataCallCount = 0;
-  
+
   private handleAudioData(buf: Buffer): void {
     const callId = ++OnVoiceService._audioDataCallCount;
     const shouldLog = callId <= 3 || callId % 100 === 0;
-    
+
     if (shouldLog) {
       console.log(`[OnVoiceService] 🎵 handleAudioData 호출됨! (callId=${callId}, size=${buf.length} bytes)`);
     }
-    
+
     try {
       if (this.deepgramWs && this.deepgramWs.readyState === WebSocket.OPEN) {
         if (shouldLog) {
@@ -273,8 +271,12 @@ export class OnVoiceService {
       } else {
         // 연결 문제는 경고로 출력
         if (shouldLog) {
-          console.warn(`[OnVoiceService] ⚠️ WebSocket 연결이 없어 오디오 데이터를 전송할 수 없습니다. (callId=${callId})`);
-          console.warn(`[OnVoiceService] Deepgram 상태: ${this.deepgramWs?.readyState}, 서버 상태: ${this.serverWs?.readyState}`);
+          console.warn(
+            `[OnVoiceService] ⚠️ WebSocket 연결이 없어 오디오 데이터를 전송할 수 없습니다. (callId=${callId})`
+          );
+          console.warn(
+            `[OnVoiceService] Deepgram 상태: ${this.deepgramWs?.readyState}, 서버 상태: ${this.serverWs?.readyState}`
+          );
         }
       }
     } catch (err) {
@@ -288,14 +290,14 @@ export class OnVoiceService {
   private handleDeepgramMessage(data: Buffer): void {
     try {
       const message = JSON.parse(data.toString());
-      
-      if (message.type === 'Results') {
+
+      if (message.type === "Results") {
         const transcript = message.channel?.alternatives?.[0]?.transcript;
         const isFinal = message.is_final;
-        
+
         if (transcript && transcript.trim()) {
-          console.log(`[OnVoiceService] [STT${isFinal ? '' : '-interim'}] ${transcript}`);
-          
+          console.log(`[OnVoiceService] [STT${isFinal ? "" : "-interim"}] ${transcript}`);
+
           // 최종 결과만 분석
           if (isFinal && this.options.enableHarmfulAnalysis) {
             this.analyzeText(transcript);
@@ -303,7 +305,7 @@ export class OnVoiceService {
         }
       }
     } catch (err) {
-      console.error('[OnVoiceService] Deepgram 메시지 파싱 오류:', err);
+      console.error("[OnVoiceService] Deepgram 메시지 파싱 오류:", err);
     }
   }
 
@@ -314,36 +316,38 @@ export class OnVoiceService {
     try {
       const messageStr = data.toString();
       const message = JSON.parse(messageStr);
-      
+
       // 서버에서 이미 STT + 분석이 완료된 경우
       // 서버 응답 형식: status="ok", text, is_harmful, confidence 등
-      if (message.status === 'ok' && message.text) {
+      if (message.status === "ok" && message.text) {
         const text = message.text;
         const isHarmful = message.is_harmful === 1 || message.is_harmful === true;
         const confidence = message.confidence || 0;
         const rawText = message.raw_text || text;
-        
+
         if (text && text.trim()) {
           console.log(`[OnVoiceService] [STT] ${text} (confidence: ${confidence.toFixed(2)})`);
-          
+
           if (isHarmful) {
             // 서버에서 키워드 정보를 제공하지 않으므로, 텍스트 전체를 사용
             const matchedKeywords = message.matched_keywords || [rawText];
-            console.warn(`[OnVoiceService] 🚨 유해 표현 감지 (confidence: ${confidence.toFixed(2)}): ${matchedKeywords.join(', ')}`);
+            console.warn(
+              `[OnVoiceService] 🚨 유해 표현 감지 (confidence: ${confidence.toFixed(2)}): ${matchedKeywords.join(", ")}`
+            );
             this.broadcastHarmfulDetection(text, matchedKeywords);
           }
         }
-      } else if (message.status === 'buffering') {
+      } else if (message.status === "buffering") {
         // 버퍼링 메시지는 DEBUG 레벨로만 출력 (너무 많이 출력됨)
         // console.debug(`[OnVoiceService] 서버 버퍼링 중... (size: ${message.size || 'unknown'})`);
-      } else if (message.status === 'connected') {
-        console.log(`[OnVoiceService] ✅ 서버 연결 확인: ${message.message || ''}`);
-      } else if (message.status === 'error') {
-        console.error(`[OnVoiceService] ❌ 서버 오류: ${message.detail || message.message || 'Unknown error'}`);
+      } else if (message.status === "connected") {
+        console.log(`[OnVoiceService] ✅ 서버 연결 확인: ${message.message || ""}`);
+      } else if (message.status === "error") {
+        console.error(`[OnVoiceService] ❌ 서버 오류: ${message.detail || message.message || "Unknown error"}`);
       }
     } catch (err) {
-      console.error('[OnVoiceService] 서버 메시지 파싱 오류:', err);
-      console.error('[OnVoiceService] 원본 데이터:', data.toString());
+      console.error("[OnVoiceService] 서버 메시지 파싱 오류:", err);
+      console.error("[OnVoiceService] 원본 데이터:", data.toString());
     }
   }
 
@@ -353,18 +357,18 @@ export class OnVoiceService {
   private async analyzeText(text: string): Promise<void> {
     try {
       const result = await sendTextForAnalysis(text);
-      
-      if ('error' in result) {
-        console.error('[OnVoiceService] 분석 오류:', result.message);
+
+      if ("error" in result) {
+        console.error("[OnVoiceService] 분석 오류:", result.message);
         return;
       }
 
       if (result.isHarmful) {
-        console.warn(`[OnVoiceService] 🚨 유해 표현 감지: ${result.matchedKeywords.join(', ')}`);
+        console.warn(`[OnVoiceService] 🚨 유해 표현 감지: ${result.matchedKeywords.join(", ")}`);
         this.broadcastHarmfulDetection(text, result.matchedKeywords);
       }
     } catch (err) {
-      console.error('[OnVoiceService] 텍스트 분석 실패:', err);
+      console.error("[OnVoiceService] 텍스트 분석 실패:", err);
     }
   }
 
@@ -422,4 +426,3 @@ export function getOnVoiceService(): OnVoiceService | null {
 export function setOnVoiceService(service: OnVoiceService | null): void {
   globalOnVoiceService = service;
 }
-

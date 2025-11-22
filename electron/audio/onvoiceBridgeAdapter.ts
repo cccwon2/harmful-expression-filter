@@ -17,8 +17,6 @@ export interface CreateOnVoiceCaptureOptions {
    * - 'discord': Discord 프로세스 자동 검색 (FindDiscordProcess)
    * - number: 직접 PID 지정
    * - function: 커스텀 검색 함수 (새로운 bridge에서는 지원하지 않음)
-   *
-   * TODO: 새로운 bridge에서는 PID를 직접 받도록 수정 필요
    */
   findPid?: "edge" | "chrome" | "discord" | number | ((capture: any) => number);
   /** PCM 오디오 데이터 수신 콜백 (Buffer) */
@@ -96,9 +94,33 @@ export function createOnVoiceCapture(options: CreateOnVoiceCaptureOptions): OnVo
           if (typeof findPid === "number") {
             pid = findPid;
             console.log(`[OnVoiceBridgeAdapter] PID 직접 지정: ${pid} (타입: ${typeof pid})`);
+          } else if (typeof findPid === "string") {
+            // 문자열인 경우 onVoiceBridge.findProcess 사용
+            console.log(`[OnVoiceBridgeAdapter] 프로세스 찾는 중: ${findPid}...`);
+            try {
+              pid = await onVoiceBridge.findProcess(findPid);
+              if (pid <= 0) {
+                const error = new Error(`프로세스를 찾을 수 없습니다: ${findPid}`);
+                console.error(`[OnVoiceBridgeAdapter] ${error.message}`);
+                if (onError) {
+                  onError(error);
+                }
+                return;
+              }
+              console.log(`[OnVoiceBridgeAdapter] 프로세스 발견: PID=${pid}`);
+            } catch (err) {
+              const error = err instanceof Error ? err : new Error(String(err));
+              console.error(`[OnVoiceBridgeAdapter] 프로세스 찾기 실패: ${findPid}`, error);
+              if (onError) {
+                onError(error);
+              }
+              return;
+            }
           } else {
-            // TODO: 프로세스 자동 검색 구현 필요
-            const error = new Error("프로세스 자동 검색은 아직 구현되지 않았습니다. PID를 직접 지정하세요.");
+            // function 타입은 지원하지 않음
+            const error = new Error(
+              "커스텀 검색 함수는 지원하지 않습니다. 'edge', 'chrome', 'discord' 또는 PID를 사용하세요."
+            );
             console.error(`[OnVoiceBridgeAdapter] ${error.message}`);
             if (onError) {
               onError(error);
@@ -117,7 +139,7 @@ export function createOnVoiceCapture(options: CreateOnVoiceCaptureOptions): OnVo
 
           console.log(`[OnVoiceBridgeAdapter] 캡처 시작 시도: PID=${pid} (유효성 검증 통과)`);
           currentPid = pid;
-          
+
           try {
             await onVoiceBridge.startCapture(pid);
             isCapturing = true;
