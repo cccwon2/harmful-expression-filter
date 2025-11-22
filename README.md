@@ -92,7 +92,7 @@ harmful-expression-filter/
 │   └── ipc/                 # IPC 핸들러
 │       └── onVoiceHandlers.ts       # OnVoice IPC 핸들러
 ├── dotnet/                  # C# COM Bridge
-│   └── OnVoiceComBridge/    # .NET 8 프로젝트
+│   └── OnVoiceComBridge/    # .NET 6 프로젝트
 │       └── Startup.cs       # Windows SDK OCR + OnVoice COM 래퍼
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```

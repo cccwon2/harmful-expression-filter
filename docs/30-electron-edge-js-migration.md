@@ -19,7 +19,7 @@ OnVoiceAudioBridge.OnVoiceCapture (COM)
 ## 파일 구조
 
 ### C# 프로젝트
-- `dotnet/OnVoiceComBridge/OnVoiceComBridge.csproj` - .NET 8 프로젝트 파일
+- `dotnet/OnVoiceComBridge/OnVoiceComBridge.csproj` - .NET 6 프로젝트 파일
 - `dotnet/OnVoiceComBridge/Startup.cs` - electron-edge-js 엔트리포인트 + COM 래퍼
 
 ### Electron Main Process

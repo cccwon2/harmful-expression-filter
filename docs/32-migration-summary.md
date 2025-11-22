@@ -3,7 +3,7 @@
 ## 완료된 작업
 
 ### 1. 빌드 시스템 ✅
-- `.NET 8` 프로젝트 생성 (`dotnet/OnVoiceComBridge/`)
+- `.NET 6` 프로젝트 생성 (`dotnet/OnVoiceComBridge/`)
 - DLL 자동 복사 스크립트 (`scripts/copy-dll.js`)
 - 통합 빌드 명령어 (`npm run build:all`)
 
@@ -105,7 +105,7 @@ TEST_PID=12345 npx tsx electron/test/test_onvoice_bridge.ts
 ```
 dotnet/
   OnVoiceComBridge/
-    OnVoiceComBridge.csproj    # .NET 8 프로젝트
+    OnVoiceComBridge.csproj    # .NET 6 프로젝트
     Startup.cs                  # electron-edge-js 엔트리포인트 + COM 래퍼
 
 electron/
