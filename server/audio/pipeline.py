@@ -45,7 +45,7 @@ class AudioProcessingPipeline:
             raise ValueError("DEEPGRAM_API_KEY가 설정되지 않았습니다.")
 
         self.api_key = DEEPGRAM_API_KEY
-        self.keywords = keywords or ["새끼", "시발", "씨발", "병신", "존나", "미친", "니미", "좆", "도 아니고"]
+        self.keywords = keywords or ["새끼", "쉐끼", "시끼", "시발", "씨발", "병신", "존나", "미친", "니미", "좆", "도 아니고"]
         
         # Deepgram 클라이언트 및 연결 객체
         self.dg_client = DeepgramClient(self.api_key)

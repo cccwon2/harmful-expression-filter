@@ -8,7 +8,7 @@ export type OverlayMode = 'setup' | 'detect' | 'alert';
 export interface StoreData {
   roi: ROI | null;
   mode: OverlayMode;
-  volumeLevel?: number; // 0~9 (0 = 무소음, 9 = 90%), 기본값: 1 (10%)
+  volumeLevel?: number; // 1~9 (1 = 10%, 9 = 90%), 기본값: 1 (10%)
 }
 
 const getStorePath = () => {
@@ -79,12 +79,14 @@ export function updateStore(updater: (state: StoreData) => StoreData) {
 
 export function getVolumeLevel(): number {
   const data = loadData();
-  return data.volumeLevel ?? defaultData.volumeLevel ?? 1;
+  const level = data.volumeLevel ?? defaultData.volumeLevel ?? 1;
+  // 기존에 0으로 설정된 값이 있다면 1로 변경
+  return Math.max(1, level);
 }
 
 export function setVolumeLevel(level: number): void {
   const data = loadData();
-  // 0~9 범위로 제한
-  data.volumeLevel = Math.max(0, Math.min(9, Math.round(level)));
+  // 1~9 범위로 제한 (무소음 0% 제외)
+  data.volumeLevel = Math.max(1, Math.min(9, Math.round(level)));
   saveData(data);
 }

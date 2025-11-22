@@ -408,15 +408,6 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         label: '볼륨 조절',
         submenu: [
           {
-            label: '0 (무소음)',
-            type: 'radio',
-            checked: getVolumeLevel() === 0,
-            click: async () => {
-              await setTrayVolumeLevel(0);
-              updateContextMenu();
-            },
-          },
-          {
             label: '1 (10%)',
             type: 'radio',
             checked: getVolumeLevel() === 1,

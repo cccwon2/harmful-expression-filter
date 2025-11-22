@@ -2,7 +2,7 @@
  * Phase 5: Windows 볼륨 제어 모듈
  *
  * 유해 표현 감지 시 특정 앱의 볼륨을 전체 볼륨 기준으로
- * 0(무소음) ~ 9(90%)까지 설정할 수 있습니다.
+ * 1(10%) ~ 9(90%)까지 설정할 수 있습니다.
  * 기본값: 1(10%)
  * 
  * 감시 대상 앱(Chrome, Edge, Discord)의 볼륨만 조절합니다.
@@ -10,13 +10,13 @@
 
 import soundMixer, { Device, DeviceType, AudioSession } from 'native-sound-mixer';
 
-const MIN_VOLUME_LEVEL = 0;  // 무소음
+const MIN_VOLUME_LEVEL = 1;  // 10% (무소음 제외)
 const MAX_VOLUME_LEVEL = 9;  // 90%
 const DEFAULT_VOLUME_LEVEL = 1; // 10%
 
 export class VolumeController {
   private defaultDevice: Device | null = null;
-  private currentVolumeLevel: number = DEFAULT_VOLUME_LEVEL; // 0 ~ 9 (0% = 무소음, 9 = 90%)
+  private currentVolumeLevel: number = DEFAULT_VOLUME_LEVEL; // 1 ~ 9 (1 = 10%, 9 = 90%)
   private targetAppName: string | null = null; // 대상 앱 이름 (예: "chrome", "edge", "discord")
   private targetAppSearchNames: string[] = []; // 검색할 앱 이름 목록 (Edge의 경우 ["edge", "msedge"] 등)
 
@@ -43,15 +43,15 @@ export class VolumeController {
   }
 
   /**
-   * 볼륨 레벨을 퍼센트로 변환 (0~9 → 0%~90%)
-   * 0 = 0% (무소음)
+   * 볼륨 레벨을 퍼센트로 변환 (1~9 → 10%~90%)
    * 1 = 10%
+   * 2 = 20%
    * ...
    * 9 = 90%
    */
   private volumeLevelToPercent(level: number): number {
     const clampedLevel = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
-    return clampedLevel * 10; // 0~9 → 0%~90%
+    return clampedLevel * 10; // 1~9 → 10%~90%
   }
 
   /**
@@ -59,7 +59,7 @@ export class VolumeController {
    */
   private volumeLevelToNormalized(level: number): number {
     const percent = this.volumeLevelToPercent(level);
-    return percent / 100; // 0.0 ~ 0.9
+    return percent / 100; // 0.1 ~ 0.9 (1~9 레벨을 10%~90%로 변환)
   }
 
   /**
@@ -150,10 +150,10 @@ export class VolumeController {
   }
 
   /**
-   * 볼륨 레벨 설정 (0~9: 0% = 무소음, 9 = 90%)
+   * 볼륨 레벨 설정 (1~9: 1 = 10%, 9 = 90%)
    */
   async setVolumeLevel(level: number): Promise<void> {
-    // 레벨을 0~9 범위로 제한
+    // 레벨을 1~9 범위로 제한 (무소음 제외)
     const clampedLevel = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
     const targetVolume = this.volumeLevelToNormalized(clampedLevel); // 0.0 ~ 0.9
 
@@ -178,7 +178,7 @@ export class VolumeController {
   }
 
   /**
-   * 현재 볼륨 레벨을 퍼센트로 반환 (0%~90%)
+   * 현재 볼륨 레벨을 퍼센트로 반환 (10%~90%)
    */
   getCurrentVolumePercent(): number {
     return this.volumeLevelToPercent(this.currentVolumeLevel);
