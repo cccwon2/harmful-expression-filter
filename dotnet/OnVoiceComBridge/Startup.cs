@@ -1,9 +1,20 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Reflection; 
+using System.Reflection;
+using System.Text;
+using System.Net.Http;
+using System.Text.Json;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
+using Microsoft.Windows.AI;
+using Microsoft.Windows.AI.Imaging; 
 
 namespace OnVoiceComBridge
 {
@@ -20,6 +31,11 @@ namespace OnVoiceComBridge
         private static Func<object, Task<object>>? _audioCallback;
         private static SynchronizationContext? _mainThreadContext;
         private static int _mainThreadId = -1;
+        
+        // OCR 관련 필드
+        private static TextRecognizer? _textRecognizer;
+        private static readonly HttpClient _httpClient = new HttpClient();
+        private static string _serverUrl = LoadServerUrlFromEnv();
 
         public async Task<object> Invoke(dynamic input)
         {
@@ -147,6 +163,94 @@ namespace OnVoiceComBridge
                         }
                     }
 
+                case "ocr":
+                    try
+                    {
+                        byte[] imageBytes = (byte[])input.imageData;
+                        Console.WriteLine($"[OnVoiceComBridge] OCR 요청: 이미지 크기 {imageBytes.Length} bytes");
+                        
+                        // SoftwareBitmap으로 변환
+                        SoftwareBitmap? softwareBitmap = await ConvertBytesToSoftwareBitmap(imageBytes);
+                        if (softwareBitmap == null)
+                        {
+                            return new { ok = false, error = "이미지 변환 실패" };
+                        }
+                        
+                        // OCR 수행
+                        string recognizedText = await RecognizeTextFromSoftwareBitmap(softwareBitmap);
+                        Console.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText.Length}자 추출");
+                        
+                        // 서버에 유해성 검사 요청
+                        var analysisResult = await AnalyzeTextForHarmfulContent(recognizedText);
+                        
+                        return new { 
+                            ok = true, 
+                            text = recognizedText,
+                            isHarmful = analysisResult.isHarmful,
+                            matchedKeywords = analysisResult.matchedKeywords,
+                            confidence = analysisResult.confidence
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[OnVoiceComBridge] ❌ OCR 오류: {ex.Message}");
+                        return new { ok = false, error = ex.Message };
+                    }
+
+                case "ocrAndBlur":
+                    try
+                    {
+                        byte[] imageBytes = (byte[])input.imageData;
+                        var roi = input.roi; // { x, y, width, height }
+                        int roiX = Convert.ToInt32(roi.x);
+                        int roiY = Convert.ToInt32(roi.y);
+                        int roiWidth = Convert.ToInt32(roi.width);
+                        int roiHeight = Convert.ToInt32(roi.height);
+                        
+                        Console.WriteLine($"[OnVoiceComBridge] OCR + 블러 요청: ROI({roiX}, {roiY}, {roiWidth}x{roiHeight})");
+                        
+                        // SoftwareBitmap으로 변환
+                        SoftwareBitmap? softwareBitmap = await ConvertBytesToSoftwareBitmap(imageBytes);
+                        if (softwareBitmap == null)
+                        {
+                            return new { ok = false, error = "이미지 변환 실패" };
+                        }
+                        
+                        // OCR 수행
+                        string recognizedText = await RecognizeTextFromSoftwareBitmap(softwareBitmap);
+                        Console.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText}");
+                        
+                        // 서버에 유해성 검사 요청
+                        var analysisResult = await AnalyzeTextForHarmfulContent(recognizedText);
+                        
+                        byte[]? blurredImage = null;
+                        if (analysisResult.isHarmful)
+                        {
+                            Console.WriteLine($"[OnVoiceComBridge] 🚨 유해 표현 감지: {string.Join(", ", analysisResult.matchedKeywords)}");
+                            // ROI 영역 블러 처리
+                            blurredImage = await BlurROI(imageBytes, roiX, roiY, roiWidth, roiHeight);
+                        }
+                        
+                        return new { 
+                            ok = true, 
+                            text = recognizedText,
+                            isHarmful = analysisResult.isHarmful,
+                            matchedKeywords = analysisResult.matchedKeywords,
+                            confidence = analysisResult.confidence,
+                            blurredImage = blurredImage
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[OnVoiceComBridge] ❌ OCR + 블러 오류: {ex.Message}");
+                        return new { ok = false, error = ex.Message };
+                    }
+
+                case "setServerUrl":
+                    _serverUrl = (string)input.url ?? "http://127.0.0.1:8000";
+                    Console.WriteLine($"[OnVoiceComBridge] 서버 URL 설정: {_serverUrl}");
+                    return new { ok = true, url = _serverUrl };
+
                 default:
                     return new { ok = false, error = $"Unknown command: {command}" };
             }
@@ -229,6 +333,354 @@ namespace OnVoiceComBridge
         private static void InvokeJs(Func<object, Task<object>> cb, byte[] buffer)
         {
              try { cb(new { type = "audio", data = buffer }); } catch { }
+        }
+
+        // ========== .env 파일 읽기 ==========
+        
+        /// <summary>
+        /// 루트 디렉토리의 .env 파일에서 SERVER_URL을 읽어옵니다.
+        /// </summary>
+        private static string LoadServerUrlFromEnv()
+        {
+            try
+            {
+                // 루트 디렉토리 찾기 (Assembly 위치 기준으로 상위 디렉토리 탐색)
+                string? rootDir = FindRootDirectory();
+                if (rootDir == null)
+                {
+                    Console.WriteLine("[OnVoiceComBridge] 루트 디렉토리를 찾을 수 없습니다. 기본 SERVER_URL 사용: http://127.0.0.1:8000");
+                    return "http://127.0.0.1:8000";
+                }
+
+                string envPath = Path.Combine(rootDir, ".env");
+                if (!File.Exists(envPath))
+                {
+                    Console.WriteLine($"[OnVoiceComBridge] .env 파일을 찾을 수 없습니다: {envPath}");
+                    Console.WriteLine("[OnVoiceComBridge] 기본 SERVER_URL 사용: http://127.0.0.1:8000");
+                    return "http://127.0.0.1:8000";
+                }
+
+                // .env 파일 읽기 및 파싱
+                var envVars = ParseEnvFile(envPath);
+                if (envVars.TryGetValue("SERVER_URL", out string? serverUrl) && !string.IsNullOrWhiteSpace(serverUrl))
+                {
+                    Console.WriteLine($"[OnVoiceComBridge] .env에서 SERVER_URL 로드: {serverUrl}");
+                    return serverUrl.Trim();
+                }
+
+                Console.WriteLine("[OnVoiceComBridge] .env 파일에 SERVER_URL이 없습니다. 기본값 사용: http://127.0.0.1:8000");
+                return "http://127.0.0.1:8000";
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] .env 파일 읽기 오류: {ex.Message}");
+                Console.WriteLine("[OnVoiceComBridge] 기본 SERVER_URL 사용: http://127.0.0.1:8000");
+                return "http://127.0.0.1:8000";
+            }
+        }
+
+        /// <summary>
+        /// 프로젝트 루트 디렉토리를 찾습니다.
+        /// </summary>
+        private static string? FindRootDirectory()
+        {
+            try
+            {
+                // Assembly 위치에서 시작하여 상위 디렉토리로 탐색
+                string? currentDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                if (currentDir == null) return null;
+
+                // 최대 5단계 상위 디렉토리까지 탐색
+                for (int i = 0; i < 5; i++)
+                {
+                    if (currentDir == null) break;
+                    
+                    // .env 파일이 있거나 package.json이 있는 디렉토리를 루트로 간주
+                    string envPath = Path.Combine(currentDir, ".env");
+                    string packageJsonPath = Path.Combine(currentDir, "package.json");
+                    
+                    if (File.Exists(envPath) || File.Exists(packageJsonPath))
+                    {
+                        return currentDir;
+                    }
+                    
+                    // 상위 디렉토리로 이동
+                    var parent = Directory.GetParent(currentDir);
+                    if (parent == null) break;
+                    currentDir = parent.FullName;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] 루트 디렉토리 찾기 오류: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// .env 파일을 파싱하여 키-값 쌍을 반환합니다.
+        /// </summary>
+        private static Dictionary<string, string> ParseEnvFile(string filePath)
+        {
+            var envVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            
+            if (!File.Exists(filePath))
+            {
+                return envVars;
+            }
+
+            try
+            {
+                var lines = File.ReadAllLines(filePath);
+                foreach (var line in lines)
+                {
+                    // 주석 제거
+                    var trimmedLine = line.Trim();
+                    if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("#"))
+                    {
+                        continue;
+                    }
+
+                    // KEY=VALUE 형식 파싱
+                    var equalIndex = trimmedLine.IndexOf('=');
+                    if (equalIndex <= 0) continue;
+
+                    var key = trimmedLine.Substring(0, equalIndex).Trim();
+                    var value = trimmedLine.Substring(equalIndex + 1).Trim();
+
+                    // 따옴표 제거 (선택적)
+                    if (value.Length >= 2)
+                    {
+                        if ((value.StartsWith("\"") && value.EndsWith("\"")) ||
+                            (value.StartsWith("'") && value.EndsWith("'")))
+                        {
+                            value = value.Substring(1, value.Length - 2);
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(key))
+                    {
+                        envVars[key] = value;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] .env 파일 파싱 오류: {ex.Message}");
+            }
+
+            return envVars;
+        }
+
+        // ========== OCR 관련 메서드 ==========
+        
+        /// <summary>
+        /// TextRecognizer 모델이 준비되었는지 확인하고 준비
+        /// </summary>
+        public static async Task<TextRecognizer> EnsureModelIsReady()
+        {
+            if (TextRecognizer.GetReadyState() == AIFeatureReadyState.NotReady)
+            {
+                var loadResult = await TextRecognizer.EnsureReadyAsync();
+                if (loadResult.Status != AIFeatureReadyResultState.Success)
+                {
+                    throw new Exception(loadResult.ExtendedError().Message);
+                }
+            }
+
+            if (_textRecognizer == null)
+            {
+                _textRecognizer = await TextRecognizer.CreateAsync();
+            }
+
+            return _textRecognizer;
+        }
+
+        /// <summary>
+        /// SoftwareBitmap에서 텍스트 인식
+        /// </summary>
+        public static async Task<string> RecognizeTextFromSoftwareBitmap(SoftwareBitmap bitmap)
+        {
+            TextRecognizer textRecognizer = await EnsureModelIsReady();
+            ImageBuffer imageBuffer = ImageBuffer.CreateBufferAttachedToBitmap(bitmap);
+            RecognizedText recognizedText = textRecognizer.RecognizeTextFromImage(imageBuffer);
+            StringBuilder stringBuilder = new StringBuilder();
+
+            foreach (var line in recognizedText.Lines)
+            {
+                stringBuilder.AppendLine(line.Text);
+            }
+
+            return stringBuilder.ToString().Trim();
+        }
+
+        /// <summary>
+        /// 바이트 배열을 SoftwareBitmap으로 변환
+        /// </summary>
+        private static async Task<SoftwareBitmap?> ConvertBytesToSoftwareBitmap(byte[] imageBytes)
+        {
+            try
+            {
+                using (var stream = new InMemoryRandomAccessStream())
+                {
+                    await stream.WriteAsync(imageBytes.AsBuffer());
+                    stream.Seek(0);
+
+                    var decoder = await BitmapDecoder.CreateAsync(stream);
+                    var bitmap = await decoder.GetSoftwareBitmapAsync();
+                    return bitmap;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] 이미지 변환 오류: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 서버에 텍스트를 전송하여 유해성 검사
+        /// </summary>
+        private static async Task<(bool isHarmful, string[] matchedKeywords, double confidence)> AnalyzeTextForHarmfulContent(string text)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return (false, Array.Empty<string>(), 0.0);
+                }
+
+                var requestBody = new
+                {
+                    text = text.Trim(),
+                    use_ai = false
+                };
+
+                var json = JsonSerializer.Serialize(requestBody);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync($"{_serverUrl}/analyze", content);
+                response.EnsureSuccessStatusCode();
+
+                var responseJson = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<JsonElement>(responseJson);
+
+                bool isHarmful = result.GetProperty("has_violation").GetBoolean();
+                double confidence = result.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : (isHarmful ? 1.0 : 0.0);
+                
+                var matchedKeywords = new List<string>();
+                if (result.TryGetProperty("matched_keywords", out var keywords))
+                {
+                    foreach (var keyword in keywords.EnumerateArray())
+                    {
+                        matchedKeywords.Add(keyword.GetString() ?? "");
+                    }
+                }
+
+                return (isHarmful, matchedKeywords.ToArray(), confidence);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] 유해성 검사 오류: {ex.Message}");
+                // 오류 시 안전하게 false 반환
+                return (false, Array.Empty<string>(), 0.0);
+            }
+        }
+
+        /// <summary>
+        /// ROI 영역을 블러 처리
+        /// </summary>
+        private static async Task<byte[]> BlurROI(byte[] imageBytes, int x, int y, int width, int height)
+        {
+            try
+            {
+                using (var ms = new MemoryStream(imageBytes))
+                using (var originalImage = new Bitmap(ms))
+                {
+                    // ROI 영역만 블러 처리
+                    using (var blurredRegion = new Bitmap(width, height))
+                    using (var graphics = Graphics.FromImage(blurredRegion))
+                    {
+                        // 원본 이미지에서 ROI 영역 추출
+                        graphics.DrawImage(originalImage, 
+                            new Rectangle(0, 0, width, height),
+                            new Rectangle(x, y, width, height),
+                            GraphicsUnit.Pixel);
+
+                        // 간단한 블러 효과 (가우시안 블러 대신 박스 블러 사용)
+                        // System.Drawing에는 가우시안 블러가 없으므로 간단한 평균 필터 사용
+                        var blurred = ApplyBoxBlur(blurredRegion, 15); // 블러 강도
+
+                        // 블러 처리된 영역을 원본 이미지에 다시 그리기
+                        using (var finalGraphics = Graphics.FromImage(originalImage))
+                        {
+                            finalGraphics.DrawImage(blurred, x, y);
+                        }
+                    }
+
+                    // 결과를 바이트 배열로 변환
+                    using (var resultStream = new MemoryStream())
+                    {
+                        originalImage.Save(resultStream, ImageFormat.Png);
+                        return resultStream.ToArray();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] 블러 처리 오류: {ex.Message}");
+                // 오류 시 원본 이미지 반환
+                return imageBytes;
+            }
+        }
+
+        /// <summary>
+        /// 박스 블러 필터 적용 (간단한 블러 효과)
+        /// </summary>
+        private static Bitmap ApplyBoxBlur(Bitmap source, int radius)
+        {
+            int width = source.Width;
+            int height = source.Height;
+            var result = new Bitmap(width, height);
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int r = 0, g = 0, b = 0, count = 0;
+
+                    // 주변 픽셀들의 평균 계산
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        for (int dx = -radius; dx <= radius; dx++)
+                        {
+                            int px = x + dx;
+                            int py = y + dy;
+
+                            if (px >= 0 && px < width && py >= 0 && py < height)
+                            {
+                                var pixel = source.GetPixel(px, py);
+                                r += pixel.R;
+                                g += pixel.G;
+                                b += pixel.B;
+                                count++;
+                            }
+                        }
+                    }
+
+                    if (count > 0)
+                    {
+                        r /= count;
+                        g /= count;
+                        b /= count;
+                        result.SetPixel(x, y, Color.FromArgb(r, g, b));
+                    }
+                }
+            }
+
+            return result;
         }
     }
 
