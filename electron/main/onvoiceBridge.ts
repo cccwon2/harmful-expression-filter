@@ -254,10 +254,17 @@ export const onVoiceBridge: OnVoiceBridge = {
       const result = await callBridge(payload);
 
       if (!result || result.ok === false) {
+        console.error(`[OnVoiceBridge] OCR + 분석 실패:`, result?.error || "알 수 없는 오류");
         return {
           ok: false,
           error: result?.error || "OCR + 분석 실패",
         };
+      }
+
+      // OCR 결과 검증 및 로그
+      const extractedText = result.text || "";
+      if (!extractedText || extractedText.trim().length === 0) {
+        console.log(`[OnVoiceBridge] OCR 완료: 텍스트 추출 없음 (isHarmful: ${result.isHarmful || false})`);
       }
 
       // blurredImage가 있으면 Buffer로 변환
@@ -268,7 +275,7 @@ export const onVoiceBridge: OnVoiceBridge = {
 
       return {
         ok: true,
-        text: result.text || "",
+        text: extractedText,
         isHarmful: result.isHarmful || false,
         matchedKeywords: result.matchedKeywords || [],
         confidence: result.confidence || 0,

@@ -230,7 +230,7 @@ app.whenReady().then(async () => {
       const requestTime = Date.now() - requestStartTime;
 
       if (!result.ok) {
-        console.error(`[OCR] Windows OCR 실패: ${result.error}`);
+        console.error(`[OCR] Windows OCR 실패 (${requestTime}ms): ${result.error}`);
         return {
           success: false,
           error: result.error || "OCR 처리 실패",
@@ -238,7 +238,20 @@ app.whenReady().then(async () => {
       }
 
       // 결과를 서버 응답 형식으로 변환
-      const texts = result.text ? result.text.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
+      const rawText = result.text || "";
+      const texts = rawText ? rawText.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
+
+      // OCR 결과 로그 (텍스트 추출 성공 여부)
+      if (texts.length === 0 && rawText.length === 0) {
+        console.log(`[OCR] Windows OCR 완료 (${requestTime}ms): 텍스트 없음`);
+      } else if (texts.length === 0 && rawText.length > 0) {
+        console.warn(
+          `[OCR] Windows OCR 완료 (${requestTime}ms): 원본 텍스트는 있으나 유효한 라인 없음 - "${rawText.substring(
+            0,
+            50
+          )}..."`
+        );
+      }
 
       return {
         success: true,
@@ -335,14 +348,18 @@ app.whenReady().then(async () => {
       const imageBuffer = croppedImage.toPNG();
 
       // 4. 서버로 OCR + 분석 요청
+      const ocrStartTime = Date.now();
       const result = await sendImageToServer(imageBuffer);
+      const ocrElapsed = Date.now() - ocrStartTime;
 
       if (result.success && result.data) {
         const { texts, is_harmful, harmful_words, processing_time } = result.data;
 
-        // 추출된 텍스트 로그 출력
+        // 추출된 텍스트 로그 출력 (비어있어도 로그 출력)
         if (texts.length > 0) {
-          console.log(`[OCR] 추출 텍스트: ${texts.join(" ")}`);
+          console.log(`[OCR] 추출 텍스트 (${ocrElapsed}ms): ${texts.join(" ")}`);
+        } else {
+          console.log(`[OCR] 텍스트 추출 없음 (${ocrElapsed}ms)`);
         }
 
         // 5. 유해성 감지 시 알림 (harmful=true/false 모두 전송)
@@ -375,10 +392,15 @@ app.whenReady().then(async () => {
           harmful: is_harmful,
         });
       } else {
-        console.error("[OCR] 서버 요청 실패:", result.error);
+        console.error(`[OCR] 서버 요청 실패 (${ocrElapsed}ms):`, result.error);
       }
-    } catch (error) {
-      console.error("[OCR] 캡처/처리 오류:", error);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      const errorStack = error?.stack || "";
+      console.error("[OCR] 캡처/처리 오류:", errorMessage);
+      if (errorStack && process.env.NODE_ENV === "development") {
+        console.error("[OCR] 에러 스택:", errorStack);
+      }
     } finally {
       isCaptureInProgress = false;
     }
@@ -440,17 +462,25 @@ app.whenReady().then(async () => {
         return;
       }
 
+      const captureStartTime = Date.now();
       try {
         await captureAndProcessROI();
-      } catch (error) {
-        console.error(`[OCR] 캡처 오류:`, error);
-      }
+        const captureElapsed = Date.now() - captureStartTime;
 
-      // 다음 캡처 스케줄링 (현재 작업 완료 후)
-      if (isMonitoring && currentROI) {
-        monitoringInterval = setTimeout(scheduleNextCapture, CAPTURE_INTERVAL_MS) as any;
-      } else {
-        monitoringInterval = null;
+        // OCR 처리 시간이 간격보다 오래 걸리면 경고
+        if (captureElapsed > CAPTURE_INTERVAL_MS) {
+          console.warn(`[OCR] 캡처 처리 시간 (${captureElapsed}ms)이 간격 (${CAPTURE_INTERVAL_MS}ms)보다 깁니다.`);
+        }
+      } catch (error: any) {
+        const errorMessage = error?.message || String(error);
+        console.error(`[OCR] 캡처 오류 (${Date.now() - captureStartTime}ms):`, errorMessage);
+      } finally {
+        // 에러 발생 여부와 관계없이 다음 캡처 스케줄링 보장
+        if (isMonitoring && currentROI) {
+          monitoringInterval = setTimeout(scheduleNextCapture, CAPTURE_INTERVAL_MS) as any;
+        } else {
+          monitoringInterval = null;
+        }
       }
     };
 
