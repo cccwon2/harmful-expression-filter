@@ -124,24 +124,10 @@
 | AudioManager 트레이 통합 | ✅ 완료      | 100%   | High     |
 | Windows SDK OCR 통합  | ✅ 완료      | 100%   | High     |
 
-## 최근 변경 사항 (2025-01-XX)
+## 최근 변경 사항 (2025-11-22)
 
 - **Windows SDK OCR 적용**: PaddleOCR 제거, Windows.Media.Ocr API 사용
   - Electron에서 C# COM Bridge를 통해 직접 처리
   - 서버 불필요, 네이티브 성능 활용
 - **venv310 환경 사용**: Python 3.10 가상환경(venv310)으로 변경
 - **OCR 아키텍처 개선**: 서버 기반 → 클라이언트 기반 (Windows SDK)
-
-## 다음 단계
-
-프로젝트의 다음 개발 단계를 확인하려면 각 작업 문서를 참조하세요.
-
-## 업데이트 히스토리
-
-- 2025-01-XX: Windows SDK OCR 적용 - PaddleOCR 제거, Windows.Media.Ocr API 사용, venv310 환경 사용
-- 2025-01-XX: AudioManager 추가 - 트레이 메뉴 기반 오디오 스트리밍, 보안 강화 (Deepgram API 키를 서버에서만 관리)
-- 2025-01-XX: 파일명 네이밍 규칙 통일 - `onvoice*` → `onVoice*` (onVoiceBridge, onVoiceService, onVoiceBridgeAdapter, onVoiceHandlers)
-- 2025-01-XX: Task 29 완료 - OnVoice COM Bridge 통합, 프로세스별 오디오 캡처 및 Deepgram/서버 STT 연동
-- 2025-01-XX: Task 28 완료 - PaddleOCR 서버 연동 및 Tesseract.js 대체 (현재는 Windows SDK OCR로 대체됨)
-- 2025-11-13: 오디오 모니터링과 ROI 독립성 구현, 시스템 트레이 오디오 모니터링 상태 표시 추가, 오버레이 UI 개선
-- 2025-01-XX: 초기 작업 문서 생성
