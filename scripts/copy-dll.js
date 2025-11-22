@@ -5,7 +5,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const sourceDir = path.join(__dirname, '..', 'dotnet', 'OnVoiceComBridge', 'bin', 'Debug', 'net6.0');
+// 최신 빌드 출력 디렉토리 찾기 (net6.0-windows10.0.19041.0 우선, 없으면 net6.0)
+const baseDir = path.join(__dirname, '..', 'dotnet', 'OnVoiceComBridge', 'bin', 'Debug');
+const windowsDir = path.join(baseDir, 'net6.0-windows10.0.19041.0');
+const fallbackDir = path.join(baseDir, 'net6.0');
+const sourceDir = fs.existsSync(windowsDir) ? windowsDir : fallbackDir;
 const targetDir = path.join(__dirname, '..', 'dist-electron', 'dotnet');
 
 const filesToCopy = [

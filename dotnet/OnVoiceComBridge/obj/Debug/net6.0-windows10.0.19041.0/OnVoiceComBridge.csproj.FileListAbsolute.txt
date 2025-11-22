@@ -3,3 +3,10 @@ C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-window
 C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.AssemblyInfoInputs.cache
 C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.AssemblyInfo.cs
 C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.csproj.CoreCompileInputs.cache
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.deps.json
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.dll
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.pdb
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.dll
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\refint\OnVoiceComBridge.dll
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\OnVoiceComBridge.pdb
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\ref\OnVoiceComBridge.dll
