@@ -15,7 +15,22 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. Task 24~29까지 음성 STT API, Electron 오디오 연동, OnVoice COM 브리지 통합 작업이 완료되었으며, Task 33에서 AudioManager를 추가하여 시스템 트레이에서 직접 오디오 캡처를 제어할 수 있도록 개선되었습니다.
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~33**까지 완료되었습니다:
+
+- **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
+- **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
+- **Task 24~27**: 음성 STT API, Electron 오디오 연동, Deepgram STT 통합
+- **Task 28**: PaddleOCR 서버 연동 및 Tesseract.js 대체 (현재는 Windows SDK OCR로 대체됨)
+- **Task 29**: OnVoice COM Bridge 통합 (프로세스별 오디오 캡처)
+- **Task 30~32**: electron-edge-js 마이그레이션 (winax → electron-edge-js + C#)
+- **Task 33**: AudioManager 트레이 통합 (보안 강화, 시스템 트레이 직접 제어)
+
+### 주요 기술 스택
+
+- **OCR**: Windows SDK OCR (Windows.Media.Ocr) - C# COM Bridge를 통해 사용
+- **STT**: Deepgram (WebSocket 기반 실시간 음성 인식)
+- **오디오 캡처**: OnVoice COM Bridge (프로세스별 오디오 캡처)
+- **백엔드**: FastAPI (Python 3.10, venv310 환경)
 
 ## 🚀 빠른 시작
 
@@ -47,6 +62,13 @@ npm run dev
 npm run typecheck
 npm run build:main
 
+# 전체 빌드 (C# DLL + TypeScript)
+npm run build:all
+
+# C# DLL 빌드 및 복사
+npm run build:dotnet
+npm run copy:dll
+
 # 프로덕션 실행
 npm start
 ```
@@ -63,12 +85,15 @@ harmful-expression-filter/
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 │   ├── main/                # 메인 프로세스 핵심 모듈
 │   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)
-│   │   └── onVoiceBridge.ts # OnVoice Bridge 모듈
+│   │   └── onVoiceBridge.ts # OnVoice Bridge 모듈 (Windows SDK OCR 포함)
 │   ├── audio/               # 오디오 관련 서비스
 │   │   ├── onVoiceService.ts        # OnVoice 서비스 (IPC용)
 │   │   └── onVoiceBridgeAdapter.ts  # OnVoice 브리지 어댑터
 │   └── ipc/                 # IPC 핸들러
 │       └── onVoiceHandlers.ts       # OnVoice IPC 핸들러
+├── dotnet/                  # C# COM Bridge
+│   └── OnVoiceComBridge/    # .NET 8 프로젝트
+│       └── Startup.cs       # Windows SDK OCR + OnVoice COM 래퍼
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```
 
@@ -87,8 +112,9 @@ harmful-expression-filter/
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
 - `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
 - `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
-- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (electron-edge-js 기반)
+- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (electron-edge-js 기반, Windows SDK OCR 포함)
 - `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합)
+- `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
 - `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어
 - `electron/tray.ts` – 시스템 트레이 (오디오 모니터링 상태 표시, AudioManager 통합)

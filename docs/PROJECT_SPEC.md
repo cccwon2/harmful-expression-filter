@@ -104,9 +104,10 @@
 - ROI 영역에 빨간색 테두리 및 "감시 중" 라벨 표시
 - 감지 모드에서 클릭-스루 유지
 
-### T15: OCR/STT 파이프라인 스텁 ✅ (Task 28에서 PaddleOCR로 대체됨)
+### T15: OCR/STT 파이프라인 스텁 ✅ (Windows SDK OCR 사용)
 - ~~Tesseract.js 기반 OCR 워커 초기화~~ (제거됨)
-- ✅ PaddleOCR 서버 기반 OCR로 전환 (Task 28)
+- ~~PaddleOCR 서버 기반 OCR~~ (제거됨, Windows SDK OCR로 대체)
+- ✅ Windows SDK OCR (Windows.Media.Ocr API) 사용
 - ROI 캡처 및 OCR 결과 로그 출력
 - 감지 모드 전환 시 자동 처리 루프 시작
 
@@ -125,9 +126,10 @@
 - 부팅 시 마지막 ROI/모드를 자동 복원 (감지 모드 & 모니터링 자동 시작)
 - electron-store 마이그레이션 및 alert 상태 복원은 추후 진행
 
-### T19: 네이티브 Tesseract 통합 🔄 (Task 28로 대체됨)
+### T19: 네이티브 Tesseract 통합 🔄 (Windows SDK OCR로 대체됨)
 - ~~WASM 대신 네이티브 실행 파일 호출로 OCR 성능 개선~~ (계획)
-- ✅ Task 28에서 PaddleOCR 서버 기반 OCR로 구현됨
+- ✅ Windows SDK OCR (Windows.Media.Ocr API)로 구현됨
+- C# COM Bridge를 통해 Windows OS의 네이티브 OCR 기능 사용
 
 ### T20: FastAPI 기본 구조 ✅
 - FastAPI 앱/엔드포인트(`/health`, `/keywords`, `/`) 구축
@@ -280,14 +282,18 @@ interface Window {
 - Vite 5.0.5
 
 ### 서버 (FastAPI)
-- **Python 3.11+** (venv311 가상환경 사용 필수)
+- **Python 3.10+** (venv310 가상환경 사용 필수)
 - FastAPI
-- Whisper (음성 인식)
-- PaddleOCR (OCR 서비스)
+- Deepgram STT (음성 인식)
 
-**⚠️ 중요**: server 폴더의 모든 Python 라이브러리는 `venv311` 가상환경에서만 관리합니다.
-- 가상환경 활성화: `venv311\Scripts\activate` (Windows) 또는 `source venv311/bin/activate` (Linux/Mac)
-- 의존성 설치: `.\venv311\Scripts\python.exe -m pip install -r requirements.txt`
+**⚠️ 중요**: server 폴더의 모든 Python 라이브러리는 `venv310` 가상환경에서만 관리합니다.
+- 가상환경 활성화: `venv310\Scripts\activate` (Windows) 또는 `source venv310/bin/activate` (Linux/Mac)
+- 의존성 설치: `.\venv310\Scripts\python.exe -m pip install -r requirements.txt`
+
+### OCR 처리
+- **Windows SDK OCR**: Windows.Media.Ocr API를 C# COM Bridge를 통해 사용
+- Electron에서 직접 처리 (서버 불필요)
+- C# COM Bridge (`dotnet/OnVoiceComBridge/Startup.cs`)를 통해 구현
 
 ## 빌드 및 실행
 

@@ -18,8 +18,8 @@ from PIL import Image
 # ✅ websockets: legacy asyncio API 사용 (extra_headers 지원)
 from websockets.legacy.client import connect as ws_connect
 
-# OCR 서비스
-from services.paddle_ocr_service import get_ocr_service
+# OCR 서비스 (현재는 사용하지 않음 - Windows SDK OCR을 Electron에서 직접 사용)
+# from services.paddle_ocr_service import get_ocr_service
 
 # 로깅 설정
 LOGGER = logging.getLogger("harmful-filter")
@@ -286,11 +286,12 @@ class DeepgramWebSocketManager:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_keywords()
-    try:
-        get_ocr_service()
-        LOGGER.info("[INFO] ✅ OCR 서비스 준비 완료")
-    except Exception as e:
-        LOGGER.warning("[WARN] OCR 서비스 초기화 오류: %s", e)
+    # OCR은 Electron에서 Windows SDK OCR을 직접 사용하므로 서버에서 초기화하지 않음
+    # try:
+    #     get_ocr_service()
+    #     LOGGER.info("[INFO] ✅ OCR 서비스 준비 완료")
+    # except Exception as e:
+    #     LOGGER.warning("[WARN] OCR 서비스 초기화 오류: %s", e)
 
     LOGGER.info("[INFO] 🚀 서버 시작 완료 (Deepgram Streaming Mode)")
     yield
@@ -379,16 +380,18 @@ async def analyze_text(request: AnalyzeRequest):
     }
 
 
-@app.post("/api/ocr")
-async def ocr_endpoint(file: UploadFile = File(...)):
-    try:
-        image_data = await file.read()
-        image = Image.open(io.BytesIO(image_data))
-        ocr = get_ocr_service()
-        texts, time_taken = ocr.extract_text(image)
-        return {"texts": texts, "processing_time": time_taken}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# OCR은 현재 Electron에서 Windows SDK OCR을 직접 사용하므로 이 엔드포인트는 사용되지 않음
+# (하위 호환성을 위해 주석 처리)
+# @app.post("/api/ocr")
+# async def ocr_endpoint(file: UploadFile = File(...)):
+#     try:
+#         image_data = await file.read()
+#         image = Image.open(io.BytesIO(image_data))
+#         ocr = get_ocr_service()
+#         texts, time_taken = ocr.extract_text(image)
+#         return {"texts": texts, "processing_time": time_taken}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

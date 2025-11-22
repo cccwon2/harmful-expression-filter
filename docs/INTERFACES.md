@@ -329,7 +329,36 @@ await audioManager.stopStream();
 
 ---
 
-### 9. 오버레이 창 생성
+### 9. Windows SDK OCR
+**파일**: `electron/main/onVoiceBridge.ts`, `dotnet/OnVoiceComBridge/Startup.cs`
+
+Windows SDK OCR (Windows.Media.Ocr API)를 사용하여 이미지에서 텍스트를 추출합니다. C# COM Bridge를 통해 Windows OS의 네이티브 OCR 기능을 사용합니다.
+
+**주요 기능**:
+- Windows.Media.Ocr API를 통한 텍스트 추출
+- C# COM Bridge를 통한 OCR 처리
+- Electron에서 직접 처리 (서버 불필요)
+- ROI 영역 자동 크롭 및 유해성 분석
+
+```typescript
+// 기본 OCR
+const result = await onVoiceBridge.performOCR(imageBuffer);
+
+// OCR + 유해성 분석 (ROI 포함)
+const result = await onVoiceBridge.performOCRAndAnalyze(imageBuffer, {
+  x: 100, y: 100, width: 200, height: 100
+});
+```
+
+**관련 파일**:
+- `electron/main/onVoiceBridge.ts` - OnVoice Bridge 모듈 (OCR 메서드 포함)
+- `dotnet/OnVoiceComBridge/Startup.cs` - C# COM Bridge (Windows.Media.Ocr API 호출)
+- `electron/main.ts` - OCR 모니터링 루프
+- `electron/ipc/serverHandlers.ts` - OCR IPC 핸들러
+
+---
+
+### 10. 오버레이 창 생성
 **파일**: `electron/windows/createOverlayWindow.ts`
 
 투명 오버레이 창을 생성하고 관리하는 함수입니다.
