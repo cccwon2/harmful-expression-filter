@@ -4,7 +4,7 @@ import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
 import { IPC_CHANNELS } from './ipc/channels';
 import AudioManager from './main/AudioManager';
-import { getOnVoiceService } from './audio/onvoiceService';
+import { getOnVoiceService } from './audio/onVoiceService';
 import { getVolumeLevel, setVolumeLevel } from './store';
 
 let tray: Tray | null = null;
