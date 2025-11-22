@@ -4,6 +4,8 @@ import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
 import { IPC_CHANNELS } from './ipc/channels';
 import AudioManager from './main/AudioManager';
+import { getOnVoiceService } from './audio/onvoiceService';
+import { getVolumeLevel, setVolumeLevel } from './store';
 
 let tray: Tray | null = null;
 let trayUpdateCallback: (() => void) | null = null;
@@ -392,6 +394,115 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'separator',
       },
       {
+        type: 'separator',
+      },
+      {
+        label: '--- 볼륨 설정 (Volume) ---',
+        enabled: false,
+      },
+      {
+        label: `현재 볼륨: ${getVolumeLevel()} (${getVolumeLevel() * 10}%)`,
+        enabled: false,
+      },
+      {
+        label: '볼륨 조절',
+        submenu: [
+          {
+            label: '0 (무소음)',
+            type: 'radio',
+            checked: getVolumeLevel() === 0,
+            click: async () => {
+              await setTrayVolumeLevel(0);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '1 (10%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 1,
+            click: async () => {
+              await setTrayVolumeLevel(1);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '2 (20%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 2,
+            click: async () => {
+              await setTrayVolumeLevel(2);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '3 (30%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 3,
+            click: async () => {
+              await setTrayVolumeLevel(3);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '4 (40%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 4,
+            click: async () => {
+              await setTrayVolumeLevel(4);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '5 (50%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 5,
+            click: async () => {
+              await setTrayVolumeLevel(5);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '6 (60%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 6,
+            click: async () => {
+              await setTrayVolumeLevel(6);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '7 (70%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 7,
+            click: async () => {
+              await setTrayVolumeLevel(7);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '8 (80%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 8,
+            click: async () => {
+              await setTrayVolumeLevel(8);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '9 (90%)',
+            type: 'radio',
+            checked: getVolumeLevel() === 9,
+            click: async () => {
+              await setTrayVolumeLevel(9);
+              updateContextMenu();
+            },
+          },
+        ],
+      },
+      {
+        type: 'separator',
+      },
+      {
         label: 'Quit',
         type: 'normal',
         click: () => {
@@ -449,5 +560,26 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
   (trayInstance as any).updateContextMenu = updateContextMenu;
 
   return tray;
+}
+
+/**
+ * 트레이 메뉴에서 볼륨 레벨 설정
+ */
+async function setTrayVolumeLevel(level: number): Promise<void> {
+  try {
+    // 설정 저장
+    setVolumeLevel(level);
+
+    // OnVoiceService에 볼륨 레벨 설정
+    const service = getOnVoiceService();
+    if (service) {
+      await service.setVolumeLevel(level);
+      console.log(`[Tray] Volume level set to: ${level} (${level * 10}%)`);
+    } else {
+      console.warn('[Tray] OnVoiceService is not initialized');
+    }
+  } catch (err) {
+    console.error('[Tray] Failed to set volume level:', err);
+  }
 }
 

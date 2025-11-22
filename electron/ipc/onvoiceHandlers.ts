@@ -92,6 +92,21 @@ function registerIpcHandlers() {
     return service.getStatus();
   });
 
+  ipcMain.handle(
+    ONVOICE_CHANNELS.SET_VOLUME_LEVEL,
+    async (_, payload: { level: number }) => {
+      try {
+        const level = Math.max(0, Math.min(9, Math.round(payload?.level ?? 0)));
+        const success = await service.setVolumeLevel(level);
+        const status = service.getStatus();
+        return { success, level, volumePercent: status.volumePercent };
+      } catch (err: any) {
+        console.error("[OnVoiceHandlers] Failed to set volume level:", err);
+        return { success: false, error: err.message };
+      }
+    }
+  );
+
   console.log("[OnVoiceHandlers] IPC handlers registered");
 }
 

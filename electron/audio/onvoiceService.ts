@@ -13,6 +13,8 @@ import { createOnVoiceCapture, OnVoiceCaptureHandle } from "./onVoiceBridgeAdapt
 import { sendTextForAnalysis, AnalysisResult } from "../utils/harmfulAnalysisClient";
 import { IPC_CHANNELS } from "../ipc/channels";
 import { findProcessByType } from "../utils/processFinder";
+import { VolumeController } from "./volumeController";
+import { getVolumeLevel, setVolumeLevel as saveVolumeLevel } from "../store";
 
 export interface OnVoiceServiceOptions {
   /** Deepgram API 키 (Deepgram WebSocket 사용 시) */
@@ -21,6 +23,10 @@ export interface OnVoiceServiceOptions {
   serverWebSocketUrl?: string;
   /** 유해 표현 분석 사용 여부 (기본값: true) */
   enableHarmfulAnalysis?: boolean;
+  /** 유해 표현 감지 시 볼륨 조절 활성화 (기본값: true) */
+  enableVolumeControl?: boolean;
+  /** 유해 표현 감지 시 볼륨 복원 대기 시간 (밀리초, 기본값: 3000) */
+  volumeRestoreDelayMs?: number;
 }
 
 export class OnVoiceService {
@@ -31,13 +37,28 @@ export class OnVoiceService {
   private windows: Set<BrowserWindow> = new Set();
   private options: Required<OnVoiceServiceOptions>;
   private targetPid: "edge" | "chrome" | "discord" | number = "chrome";
+  private volumeController: VolumeController | null = null;
+  private harmfulDetectionCount: number = 0; // 유해 표현 감지 횟수 추적
 
   constructor(initialWindow: BrowserWindow | null, options: OnVoiceServiceOptions = {}) {
     this.options = {
       deepgramApiKey: options.deepgramApiKey || process.env.DEEPGRAM_API_KEY || "",
       serverWebSocketUrl: options.serverWebSocketUrl || "ws://127.0.0.1:8000/ws/audio",
       enableHarmfulAnalysis: options.enableHarmfulAnalysis !== false,
+      enableVolumeControl: options.enableVolumeControl !== false,
+      volumeRestoreDelayMs: options.volumeRestoreDelayMs || 3000,
     };
+
+    // 볼륨 조절 활성화 시 VolumeController 초기화
+    if (this.options.enableVolumeControl) {
+      this.volumeController = new VolumeController();
+      // 저장된 볼륨 레벨 로드 및 설정
+      const savedLevel = getVolumeLevel();
+      this.volumeController.setVolumeLevel(savedLevel).catch((err) => {
+        console.error("[OnVoiceService] Failed to load saved volume level:", err);
+      });
+      console.log(`[OnVoiceService] VolumeController initialized with level ${savedLevel} (${savedLevel * 10}%)`);
+    }
 
     if (initialWindow) {
       this.windows.add(initialWindow);
@@ -144,6 +165,7 @@ export class OnVoiceService {
       this.serverWs = null;
     }
 
+    this.harmfulDetectionCount = 0;
     this.isMonitoring = false;
     console.log("[OnVoiceService] 모니터링 중지 완료");
     this.broadcastStatus();
@@ -403,6 +425,36 @@ export class OnVoiceService {
         window.webContents.send(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, payload);
       }
     });
+
+    // 볼륨 조절 활성화 시 볼륨 낮추기
+    if (this.options.enableVolumeControl && this.volumeController) {
+      this.handleHarmfulExpressionDetected();
+    }
+  }
+
+  /**
+   * 유해 표현 감지 시 볼륨 조절 처리
+   * 설정된 볼륨 레벨로 조절
+   */
+  private async handleHarmfulExpressionDetected(): Promise<void> {
+    if (!this.volumeController) {
+      return;
+    }
+
+    try {
+      this.harmfulDetectionCount++;
+
+      // 현재 설정된 볼륨 레벨로 조절
+      const currentLevel = this.volumeController.getCurrentVolumeLevel();
+      await this.volumeController.setVolumeLevel(currentLevel);
+
+      const percent = this.volumeController.getCurrentVolumePercent();
+      console.log(
+        `[OnVoiceService] 🔊 Volume adjusted due to harmful expression (detection #${this.harmfulDetectionCount}): Level ${currentLevel} (${percent}%)`
+      );
+    } catch (error) {
+      console.error("[OnVoiceService] Failed to adjust volume on harmful detection:", error);
+    }
   }
 
   /**
@@ -412,7 +464,30 @@ export class OnVoiceService {
     return {
       isMonitoring: this.isMonitoring,
       targetPid: this.targetPid,
+      volumeLevel: this.volumeController?.getCurrentVolumeLevel() ?? null,
+      volumePercent: this.volumeController?.getCurrentVolumePercent() ?? null,
     };
+  }
+
+  /**
+   * 볼륨 레벨 설정 (0~9: 0% = 무소음, 9 = 90%)
+   */
+  async setVolumeLevel(level: number): Promise<boolean> {
+    if (!this.volumeController) {
+      console.warn("[OnVoiceService] VolumeController is not initialized");
+      return false;
+    }
+
+    try {
+      await this.volumeController.setVolumeLevel(level);
+      // 설정 저장
+      saveVolumeLevel(level);
+      console.log(`[OnVoiceService] Volume level saved: ${level} (${level * 10}%)`);
+      return true;
+    } catch (error) {
+      console.error("[OnVoiceService] Failed to set volume level:", error);
+      return false;
+    }
   }
 }
 

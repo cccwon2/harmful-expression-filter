@@ -49,6 +49,7 @@ export const ONVOICE_CHANNELS = {
   START_CAPTURE: 'onvoice:startCapture',
   STOP_CAPTURE: 'onvoice:stopCapture',
   GET_STATUS: 'onvoice:get-status',
+  SET_VOLUME_LEVEL: 'onvoice:set-volume-level',     // 볼륨 레벨 설정 (0~9: 0% = 무소음, 9 = 90%)
 } as const;
 
 export type OnVoiceChannel = typeof ONVOICE_CHANNELS[keyof typeof ONVOICE_CHANNELS];

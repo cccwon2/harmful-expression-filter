@@ -8,6 +8,7 @@ export type OverlayMode = 'setup' | 'detect' | 'alert';
 export interface StoreData {
   roi: ROI | null;
   mode: OverlayMode;
+  volumeLevel?: number; // 0~9 (0 = 무소음, 9 = 90%), 기본값: 1 (10%)
 }
 
 const getStorePath = () => {
@@ -18,6 +19,7 @@ const getStorePath = () => {
 const defaultData: StoreData = {
   roi: null,
   mode: 'setup',
+  volumeLevel: 1, // 기본값: 1 (10%)
 };
 
 function loadData(): StoreData {
@@ -73,4 +75,16 @@ export function setMode(mode: OverlayMode) {
 export function updateStore(updater: (state: StoreData) => StoreData) {
   const nextState = updater(loadData());
   saveData(nextState);
+}
+
+export function getVolumeLevel(): number {
+  const data = loadData();
+  return data.volumeLevel ?? defaultData.volumeLevel ?? 1;
+}
+
+export function setVolumeLevel(level: number): void {
+  const data = loadData();
+  // 0~9 범위로 제한
+  data.volumeLevel = Math.max(0, Math.min(9, Math.round(level)));
+  saveData(data);
 }
