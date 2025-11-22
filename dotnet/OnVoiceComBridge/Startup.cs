@@ -84,35 +84,36 @@ namespace OnVoiceComBridge
                     string target = (string)input.target;
                     Console.WriteLine($"[OnVoiceComBridge] 프로세스 찾기 요청: {target}");
                     
+                    int foundPid = 0;
+                    
                     try
                     {
                         var capturer = (IOnVoiceCapture)_capture;
-                        int pid = 0;
                         
                         switch (target?.ToLower())
                         {
                             case "chrome":
-                                pid = capturer.FindChromeProcess();
-                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindChromeProcess 성공: PID={pid}");
+                                foundPid = capturer.FindChromeProcess();
+                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindChromeProcess 성공: PID={foundPid}");
                                 break;
                             case "edge":
-                                pid = capturer.FindEdgeProcess();
-                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindEdgeProcess 성공: PID={pid}");
+                                foundPid = capturer.FindEdgeProcess();
+                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindEdgeProcess 성공: PID={foundPid}");
                                 break;
                             case "discord":
-                                pid = capturer.FindDiscordProcess();
-                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindDiscordProcess 성공: PID={pid}");
+                                foundPid = capturer.FindDiscordProcess();
+                                Console.WriteLine($"[OnVoiceComBridge] ✅ FindDiscordProcess 성공: PID={foundPid}");
                                 break;
                             default:
                                 return new { ok = false, error = $"Unknown target: {target}" };
                         }
                         
-                        if (pid <= 0)
+                        if (foundPid <= 0)
                         {
                             return new { ok = false, error = $"프로세스를 찾을 수 없습니다: {target}" };
                         }
                         
-                        return new { ok = true, pid = pid };
+                        return new { ok = true, pid = foundPid };
                     }
                     catch (Exception ex)
                     {
@@ -129,15 +130,15 @@ namespace OnVoiceComBridge
                             };
                             
                             object? result = _capture.GetType().InvokeMember(methodName, BindingFlags.InvokeMethod, null, _capture, null);
-                            int pid = result != null ? Convert.ToInt32(result) : 0;
+                            foundPid = result != null ? Convert.ToInt32(result) : 0;
                             
-                            if (pid <= 0)
+                            if (foundPid <= 0)
                             {
                                 return new { ok = false, error = $"프로세스를 찾을 수 없습니다: {target}" };
                             }
                             
-                            Console.WriteLine($"[OnVoiceComBridge] ✅ {methodName} 성공 (Reflection): PID={pid}");
-                            return new { ok = true, pid = pid };
+                            Console.WriteLine($"[OnVoiceComBridge] ✅ {methodName} 성공 (Reflection): PID={foundPid}");
+                            return new { ok = true, pid = foundPid };
                         }
                         catch (Exception refEx)
                         {
