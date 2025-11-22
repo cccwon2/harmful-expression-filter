@@ -25,10 +25,6 @@ class AudioManager {
   private volumeController: VolumeController | null = null;
   private harmfulDetectionCount: number = 0;
 
-  // 중복 음소거 방지 및 복구를 위한 플래그
-  private isMuting: boolean = false;
-  private muteTimer: NodeJS.Timeout | null = null;
-
   private constructor() {
     this.wsUrl = process.env.SERVER_WS_URL || "ws://localhost:8000/ws/audio";
     console.log(`[AudioManager] WebSocket URL: ${this.wsUrl}`);
@@ -223,7 +219,7 @@ class AudioManager {
 
   /**
    * -------------------------------------------------------
-   * [수정됨] 유해 표현 감지 시 볼륨 조절 (Mute & Restore)
+   * 유해 표현 감지 시 설정된 볼륨 레벨로 조절
    * -------------------------------------------------------
    */
   private async handleHarmfulExpressionDetected(): Promise<void> {
@@ -232,44 +228,16 @@ class AudioManager {
       return;
     }
 
-    // 이미 음소거(처벌) 중이라면 타이머만 연장하거나 무시
-    if (this.isMuting) {
-      console.log("[AudioManager] 이미 제재 중입니다. (연속 감지)");
-      // 필요하다면 여기서 타이머를 리셋해서 제재 시간을 늘릴 수 있습니다.
-      return;
-    }
-
     try {
       this.harmfulDetectionCount++;
-      this.isMuting = true;
 
-      console.log(`[AudioManager] 🔇 유해 표현 감지! 볼륨 음소거`);
+      // 저장소에서 설정된 볼륨 레벨 가져오기
+      const savedVolumeLevel = getVolumeLevel();
+      console.log(`[AudioManager] 🔊 유해 표현 감지! 볼륨 조절: ${savedVolumeLevel} (${savedVolumeLevel * 10}%)`);
 
-      // 2. 볼륨을 0으로 설정 (Mute)
-      await this.volumeController.setVolumeLevel(0);
-
-      // 3. 일정 시간(예: 3초) 후 볼륨 복구
-      // 복구 시 저장소에서 최신 볼륨 레벨을 가져와서 사용 (사용자가 중간에 변경했을 수 있음)
-      if (this.muteTimer) clearTimeout(this.muteTimer);
-
-      this.muteTimer = setTimeout(async () => {
-        try {
-          // 저장소에서 최신 볼륨 레벨 가져오기 (사용자가 중간에 변경했을 수 있음)
-          const savedVolumeLevel = getVolumeLevel();
-          console.log(`[AudioManager] 🔊 제재 시간 종료. 볼륨 복구: ${savedVolumeLevel} (${savedVolumeLevel * 10}%)`);
-          if (this.volumeController) {
-            await this.volumeController.setVolumeLevel(savedVolumeLevel);
-          }
-        } catch (err) {
-          console.error("[AudioManager] 볼륨 복구 실패:", err);
-        } finally {
-          this.isMuting = false;
-          this.muteTimer = null;
-        }
-      }, 3000); // 3초간 음소거
+      await this.volumeController.setVolumeLevel(savedVolumeLevel);
     } catch (error) {
       console.error("[AudioManager] 유해 표현 처리 중 오류:", error);
-      this.isMuting = false;
     }
   }
 }
