@@ -241,16 +241,18 @@ app.whenReady().then(async () => {
       const rawText = result.text || "";
       const texts = rawText ? rawText.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
 
-      // OCR 결과 로그 (텍스트 추출 성공 여부)
+      // OCR 결과 로그 (항상 출력하여 디버깅 가능하도록)
       if (texts.length === 0 && rawText.length === 0) {
         console.log(`[OCR] Windows OCR 완료 (${requestTime}ms): 텍스트 없음`);
       } else if (texts.length === 0 && rawText.length > 0) {
-        console.warn(
+        console.log(
           `[OCR] Windows OCR 완료 (${requestTime}ms): 원본 텍스트는 있으나 유효한 라인 없음 - "${rawText.substring(
             0,
             50
           )}..."`
         );
+      } else {
+        console.log(`[OCR] Windows OCR 완료 (${requestTime}ms): ${texts.length}개 텍스트 추출`);
       }
 
       return {
@@ -352,11 +354,12 @@ app.whenReady().then(async () => {
       const result = await sendImageToServer(imageBuffer);
       const ocrElapsed = Date.now() - ocrStartTime;
 
+      // OCR 결과 항상 로그 출력
       if (result.success && result.data) {
         const { texts, is_harmful, harmful_words, processing_time } = result.data;
 
-        // 추출된 텍스트 로그 출력 (비어있어도 로그 출력)
-        if (texts.length > 0) {
+        // 추출된 텍스트 로그 출력 (항상 출력)
+        if (texts && texts.length > 0) {
           console.log(`[OCR] 추출 텍스트 (${ocrElapsed}ms): ${texts.join(" ")}`);
         } else {
           console.log(`[OCR] 텍스트 추출 없음 (${ocrElapsed}ms)`);

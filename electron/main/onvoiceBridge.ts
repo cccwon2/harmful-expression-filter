@@ -261,10 +261,12 @@ export const onVoiceBridge: OnVoiceBridge = {
         };
       }
 
-      // OCR 결과 검증 및 로그
+      // OCR 결과 검증 및 로그 (항상 출력)
       const extractedText = result.text || "";
       if (!extractedText || extractedText.trim().length === 0) {
         console.log(`[OnVoiceBridge] OCR 완료: 텍스트 추출 없음 (isHarmful: ${result.isHarmful || false})`);
+      } else {
+        console.log(`[OnVoiceBridge] OCR 완료: 텍스트 추출 성공 (${extractedText.length}자)`);
       }
 
       // blurredImage가 있으면 Buffer로 변환
