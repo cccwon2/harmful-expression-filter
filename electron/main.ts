@@ -16,7 +16,7 @@ import { registerOnVoiceHandlers } from "./ipc/onVoiceHandlers";
 import { setTrayAudioUpdateCallback } from "./tray";
 import AudioManager from "./main/AudioManager";
 
-const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격
+const CAPTURE_INTERVAL_MS = 1000; // 1초 간격
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
@@ -339,6 +339,11 @@ app.whenReady().then(async () => {
 
       if (result.success && result.data) {
         const { texts, is_harmful, harmful_words, processing_time } = result.data;
+
+        // 추출된 텍스트 로그 출력
+        if (texts.length > 0) {
+          console.log(`[OCR] 추출 텍스트: ${texts.join(" ")}`);
+        }
 
         // 5. 유해성 감지 시 알림 (harmful=true/false 모두 전송)
         if (overlayWindow && !overlayWindow.isDestroyed()) {
