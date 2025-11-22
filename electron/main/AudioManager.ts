@@ -5,7 +5,7 @@
  */
 
 import WebSocket from "ws";
-import { onVoiceBridge } from "./onvoiceBridge";
+import { onVoiceBridge } from "./onVoiceBridge";
 
 type TargetApp = "chrome" | "edge" | "discord";
 
@@ -24,6 +24,8 @@ class AudioManager {
   private currentTarget: TargetApp | null = null;
   private currentPid: number | null = null;
   private wsUrl: string;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private isReconnecting = false;
 
   private constructor() {
     // 환경 변수에서 WebSocket URL 가져오기 (기본값: ws://localhost:8000/ws/audio)
@@ -78,8 +80,10 @@ class AudioManager {
       this.ws.send(pcm);
     } catch (error) {
       console.error("[AudioManager] 오디오 데이터 전송 실패:", error);
-      // 전송 실패 시 WebSocket 재연결 시도
-      this.reconnectWebSocket();
+      // 전송 실패 시 WebSocket 재연결 시도 (비동기로 처리)
+      this.reconnectWebSocket().catch((err) => {
+        console.error("[AudioManager] 재연결 시도 중 오류:", err);
+      });
     }
   }
 
@@ -138,13 +142,16 @@ class AudioManager {
 
       this.ws.on("close", (code, reason) => {
         console.log(`[AudioManager] WebSocket 연결 종료: ${code} - ${reason.toString()}`);
+        const wasStreaming = this.isStreaming;
         this.ws = null;
 
         // 스트리밍 중이면 재연결 시도
-        if (this.isStreaming) {
+        if (wasStreaming && !this.isReconnecting) {
           console.log("[AudioManager] 스트리밍 중이므로 재연결 시도...");
-          setTimeout(() => {
-            this.reconnectWebSocket();
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectWebSocket().catch((err) => {
+              console.error("[AudioManager] 재연결 시도 중 오류:", err);
+            });
           }, 2000);
         }
       });
@@ -159,11 +166,34 @@ class AudioManager {
       return; // 스트리밍 중이 아니면 재연결하지 않음
     }
 
+    // 이미 재연결 중이면 중복 시도 방지
+    if (this.isReconnecting) {
+      console.log("[AudioManager] 이미 재연결 시도 중입니다.");
+      return;
+    }
+
+    this.isReconnecting = true;
+
     try {
       await this.connectWebSocket();
       console.log("[AudioManager] WebSocket 재연결 성공");
     } catch (error) {
       console.error("[AudioManager] WebSocket 재연결 실패:", error);
+      // 재연결 실패 시 일정 시간 후 다시 시도
+      if (this.isStreaming) {
+        this.reconnectTimer = setTimeout(() => {
+          this.isReconnecting = false;
+          this.reconnectWebSocket().catch((err) => {
+            console.error("[AudioManager] 재연결 재시도 중 오류:", err);
+          });
+        }, 5000);
+        return; // 타이머가 재시도하므로 여기서는 플래그를 유지
+      }
+    } finally {
+      // 성공한 경우에만 플래그 해제 (실패 시 타이머가 재시도하므로 유지)
+      if (!this.isStreaming || this.ws?.readyState === WebSocket.OPEN) {
+        this.isReconnecting = false;
+      }
     }
   }
 
@@ -211,9 +241,18 @@ class AudioManager {
     } catch (error) {
       console.error("[AudioManager] 스트리밍 시작 실패:", error);
 
-      // 실패 시 WebSocket 닫기
+      // 실패 시 WebSocket 닫기 및 재연결 타이머 취소
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      this.isReconnecting = false;
+
       if (this.ws) {
-        this.ws.close();
+        this.ws.removeAllListeners();
+        if (this.ws.readyState !== WebSocket.CLOSED) {
+          this.ws.close();
+        }
         this.ws = null;
       }
 
@@ -235,13 +274,23 @@ class AudioManager {
     }
 
     try {
+      // 재연결 타이머 취소
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      this.isReconnecting = false;
+
       // 1. 캡처 중지
       console.log("[AudioManager] 캡처 중지 중...");
       await onVoiceBridge.stopCapture();
 
       // 2. WebSocket 연결 종료
       if (this.ws) {
-        this.ws.close();
+        this.ws.removeAllListeners(); // 이벤트 리스너 정리
+        if (this.ws.readyState !== WebSocket.CLOSED) {
+          this.ws.close();
+        }
         this.ws = null;
       }
 

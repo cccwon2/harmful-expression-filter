@@ -38,7 +38,7 @@ function getBridgeFunc(): EdgeFunc {
     assemblyFile = path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.dll");
   } else {
     // 개발: dist-electron/dotnet/OnVoiceComBridge.dll (copy:dll 스크립트 의존)
-    // 현재 파일 위치: dist-electron/main/onvoiceBridge.js
+    // 현재 파일 위치: dist-electron/main/onVoiceBridge.js
     assemblyFile = path.join(__dirname, "..", "dotnet", "OnVoiceComBridge.dll");
   }
 

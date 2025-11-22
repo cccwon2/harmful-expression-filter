@@ -8,7 +8,7 @@
  */
 
 import { app, BrowserWindow } from 'electron';
-import { onVoiceBridge } from '../main/onvoiceBridge';
+import { onVoiceBridge } from '../main/onVoiceBridge';
 
 // Electron 앱 초기화 (테스트용)
 if (!app.isReady()) {

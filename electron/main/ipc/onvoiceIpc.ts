@@ -10,7 +10,7 @@
 
 // electron/main/ipc/onvoiceIpc.ts
 import { ipcMain, WebContents } from "electron";
-import { onVoiceBridge } from "../onvoiceBridge";
+import { onVoiceBridge } from "../onVoiceBridge";
 
 /**
  * OnVoice IPC 핸들러 등록

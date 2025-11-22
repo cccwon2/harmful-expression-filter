@@ -5,7 +5,7 @@
  * 기존 코드와의 호환성을 유지하는 인터페이스를 제공합니다.
  */
 
-import { onVoiceBridge, OnVoiceBridge } from "../main/onvoiceBridge";
+import { onVoiceBridge, OnVoiceBridge } from "../main/onVoiceBridge";
 
 export interface CreateOnVoiceCaptureOptions {
   /** COM 객체 ProgID (기본값: "OnVoiceAudioBridge.OnVoiceCapture") - 새로운 bridge에서는 C#에서 처리 */
