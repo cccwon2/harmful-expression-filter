@@ -273,7 +273,7 @@ export function registerAudioHandlers(mainWindow: BrowserWindow) {
 ---
 
 ### 7. OnVoice IPC 핸들러
-**파일**: `electron/ipc/onvoiceHandlers.ts`
+**파일**: `electron/ipc/onVoiceHandlers.ts`
 
 OnVoice COM 브리지를 통한 프로세스별 오디오 캡처 관련 IPC 통신을 처리하는 핸들러입니다. Task 29에서 도입되었습니다.
 
@@ -298,13 +298,38 @@ export function registerOnVoiceHandlers(window: BrowserWindow) {
 ```
 
 **관련 파일**:
-- `electron/audio/onvoiceService.ts` - OnVoice 서비스 클래스
-- `electron/audio/onvoiceCaptureBridge.ts` - COM 브리지 모듈
+- `electron/audio/onVoiceService.ts` - OnVoice 서비스 클래스
+- `electron/audio/onVoiceBridgeAdapter.ts` - OnVoice 브리지 어댑터
+- `electron/main/onVoiceBridge.ts` - OnVoice Bridge 모듈 (electron-edge-js 기반)
 - `electron/utils/harmfulAnalysisClient.ts` - 유해 표현 분석 클라이언트
 
 ---
 
-### 8. 오버레이 창 생성
+### 8. AudioManager (트레이 기반 오디오 스트리밍)
+**파일**: `electron/main/AudioManager.ts`
+
+시스템 트레이에서 직접 사용하는 오디오 스트리밍 관리자입니다. Singleton 패턴으로 구현되었으며, Python FastAPI 서버로 WebSocket을 통해 오디오를 스트리밍합니다.
+
+**주요 기능**:
+- OnVoice Bridge를 통한 오디오 캡처
+- Python FastAPI 서버로 WebSocket 스트리밍 (`ws://localhost:8000/ws/audio`)
+- 자동 재연결 로직 (중복 방지, 타이머 관리)
+- 트레이 메뉴 통합
+
+```typescript
+// 트레이 메뉴에서 사용
+const audioManager = AudioManager.getInstance();
+await audioManager.startStream('chrome'); // 또는 'edge', 'discord'
+await audioManager.stopStream();
+```
+
+**관련 파일**:
+- `electron/main/onVoiceBridge.ts` - OnVoice Bridge 모듈
+- `electron/tray.ts` - 트레이 메뉴 (AudioManager 통합)
+
+---
+
+### 9. 오버레이 창 생성
 **파일**: `electron/windows/createOverlayWindow.ts`
 
 투명 오버레이 창을 생성하고 관리하는 함수입니다.
@@ -321,7 +346,7 @@ export function registerOnVoiceHandlers(window: BrowserWindow) {
 
 ---
 
-### 9. Edit Mode 상태 관리
+### 10. Edit Mode 상태 관리
 **파일**: `electron/state/editMode.ts`
 
 Edit Mode 상태를 중앙에서 관리하는 모듈입니다.
@@ -339,7 +364,7 @@ export function setTrayUpdateCallback(callback: (() => void) | null): void;
 
 ---
 
-### 10. ROI IPC 핸들러
+### 11. ROI IPC 핸들러
 **파일**: `electron/ipc/roi.ts`
 
 ROI 선택 관련 IPC 통신을 처리하는 핸들러입니다.
@@ -356,7 +381,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 11. 오버레이 React 컴포넌트
+### 12. 오버레이 React 컴포넌트
 **파일**: `renderer/src/overlay/OverlayApp.tsx`
 
 오버레이 창의 React UI 컴포넌트입니다.
@@ -373,7 +398,7 @@ export function isROISelectingState(): boolean;
 
 ---
 
-### 12. 저장소 (electron-store)
+### 13. 저장소 (electron-store)
 **파일**: `electron/store.ts`
 
 ROI와 모드 상태를 영속화하는 경량 래퍼입니다.
@@ -394,7 +419,7 @@ export function getStoreSnapshot(): StoreData;
 
 ---
 
-### 12. 모니터링 & OCR
+### 14. 모니터링 & OCR
 **파일**: `electron/main.ts`
 
 주요 역할:
@@ -405,7 +430,7 @@ export function getStoreSnapshot(): StoreData;
 
 ---
 
-### 13. 오디오 모니터링 서비스
+### 15. 오디오 모니터링 서비스
 **파일**: `electron/audio/audioService.ts`
 
 오디오 캡처, 처리, WebSocket 통신을 통합 관리합니다. Task 25에서 도입되었습니다.
@@ -419,7 +444,7 @@ export function getStoreSnapshot(): StoreData;
 
 ---
 
-### 14. 앱별 볼륨 제어
+### 16. 앱별 볼륨 제어
 **파일**: `electron/audio/appVolumeController.ts`
 
 앱별로 독립적으로 볼륨을 조절하는 모듈입니다. Task 26에서 도입되었습니다.

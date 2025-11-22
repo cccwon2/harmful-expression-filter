@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. Task 24~29까지 음성 STT API, Electron 오디오 연동, OnVoice COM 브리지 통합 작업이 완료되어 있으며, 시스템 트레이에 오디오 모니터링 상태 표시 기능이 추가되었습니다.
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. Task 24~29까지 음성 STT API, Electron 오디오 연동, OnVoice COM 브리지 통합 작업이 완료되었으며, Task 33에서 AudioManager를 추가하여 시스템 트레이에서 직접 오디오 캡처를 제어할 수 있도록 개선되었습니다.
 
 ## 🚀 빠른 시작
 
@@ -56,11 +56,19 @@ npm start
 ```
 harmful-expression-filter/
 ├── README.md                # 프로젝트 개요 및 빠른 시작 가이드
-├── docs/                    # 작업/문서 모음 (Task 00~26)
+├── docs/                    # 작업/문서 모음 (Task 00~33)
 │   ├── PROJECT_SPEC.md      # 마스터 플랜 (전체 프로젝트 명세서)
 │   ├── INTERFACES.md        # 핵심 인터페이스 및 연결부 코드
-│   └── ...                  # 각 작업 문서 (01~26)
+│   └── ...                  # 각 작업 문서 (01~33)
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
+│   ├── main/                # 메인 프로세스 핵심 모듈
+│   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)
+│   │   └── onVoiceBridge.ts # OnVoice Bridge 모듈
+│   ├── audio/               # 오디오 관련 서비스
+│   │   ├── onVoiceService.ts        # OnVoice 서비스 (IPC용)
+│   │   └── onVoiceBridgeAdapter.ts  # OnVoice 브리지 어댑터
+│   └── ipc/                 # IPC 핸들러
+│       └── onVoiceHandlers.ts       # OnVoice IPC 핸들러
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```
 
@@ -71,17 +79,19 @@ harmful-expression-filter/
 - `electron/ipc/channels.ts` – IPC 채널 정의 (SERVER_CHANNELS, AUDIO_CHANNELS, ONVOICE_CHANNELS 포함)
 - `electron/ipc/serverHandlers.ts` – FastAPI 연동 IPC 핸들러
 - `electron/ipc/audioHandlers.ts` – 오디오 모니터링 IPC 핸들러
-- `electron/ipc/onvoiceHandlers.ts` – OnVoice COM 브리지 IPC 핸들러
+- `electron/ipc/onVoiceHandlers.ts` – OnVoice COM 브리지 IPC 핸들러
 - `electron/preload.ts` – Preload API 구현 및 서버 브리지
 - `renderer/src/global.d.ts` – Preload API 타입 정의
 - `renderer/src/components/ServerTest.tsx` – 서버 테스트용 개발 UI
 - `renderer/src/components/AudioMonitor.tsx` – 오디오 모니터링 UI 컴포넌트
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
-- `electron/audio/onvoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
-- `electron/audio/onvoiceCaptureBridge.ts` – OnVoice COM 브리지 모듈
+- `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
+- `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
+- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (electron-edge-js 기반)
+- `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
 - `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어
-- `electron/tray.ts` – 시스템 트레이 (오디오 모니터링 상태 표시)
+- `electron/tray.ts` – 시스템 트레이 (오디오 모니터링 상태 표시, AudioManager 통합)
 - `electron/windows/createOverlayWindow.ts` – 오버레이 창 생성
 - `electron/state/editMode.ts` – Edit Mode 상태 관리
 
