@@ -22,9 +22,10 @@ export class LocalSttService {
   private loadingPromise: Promise<void> | null = null; // 동시 호출 방지용
   private lastProcessedText: string = ''; // 중복 제거용
   private lastProcessedTime: number = 0; // 마지막 처리 시간
+  private processingPromise: Promise<string | null> | null = null; // 현재 처리 중인 Promise
   
   // 오디오 설정
-  private readonly CHUNK_SIZE_SEC = 3.0; // 3초 분량 버퍼링
+  private readonly CHUNK_SIZE_SEC = 3.0; // 3초 분량 버퍼링 (정확도 향상을 위해 3초 유지)
   private readonly SAMPLE_RATE = 16000; // 16kHz 샘플레이트
   private readonly CHUNK_SIZE_SAMPLES = Math.floor(this.CHUNK_SIZE_SEC * this.SAMPLE_RATE);
 
@@ -236,8 +237,8 @@ export class LocalSttService {
       return null;
     }
 
-    // Int16 → Float32 변환 및 버퍼에 추가
-    const float32Array = this.convertInt16ToFloat32(pcmInt16);
+    // Int16 → Float32 변환 및 버퍼에 추가 (최적화: 직접 변환)
+    const float32Array = this.convertInt16ToFloat32Fast(pcmInt16);
     this.audioBuffer.push(float32Array);
 
     // 3초 분량이 쌓였는지 확인
@@ -255,49 +256,85 @@ export class LocalSttService {
       offset += arr.length;
     }
 
+    // 오디오 품질 검증 (너무 조용하면 스킵)
+    const audioMean = Math.abs(combinedBuffer.reduce((sum, val) => sum + Math.abs(val), 0) / combinedBuffer.length);
+    if (audioMean < 0.001) {
+      // 오디오가 너무 조용하면 스킵 (노이즈만 있을 수 있음)
+      this.audioBuffer = [];
+      return null;
+    }
+
+    // 오디오 정규화 (클리핑 방지)
+    const maxAbs = Math.max(...Array.from(combinedBuffer).map(Math.abs));
+    if (maxAbs > 0.95) {
+      // 클리핑 위험이 있으면 정규화
+      const scale = 0.95 / maxAbs;
+      for (let i = 0; i < combinedBuffer.length; i++) {
+        combinedBuffer[i] *= scale;
+      }
+    }
+
     // 버퍼 초기화 (다음 청크를 위해)
     this.audioBuffer = [];
 
-    // STT 처리
-    this.state = 'processing';
-    try {
-      const result = await this.transcriber(combinedBuffer, {
-        return_timestamps: false,
-        language: 'ko', // 한국어 지정
-      });
-      
-      this.state = 'ready';
-      
-      // result가 배열일 수 있으므로 처리
-      let text = '';
-      if (Array.isArray(result)) {
-        text = result[0]?.text?.trim() || '';
-      } else {
-        text = result?.text?.trim() || '';
-      }
-      
-      // 반복 패턴 제거 및 중복 필터링
-      text = this.deduplicateText(text);
-      
-      if (text) {
-        console.log(`[LocalSttService] STT 결과: "${text}"`);
-      }
-      
-      return text || null;
-    } catch (error) {
-      this.state = 'ready';
-      console.error('[LocalSttService] STT 처리 실패:', error);
+    // 이미 처리 중이면 이번 청크는 스킵 (렉 방지)
+    if (this.state === 'processing' || this.processingPromise) {
       return null;
     }
+
+    // STT 처리 (비동기로 처리하여 블로킹 최소화)
+    this.state = 'processing';
+    this.processingPromise = (async () => {
+      try {
+        // STT 처리를 다음 틱으로 지연시켜 메인 스레드 블로킹 최소화
+        await new Promise(resolve => setImmediate(resolve));
+        
+        // 한글 인식 정확도 향상을 위한 옵션 설정
+        const result = await this.transcriber(combinedBuffer, {
+          return_timestamps: false,
+          language: 'ko', // 한국어 지정
+          // chunk_length_s: 30, // 청크 길이 (기본값 사용)
+          // stride_length_s: 5, // 스트라이드 길이 (기본값 사용)
+          // task: 'transcribe', // transcribe 또는 translate
+        });
+        
+        // result가 배열일 수 있으므로 처리
+        let text = '';
+        if (Array.isArray(result)) {
+          text = result[0]?.text?.trim() || '';
+        } else {
+          text = result?.text?.trim() || '';
+        }
+        
+        // 반복 패턴 제거 및 중복 필터링 (간소화된 버전)
+        text = this.deduplicateTextFast(text);
+        
+        this.state = 'ready';
+        this.processingPromise = null;
+        
+        if (text) {
+          console.log(`[LocalSttService] STT 결과: "${text}"`);
+        }
+        
+        return text || null;
+      } catch (error) {
+        this.state = 'ready';
+        this.processingPromise = null;
+        console.error('[LocalSttService] STT 처리 실패:', error);
+        return null;
+      }
+    })();
+
+    return this.processingPromise;
   }
 
   /**
-   * PCM Int16 데이터를 Float32 배열로 변환
+   * PCM Int16 데이터를 Float32 배열로 변환 (최적화 버전)
    * 
    * @param buffer PCM Int16 형식의 Buffer
    * @returns Float32 배열 (-1.0 ~ 1.0 범위로 정규화)
    */
-  private convertInt16ToFloat32(buffer: Buffer): Float32Array {
+  private convertInt16ToFloat32Fast(buffer: Buffer): Float32Array {
     const int16Array = new Int16Array(
       buffer.buffer,
       buffer.byteOffset,
@@ -306,11 +343,23 @@ export class LocalSttService {
     const float32Array = new Float32Array(int16Array.length);
     
     // Int16 (-32768 ~ 32767) → Float32 (-1.0 ~ 1.0)
+    // 최적화: 루프 언롤링 및 상수 사용
+    const scale = 1.0 / 32768.0;
     for (let i = 0; i < int16Array.length; i++) {
-      float32Array[i] = int16Array[i] / 32768.0;
+      float32Array[i] = int16Array[i] * scale;
     }
     
     return float32Array;
+  }
+
+  /**
+   * PCM Int16 데이터를 Float32 배열로 변환 (레거시 버전)
+   * 
+   * @param buffer PCM Int16 형식의 Buffer
+   * @returns Float32 배열 (-1.0 ~ 1.0 범위로 정규화)
+   */
+  private convertInt16ToFloat32(buffer: Buffer): Float32Array {
+    return this.convertInt16ToFloat32Fast(buffer);
   }
 
   /**
@@ -352,7 +401,52 @@ export class LocalSttService {
   }
 
   /**
-   * 텍스트에서 반복 패턴 제거 및 중복 필터링
+   * 텍스트에서 반복 패턴 제거 및 중복 필터링 (정확도 향상을 위해 덜 공격적으로)
+   */
+  private deduplicateTextFast(text: string): string {
+    if (!text) return '';
+
+    let cleaned = text.trim();
+    
+    // 1. 같은 문장이 반복되는 패턴 제거 (3번 이상 반복만 제거)
+    // "-문장. -문장. -문장." 패턴을 "-문장."으로
+    const dashPattern = /^([-]\s*[^.-]+[.-]?)(\s*\1\s*){2,}/;
+    const dashMatch = cleaned.match(dashPattern);
+    if (dashMatch) {
+      cleaned = dashMatch[1].trim();
+    }
+    
+    // 2. 짧은 단어 반복 제거 (5번 이상 반복만 제거, 정확도 보호)
+    const shortRepeat = /(\b\S{1,2}\b)(\s*[,\s]?\s*\1){4,}/g;
+    cleaned = cleaned.replace(shortRepeat, (match) => {
+      const parts = match.split(/[,\s]+/).filter((p: string) => p.trim());
+      // 반복이 너무 많으면 첫 2개만 유지
+      if (parts.length > 5) {
+        return parts.slice(0, 2).join(' ');
+      }
+      return match;
+    });
+    
+    // 3. 이전 결과와 동일하면 제거 (시간 간격을 2초로 늘려 정확도 보호)
+    const now = Date.now();
+    if (cleaned === this.lastProcessedText && now - this.lastProcessedTime < 2000) {
+      return '';
+    }
+    
+    // 4. 너무 짧은 텍스트는 제거하지 않음 (한 글자도 의미 있을 수 있음)
+    // 대신 1글자 미만만 제거
+    if (cleaned.length < 1) {
+      return '';
+    }
+    
+    this.lastProcessedText = cleaned;
+    this.lastProcessedTime = now;
+    
+    return cleaned;
+  }
+
+  /**
+   * 텍스트에서 반복 패턴 제거 및 중복 필터링 (상세 버전)
    */
   private deduplicateText(text: string): string {
     if (!text) return '';
