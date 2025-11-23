@@ -38,6 +38,34 @@
 - **오디오 캡처**: OnVoice COM Bridge (프로세스별 오디오 캡처)
 - **백엔드**: FastAPI (Python 3.10, venv310 환경)
 
+## ⚙️ 환경 변수 설정
+
+프로젝트 루트와 `server` 폴더에 `.env` 파일을 생성하여 환경 변수를 설정합니다.
+
+### 루트 `.env` 파일 (프로젝트 루트)
+
+```env
+# 서버 URL (Electron에서 사용)
+SERVER_URL=http://127.0.0.1:8000
+
+# WebSocket URL (오디오 스트리밍용)
+SERVER_WS_URL=ws://127.0.0.1:8000/ws/audio
+```
+
+### `server/.env` 파일
+
+```env
+# Deepgram API Key (STT용)
+# 발급: https://console.deepgram.com/signup
+DEEPGRAM_API_KEY=your_deepgram_api_key_here
+```
+
+**참고**:
+
+- `.env` 파일은 `.gitignore`에 포함되어 있어 Git에 커밋되지 않습니다.
+- Deepgram API 키는 [Deepgram Console](https://console.deepgram.com/signup)에서 발급받을 수 있습니다.
+- 무료 크레딧: $200 (약 16,000분 사용 가능)
+
 ## 🚀 빠른 시작
 
 ```bash
@@ -100,6 +128,23 @@ harmful-expression-filter/
 ├── dotnet/                  # C# COM Bridge
 │   └── OnVoiceComBridge/    # .NET 6 프로젝트
 │       └── Startup.cs       # Windows SDK OCR + OnVoice COM 래퍼
+├── server/                  # FastAPI 백엔드 서버
+│   ├── main.py              # FastAPI 앱 진입점
+│   ├── requirements.txt     # Python 의존성 목록
+│   ├── .env                 # 환경 변수 (DEEPGRAM_API_KEY 등)
+│   ├── audio/               # 오디오 처리 모듈
+│   │   ├── deepgram_service.py    # Deepgram STT 서비스
+│   │   ├── whisper_service.py     # Whisper STT 서비스 (레거시)
+│   │   ├── buffer_manager.py      # 오디오 버퍼 관리 (레거시)
+│   │   └── pipeline.py            # 오디오 처리 파이프라인 (레거시)
+│   ├── nlp/                 # 자연어 처리 모듈
+│   │   └── harmful_classifier.py  # 유해 표현 분류기
+│   ├── services/            # 외부 서비스 연동
+│   │   └── paddle_ocr_service.py  # PaddleOCR 서비스 (레거시)
+│   ├── data/                # 데이터 파일
+│   │   └── bad_words.json   # 유해어 목록
+│   ├── tests/               # 테스트 파일
+│   └── venv310/             # Python 3.10 가상환경
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```
 
