@@ -39,3 +39,12 @@ Thumbs.db
 **/server/__pycache__/
 **/server/.pytest_cache/
 **/server/logs/
+
+# .NET / C# Build Folders
+**/bin/
+**/obj/
+
+# Visual Studio User specific files (사용자 설정 파일 등)
+*.user
+*.suo
+.vs/
