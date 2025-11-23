@@ -43,6 +43,7 @@
 33. **[AudioManager 트레이 통합](./33-audiomanager-tray-integration.md)** ✅ 완료
 34. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ✅ 완료
 35. **[Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)** ✅ 완료
+36. **[로컬 Whisper 폴백 시스템](./36-local-whisper-fallback.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -92,6 +93,9 @@
     └─ 29-onvoice-com-bridge-integration
 35-deepgram-realtime-streaming
     └─ 27-deepgram-stt-integration
+36-local-whisper-fallback
+    ├─ 35-deepgram-realtime-streaming
+    └─ 34-windows-ocr-optimization (로컬 분석 로직 참고)
 ```
 
 ## 작업 상태
@@ -130,6 +134,7 @@
 | AudioManager 트레이 통합 | ✅ 완료      | 100%   | High     |
 | Windows OCR 성능 최적화 | ✅ 완료      | 100%   | High     |
 | Deepgram 실시간 스트리밍 | ✅ 완료      | 100%   | High     |
+| 로컬 Whisper 폴백 시스템 | ✅ 완료      | 100%   | High     |
 
 ## 최근 변경 사항 (2025-11-22)
 
@@ -146,3 +151,8 @@
   - 레이턴시: ~2.0초 → ~0.5초 (버퍼링 제거)
   - 중간 결과(Interim Results) 지원으로 문장 완성 전에도 감지 가능
   - WebSocket 기반 실시간 양방향 통신
+- **Task 36: 로컬 Whisper 폴백 시스템 완료**
+  - 서버 연결 실패 시 자동으로 로컬 Whisper 모드로 전환
+  - 오프라인 환경에서도 STT 기능 유지
+  - `Xenova/whisper-tiny` 모델 사용 (quantized, ~75MB)
+  - 3초 버퍼링 후 로컬 STT 처리 및 유해성 분석

@@ -122,7 +122,7 @@ function callBridge(payload: any): Promise<any> {
   });
 }
 
-function analyzeTextLocally(text: string): { isHarmful: boolean; matched: string[] } {
+export function analyzeTextLocally(text: string): { isHarmful: boolean; matched: string[] } {
   if (!text || !text.trim()) return { isHarmful: false, matched: [] };
   const matched: string[] = [];
   const cleanText = text.replace(/\s+/g, " ");

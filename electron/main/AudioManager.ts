@@ -1,7 +1,8 @@
 import WebSocket from "ws";
-import { onVoiceBridge } from "./onVoiceBridge";
+import { onVoiceBridge, analyzeTextLocally } from "./onVoiceBridge";
 import { VolumeController } from "../audio/volumeController";
 import { getVolumeLevel } from "../store";
+import { LocalSttService } from "../audio/LocalSttService";
 
 type TargetApp = "chrome" | "edge" | "discord";
 
@@ -10,6 +11,7 @@ interface AudioManagerStatus {
   target?: TargetApp;
   pid?: number;
   wsConnected: boolean;
+  isFallbackMode?: boolean;
 }
 
 class AudioManager {
@@ -24,6 +26,10 @@ class AudioManager {
   private isReconnecting = false;
   private volumeController: VolumeController | null = null;
   private harmfulDetectionCount: number = 0;
+  private localSttService: LocalSttService;
+  private isFallbackMode: boolean = false;
+  private reconnectAttempts: number = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 3;
 
   private constructor() {
     this.wsUrl = process.env.SERVER_WS_URL || "ws://localhost:8000/ws/audio";
@@ -51,6 +57,9 @@ class AudioManager {
       return;
     }
     try {
+      // LocalSttService 초기화 (폴백용, 모델은 나중에 필요할 때 로딩)
+      this.localSttService = LocalSttService.getInstance();
+      
       await onVoiceBridge.init((pcm: Buffer) => {
         this.handleAudioData(pcm);
       });
@@ -63,14 +72,39 @@ class AudioManager {
   }
 
   private handleAudioData(pcm: Buffer): void {
-    if (!this.isStreaming || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    if (!this.isStreaming) {
       return;
     }
-    try {
-      this.ws.send(pcm);
-    } catch (error) {
-      console.error("[AudioManager] 오디오 데이터 전송 실패:", error);
-      this.reconnectWebSocket().catch(console.error);
+
+    // 폴백 모드: 로컬 STT 사용
+    if (this.isFallbackMode) {
+      this.localSttService.processAudio(pcm).then((text) => {
+        if (text && text.trim()) {
+          console.log(`[AudioManager] [로컬 STT] ${text}`);
+          
+          // 로컬 유해성 분석
+          const analysis = analyzeTextLocally(text);
+          if (analysis.isHarmful) {
+            console.warn(
+              `[AudioManager] 🚨 유해 표현 감지! "${text}" (키워드: ${analysis.matched.join(", ")})`
+            );
+            this.handleHarmfulExpressionDetected();
+          }
+        }
+      }).catch((error) => {
+        console.error("[AudioManager] 로컬 STT 처리 실패:", error);
+      });
+      return;
+    }
+
+    // 정상 모드: WebSocket 전송
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(pcm);
+      } catch (error) {
+        console.error("[AudioManager] 오디오 데이터 전송 실패:", error);
+        this.reconnectWebSocket().catch(console.error);
+      }
     }
   }
 
@@ -90,6 +124,12 @@ class AudioManager {
 
       this.ws.on("open", () => {
         console.log("[AudioManager] ✅ WebSocket 연결 성공");
+        // 연결 성공 시 재연결 시도 횟수 초기화 및 폴백 모드 해제
+        this.reconnectAttempts = 0;
+        if (this.isFallbackMode) {
+          console.log("[AudioManager] 정상 모드로 복구되었습니다.");
+          this.isFallbackMode = false;
+        }
         resolve();
       });
 
@@ -133,6 +173,13 @@ class AudioManager {
 
       this.ws.on("error", (error) => {
         console.error("[AudioManager] WebSocket 오류:", error);
+        this.reconnectAttempts++;
+        
+        // 3회 이상 실패 시 폴백 모드로 전환
+        if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS && !this.isFallbackMode) {
+          this.switchToFallbackMode().catch(console.error);
+        }
+        
         reject(error);
       });
 
@@ -141,23 +188,31 @@ class AudioManager {
         const wasStreaming = this.isStreaming;
         this.ws = null;
         if (wasStreaming && !this.isReconnecting) {
-          this.reconnectTimer = setTimeout(() => {
-            this.reconnectWebSocket().catch(console.error);
-          }, 2000);
+          this.reconnectAttempts++;
+          
+          // 3회 이상 실패 시 폴백 모드로 전환
+          if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS && !this.isFallbackMode) {
+            this.switchToFallbackMode().catch(console.error);
+          } else {
+            // 재연결 시도
+            this.reconnectTimer = setTimeout(() => {
+              this.reconnectWebSocket().catch(console.error);
+            }, 2000);
+          }
         }
       });
     });
   }
 
   private async reconnectWebSocket(): Promise<void> {
-    // (기존 코드와 동일 - 생략 가능하나 흐름상 유지)
-    if (!this.isStreaming || this.isReconnecting) return;
+    if (!this.isStreaming || this.isReconnecting || this.isFallbackMode) return;
     this.isReconnecting = true;
     try {
       await this.connectWebSocket();
       console.log("[AudioManager] WebSocket 재연결 성공");
+      this.reconnectAttempts = 0; // 재연결 성공 시 초기화
     } catch (error) {
-      if (this.isStreaming) {
+      if (this.isStreaming && !this.isFallbackMode) {
         this.reconnectTimer = setTimeout(() => {
           this.isReconnecting = false;
           this.reconnectWebSocket().catch(console.error);
@@ -171,23 +226,65 @@ class AudioManager {
     }
   }
 
+  /**
+   * 폴백 모드로 전환 (로컬 Whisper 사용)
+   */
+  private async switchToFallbackMode(): Promise<void> {
+    if (this.isFallbackMode) {
+      return; // 이미 폴백 모드
+    }
+
+    console.warn("[AudioManager] 🚨 서버 응답 없음. 로컬 Whisper 모드로 전환합니다.");
+    this.isFallbackMode = true;
+
+    // WebSocket 연결 종료
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+
+    // 재연결 타이머 취소
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    // LocalSttService 초기화 (모델 로딩)
+    try {
+      await this.localSttService.init();
+      console.log("[AudioManager] ✅ 로컬 Whisper 모델 로딩 완료");
+    } catch (error) {
+      console.error("[AudioManager] 로컬 Whisper 모델 로딩 실패:", error);
+      // 모델 로딩 실패 시에도 폴백 모드 유지 (재시도 가능)
+    }
+  }
+
   // (startStream, stopStream, getStatus 등은 기존 코드 유지)
   public async startStream(target: TargetApp): Promise<void> {
-    // ... (기존 코드와 동일)
-    // 편의상 생략했으나 원본 코드를 그대로 사용하시면 됩니다.
     if (this.isStreaming) return;
     if (!this.isInitialized) await this.init();
 
     try {
       const pid = await onVoiceBridge.findProcess(target);
-      await this.connectWebSocket();
+      
+      // 폴백 모드가 아니면 WebSocket 연결 시도
+      if (!this.isFallbackMode) {
+        try {
+          await this.connectWebSocket();
+        } catch (error) {
+          // 연결 실패 시 폴백 모드로 전환
+          console.error("[AudioManager] WebSocket 연결 실패, 폴백 모드로 전환:", error);
+          await this.switchToFallbackMode();
+        }
+      }
+      
       if (this.volumeController) this.volumeController.setTargetApp(target);
       await onVoiceBridge.startCapture(pid);
 
       this.isStreaming = true;
       this.currentTarget = target;
       this.currentPid = pid;
-      console.log(`[AudioManager] ✅ 스트리밍 시작: ${target} (PID: ${pid})`);
+      console.log(`[AudioManager] ✅ 스트리밍 시작: ${target} (PID: ${pid})${this.isFallbackMode ? " [로컬 Whisper 모드]" : ""}`);
     } catch (e) {
       console.error(e);
       throw e;
@@ -195,13 +292,14 @@ class AudioManager {
   }
 
   public async stopStream(): Promise<void> {
-    // ... (기존 코드와 동일)
     if (!this.isStreaming) return;
     await onVoiceBridge.stopCapture();
     if (this.ws) this.ws.close();
     this.isStreaming = false;
     this.currentTarget = null;
     this.currentPid = null;
+    // 재연결 시도 횟수 초기화 (다음 스트리밍 시도 시)
+    this.reconnectAttempts = 0;
   }
 
   public setWebSocketUrl(url: string): void {
@@ -214,6 +312,7 @@ class AudioManager {
       target: this.currentTarget || undefined,
       pid: this.currentPid || undefined,
       wsConnected: this.ws !== null && this.ws.readyState === WebSocket.OPEN,
+      isFallbackMode: this.isFallbackMode,
     };
   }
 

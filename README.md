@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~33**까지 완료되었습니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~36**까지 완료되었습니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -26,15 +26,19 @@
 - **Task 33**: AudioManager 트레이 통합 (보안 강화, 시스템 트레이 직접 제어)
 - **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
+- **Task 36**: 로컬 Whisper 폴백 시스템 (서버 연결 실패 시 로컬 STT 자동 전환)
 
 ### 주요 기술 스택
 
 - **OCR**: Windows SDK OCR (Windows.Media.Ocr) - C# COM Bridge를 통해 사용
   - **성능**: 14-17ms 처리 시간 (서버 분석 제거, 로컬 분석으로 전환)
   - **최적화**: OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
-- **STT**: Deepgram (WebSocket 기반 실시간 음성 인식)
-  - **성능**: ~0.5초 레이턴시 (버퍼링 제거, 실시간 스트리밍)
-  - **기능**: 중간 결과(Interim Results) 지원, 문장 완성 전에도 감지 가능
+- **STT**: Deepgram (WebSocket 기반 실시간 음성 인식) + 로컬 Whisper 폴백
+  - **정상 모드**: Deepgram 실시간 스트리밍 (~0.5초 레이턴시)
+    - 중간 결과(Interim Results) 지원, 문장 완성 전에도 감지 가능
+  - **폴백 모드**: 로컬 Whisper (서버 연결 실패 시 자동 전환)
+    - 모델: `Xenova/whisper-tiny` (quantized, ~75MB)
+    - 오프라인 환경에서도 STT 기능 유지
 - **오디오 캡처**: OnVoice COM Bridge (프로세스별 오디오 캡처)
 - **백엔드**: FastAPI (Python 3.10, venv310 환경)
 
@@ -163,8 +167,9 @@ harmful-expression-filter/
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
 - `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
 - `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
+- `electron/audio/LocalSttService.ts` – 로컬 Whisper STT 서비스 (폴백용, Singleton)
 - `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (electron-edge-js 기반, Windows SDK OCR 포함)
-- `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합)
+- `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합, 폴백 로직 포함)
 - `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
 - `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어
