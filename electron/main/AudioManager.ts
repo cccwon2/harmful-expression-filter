@@ -26,7 +26,7 @@ class AudioManager {
   private isReconnecting = false;
   private volumeController: VolumeController | null = null;
   private harmfulDetectionCount: number = 0;
-  private localSttService: LocalSttService;
+  private localSttService!: LocalSttService; // init()에서 초기화됨
   private isFallbackMode: boolean = false;
   private reconnectAttempts: number = 0;
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
@@ -231,11 +231,13 @@ class AudioManager {
    */
   private async switchToFallbackMode(): Promise<void> {
     if (this.isFallbackMode) {
+      console.log("[AudioManager] 이미 폴백 모드입니다. 현재 상태:", this.localSttService.getState());
       return; // 이미 폴백 모드
     }
 
     console.warn("[AudioManager] 🚨 서버 응답 없음. 로컬 Whisper 모드로 전환합니다.");
     this.isFallbackMode = true;
+    console.log("[AudioManager] LocalSttService 인스턴스 확인:", !!this.localSttService);
 
     // WebSocket 연결 종료
     if (this.ws) {
@@ -251,11 +253,42 @@ class AudioManager {
 
     // LocalSttService 초기화 (모델 로딩)
     try {
+      console.log("[AudioManager] 로컬 Whisper 모델 초기화 시작...");
+      console.log("[AudioManager] LocalSttService 상태:", this.localSttService.getState());
+      
+      const initStartTime = Date.now();
       await this.localSttService.init();
-      console.log("[AudioManager] ✅ 로컬 Whisper 모델 로딩 완료");
+      const initElapsed = ((Date.now() - initStartTime) / 1000).toFixed(1);
+      
+      console.log(`[AudioManager] ✅ 로컬 Whisper 모델 로딩 완료 (소요 시간: ${initElapsed}초)`);
+      console.log("[AudioManager] 최종 LocalSttService 상태:", this.localSttService.getState());
     } catch (error) {
-      console.error("[AudioManager] 로컬 Whisper 모델 로딩 실패:", error);
+      console.error("[AudioManager] ❌ 로컬 Whisper 모델 로딩 실패:", error);
+      if (error instanceof Error) {
+        console.error("[AudioManager] 에러 상세:", error.message);
+        console.error("[AudioManager] 에러 스택:", error.stack);
+        if (error.message.includes('fetch') || error.message.includes('network')) {
+          console.error("[AudioManager] ⚠️ 네트워크 오류로 보입니다. 인터넷 연결을 확인해주세요.");
+        }
+      }
       // 모델 로딩 실패 시에도 폴백 모드 유지 (재시도 가능)
+      console.warn("[AudioManager] 폴백 모드는 활성화되었지만 모델이 로딩되지 않았습니다. STT 기능이 동작하지 않을 수 있습니다.");
+      console.warn("[AudioManager] 현재 LocalSttService 상태:", this.localSttService.getState());
+      
+      // ONNX 관련 에러인 경우 자동으로 재시도
+      if (error instanceof Error && (
+        error.message.includes('Protobuf parsing failed') ||
+        error.message.includes('onnx') && error.message.includes('failed') ||
+        error.message.includes('decoder_model_merged')
+      )) {
+        console.log("[AudioManager] ONNX 에러 감지. 자동으로 캐시 삭제 후 재시도합니다...");
+        try {
+          await this.localSttService.resetAndRetry();
+          console.log("[AudioManager] ✅ 자동 재시도 성공!");
+        } catch (retryError) {
+          console.error("[AudioManager] ❌ 자동 재시도 실패:", retryError);
+        }
+      }
     }
   }
 
