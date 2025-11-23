@@ -39,7 +39,7 @@
   - **폴백 모드**: 로컬 Whisper (서버 연결 실패 시 자동 전환)
     - 모델: `Xenova/whisper-tiny` (quantized, ~75MB)
     - 오프라인 환경에서도 STT 기능 유지
-- **오디오 캡처**: OnVoice COM Bridge (프로세스별 오디오 캡처)
+- **오디오 캡처**: [OnVoice COM Bridge](https://github.com/cccwon2/onvoice-com-bridge) (Windows WASAPI 기반 프로세스별 오디오 캡처)
 - **백엔드**: FastAPI (Python 3.10, venv310 환경)
 
 ## ⚙️ 환경 변수 설정

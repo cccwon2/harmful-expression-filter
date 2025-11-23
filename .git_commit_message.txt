@@ -1,0 +1,35 @@
+feat: Task 36 - 로컬 Whisper 폴백 시스템 구현
+
+Deepgram 서버 연결 실패 시 Electron 내부에서 로컬 Whisper 모델을
+사용하여 STT를 수행하는 폴백 시스템을 구현했습니다.
+
+주요 변경사항:
+- LocalSttService 구현 (electron/audio/LocalSttService.ts)
+  - Singleton 패턴으로 로컬 Whisper STT 서비스 구현
+  - Xenova/whisper-tiny 모델 사용 (quantized, ~75MB)
+  - PCM Int16 → Float32 변환 및 3초 버퍼링 후 STT 처리
+
+- AudioManager 폴백 로직 추가 (electron/main/AudioManager.ts)
+  - WebSocket 연결 실패 감지 및 자동 폴백 모드 전환
+  - 3회 이상 실패 시 로컬 Whisper 모드로 자동 전환
+  - 로컬 STT 결과를 기존 로컬 유해성 분석과 연동
+
+- analyzeTextLocally 함수 export (electron/main/onVoiceBridge.ts)
+  - 폴백 모드에서 로컬 유해성 분석을 위해 export 추가
+
+- 의존성 추가 (package.json)
+  - @huggingface/transformers 패키지 추가
+
+- 문서 업데이트
+  - Task 36 문서 작성 (docs/36-local-whisper-fallback.md)
+  - README.md 업데이트 (Task 36 추가, STT 섹션 보완)
+  - docs/00-overview.md 업데이트 (Task 36 추가, 의존성 그래프 업데이트)
+
+기능:
+- 서버 연결 실패 시 자동으로 로컬 Whisper 모드로 전환
+- 오프라인 환경에서도 STT 기능 유지
+- 지연 로딩으로 메모리 효율성 향상
+- 기존 로컬 유해성 분석 로직과 완전 연동
+
+관련 작업: Task 35 (Deepgram 실시간 스트리밍), Task 34 (로컬 분석 로직)
+
