@@ -230,7 +230,7 @@ transformers==4.35.0
     ```
   - 통합 확인: Python 3.11 환경에서 Whisper/Torch 설치 후 `wscat`으로 바이너리 전송
   
-  > ⚠️ **주의**: Whisper/Torch 실측 시 `server/venv311`(Python 3.11) 가상환경을 사용하고,
+  > ⚠️ **주의**: Whisper/Torch 실측 시 `server/venv310`(Python 3.10) 가상환경을 사용하고,
   > `pip install openai-whisper torch torchaudio pydub` 설치 후 실행하세요.
 
 - [ ] **4.2. 성능 최적화 검토**
@@ -261,7 +261,7 @@ transformers==4.35.0
   - 랜덤 노이즈 또는 실제 샘플 파일 기반 전송 지원
   - Python 3.12+ 환경에서는 Whisper/Torch 제약 안내 메시지 출력
   - 평균 지연 시간 계산 및 3초 초과 시 경고 출력
-  - Python 3.11 가상환경(`server/venv311`) + `.\venv311\Scripts\uvicorn.exe main:app` 조합으로 실측
+  - Python 3.10 가상환경(`server/venv310`) + `.\venv310\Scripts\uvicorn.exe main:app` 조합으로 실측
   - 랜덤 오디오 5청크 측정 (CPU):
     - Chunk1: **12.10s** *(모델 웜업 포함)*
     - Chunk2~5: **1.78s / 1.87s / 2.09s / 2.23s*
