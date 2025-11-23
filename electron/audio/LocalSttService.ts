@@ -237,6 +237,12 @@ export class LocalSttService {
       return null;
     }
 
+    // 처리 중이면 버퍼에 추가하지 않음 (렉 방지)
+    // state는 이미 'ready'임이 보장되므로 processingPromise만 체크
+    if (this.processingPromise) {
+      return null;
+    }
+    
     // Int16 → Float32 변환 및 버퍼에 추가 (최적화: 직접 변환)
     const float32Array = this.convertInt16ToFloat32Fast(pcmInt16);
     this.audioBuffer.push(float32Array);
@@ -278,19 +284,28 @@ export class LocalSttService {
     this.audioBuffer = [];
 
     // 이미 처리 중이면 이번 청크는 스킵 (렉 방지)
-    if (this.state === 'processing' || this.processingPromise) {
+    // state는 이미 'ready'임이 보장되므로 processingPromise만 체크
+    if (this.processingPromise) {
+      return null;
+    }
+
+    // transcriber는 이미 null이 아님을 확인했으므로 사용 가능
+    if (!this.transcriber) {
       return null;
     }
 
     // STT 처리 (비동기로 처리하여 블로킹 최소화)
     this.state = 'processing';
+    const transcriber = this.transcriber; // 로컬 변수로 저장하여 null 체크 회피
     this.processingPromise = (async () => {
       try {
-        // STT 처리를 다음 틱으로 지연시켜 메인 스레드 블로킹 최소화
+        // STT 처리를 여러 틱으로 분산하여 메인 스레드 블로킹 최소화
+        // base 모델은 처리 시간이 길어서 더 긴 지연 필요
+        await new Promise(resolve => setTimeout(resolve, 0));
         await new Promise(resolve => setImmediate(resolve));
         
         // 한글 인식 정확도 향상을 위한 옵션 설정
-        const result = await this.transcriber(combinedBuffer, {
+        const result = await transcriber(combinedBuffer, {
           return_timestamps: false,
           language: 'ko', // 한국어 명시적 지정
           // 추가 옵션은 기본값 사용 (정확도 우선)
@@ -618,6 +633,13 @@ export class LocalSttService {
             if (fs.existsSync(whisperTinyPath)) {
               cachePathToDelete = whisperTinyPath;
               console.log(`[LocalSttService] 에러 메시지에서 캐시 경로 추출: ${cachePathToDelete}`);
+            }
+          } else if (dirPath.includes('whisper-base')) {
+            // 이전 모델(base) 캐시도 삭제 가능
+            const whisperBasePath = dirPath.split('whisper-base')[0] + 'whisper-base';
+            if (fs.existsSync(whisperBasePath)) {
+              cachePathToDelete = whisperBasePath;
+              console.log(`[LocalSttService] 에러 메시지에서 캐시 경로 추출 (이전 모델): ${cachePathToDelete}`);
             }
           }
         }
