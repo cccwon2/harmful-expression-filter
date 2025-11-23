@@ -24,11 +24,17 @@
 - **Task 29**: OnVoice COM Bridge 통합 (프로세스별 오디오 캡처)
 - **Task 30~32**: electron-edge-js 마이그레이션 (winax → electron-edge-js + C#)
 - **Task 33**: AudioManager 트레이 통합 (보안 강화, 시스템 트레이 직접 제어)
+- **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
+- **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
 
 ### 주요 기술 스택
 
 - **OCR**: Windows SDK OCR (Windows.Media.Ocr) - C# COM Bridge를 통해 사용
+  - **성능**: 14-17ms 처리 시간 (서버 분석 제거, 로컬 분석으로 전환)
+  - **최적화**: OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
 - **STT**: Deepgram (WebSocket 기반 실시간 음성 인식)
+  - **성능**: ~0.5초 레이턴시 (버퍼링 제거, 실시간 스트리밍)
+  - **기능**: 중간 결과(Interim Results) 지원, 문장 완성 전에도 감지 가능
 - **오디오 캡처**: OnVoice COM Bridge (프로세스별 오디오 캡처)
 - **백엔드**: FastAPI (Python 3.10, venv310 환경)
 

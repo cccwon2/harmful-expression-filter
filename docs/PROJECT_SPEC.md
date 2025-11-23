@@ -149,7 +149,8 @@
 
 ### T24: 음성 STT API ✅
 - FastAPI 서버에 WebSocket 기반 음성 스트리밍 엔드포인트 구현
-- Whisper 모델을 사용한 실시간 음성 인식
+- Whisper 모델을 사용한 실시간 음성 인식 (초기 구현)
+- Deepgram으로 마이그레이션 (T27, T35)
 - 유해성 판별 통합
 
 ### T25: 음성 Electron 연동 ✅
@@ -157,6 +158,19 @@
 - WebSocket을 통한 실시간 오디오 스트리밍
 - 서버 응답 기반 유해성 감지
 - 앱별 볼륨 조절 (T26으로 마이그레이션됨)
+
+### T34: Windows OCR 성능 최적화 ✅
+- OCR 처리 시간 단축: 2-3초 → 14-17ms (약 120-200배 개선)
+- 서버 분석 제거: C#에서 서버 HTTP 요청 제거, Node.js 로컬 분석으로 전환
+- ROI 처리 제거: Node.js에서 이미 크롭된 이미지를 전달하므로 ROI 정보 불필요
+- OCR 엔진 캐싱: 초기화 비용 제거, 일관된 성능 유지
+- 이미지 변환 최적화: DataWriter 사용으로 메모리 복사 최소화
+
+### T35: Deepgram 실시간 스트리밍 방식 ✅
+- 버퍼링 제거: 1초 버퍼링 방식에서 실시간 WebSocket 스트리밍으로 전환
+- 레이턴시 단축: ~2.0초 → ~0.5초 (버퍼링 오버헤드 제거)
+- 중간 결과 활용: `interim_results=true`로 문장 완성 전에도 감지 가능
+- 리소스 사용량 감소: 버퍼링 로직 제거, Raw PCM 전송으로 변환 오버헤드 제거
 
 ### T26: 앱별 볼륨 조절 마이그레이션 ✅
 - `loudness` 패키지 제거 및 `native-sound-mixer`로 마이그레이션
@@ -285,6 +299,9 @@ interface Window {
 - **Python 3.10+** (venv310 가상환경 사용 필수)
 - FastAPI
 - Deepgram STT (음성 인식)
+  - **실시간 WebSocket 스트리밍** (Task 35)
+  - 레이턴시: ~0.5초 (버퍼링 제거)
+  - 중간 결과(Interim Results) 지원
 
 **⚠️ 중요**: server 폴더의 모든 Python 라이브러리는 `venv310` 가상환경에서만 관리합니다.
 - 가상환경 활성화: `venv310\Scripts\activate` (Windows) 또는 `source venv310/bin/activate` (Linux/Mac)
@@ -294,6 +311,10 @@ interface Window {
 - **Windows SDK OCR**: Windows.Media.Ocr API를 C# COM Bridge를 통해 사용
 - Electron에서 직접 처리 (서버 불필요)
 - C# COM Bridge (`dotnet/OnVoiceComBridge/Startup.cs`)를 통해 구현
+- **성능 최적화 (Task 34)**:
+  - 처리 시간: 2-3초 → 14-17ms (약 120-200배 개선)
+  - 서버 분석 제거, Node.js 로컬 분석으로 전환
+  - OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
 
 ## 빌드 및 실행
 

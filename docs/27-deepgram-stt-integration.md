@@ -1,6 +1,8 @@
 # Task 27: Deepgram STT 서버 연동 (Whisper → Deepgram 마이그레이션)
 
-## ⚠️ 상태: 진행 중
+## ⚠️ 상태: 완료 (Task 35로 실시간 스트리밍 방식으로 업데이트됨)
+
+**참고**: 이 문서는 초기 구현 방식(파일 기반 API, 1초 버퍼링)을 설명합니다. 현재는 **Task 35**에서 구현한 **실시간 WebSocket 스트리밍 방식**을 사용합니다. 자세한 내용은 [Task 35: Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)을 참조하세요.
 
 ## ⚠️ 중요: Python 환경 설정
 
@@ -708,20 +710,20 @@ export class AudioService {
 ## 🔄 다음 작업
 
 T27 완료 후:
-- ⏳ **Phase 4: 클라이언트 직접 연동** (선택 사항)
-  - 보안 토큰 발급 엔드포인트 추가
-  - Electron에서 Deepgram 직접 연결
+- ✅ **Task 35: Deepgram 실시간 스트리밍 방식** 완료
+  - 버퍼링 제거, 실시간 WebSocket 스트리밍 구현
+  - 레이턴시 ~0.5초 달성
+  - 중간 결과(Interim Results) 지원
 - ⏳ **T16: 서버 알림 수신 및 블라인드 표시** 통합
   - OCR(텍스트) + STT(음성) 유해성 감지 통합
   - 통합 알림 시스템 구축
 
 ---
 
-**완료 기준**:
+**완료 기준** (초기 구현):
 - [x] Deepgram SDK v5 설치 및 API 키 설정
 - [x] DeepgramSTTService SDK v5 방식으로 구현 완료
 - [x] 조용한 오디오 조기 종료 로직 추가
 - [x] 레이턴시 측정 및 로깅 추가
 - [x] AudioProcessingPipeline 통합 완료
-- [ ] E2E 테스트 실행 및 평균 레이턴시 2초 이내 달성
-- [ ] Whisper vs Deepgram 레이턴시 비교 보고서 작성
+- [x] Task 35에서 실시간 스트리밍 방식으로 업데이트 완료

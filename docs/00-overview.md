@@ -37,10 +37,12 @@
 24. **[음성 STT API](./24-audio-stt-api.md)** ✅ 완료
 25. **[음성 Electron 연동](./25-audio-electron-integration.md)** ✅ 완료
 26. **[앱별 볼륨 조절 마이그레이션](./26-app-volume-migration.md)** ✅ 완료
-27. **[Deepgram STT 통합](./27-deepgram-stt-integration.md)** ✅ 완료
+27. **[Deepgram STT 통합](./27-deepgram-stt-integration.md)** ✅ 완료 (Task 35로 실시간 스트리밍 방식으로 업데이트됨)
 28. **[PaddleOCR 서버 연동 및 Tesseract.js 대체](./28-paddle-ocr-integration.md)** ✅ 완료 (현재는 Windows SDK OCR로 대체됨)
 29. **[OnVoice COM Bridge 통합](./29-onvoice-com-bridge-integration.md)** ✅ 완료
 33. **[AudioManager 트레이 통합](./33-audiomanager-tray-integration.md)** ✅ 완료
+34. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ✅ 완료
+35. **[Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -86,6 +88,10 @@
 33-audiomanager-tray-integration
     ├─ 29-onvoice-com-bridge-integration
     └─ 02-system-tray
+34-windows-ocr-optimization
+    └─ 29-onvoice-com-bridge-integration
+35-deepgram-realtime-streaming
+    └─ 27-deepgram-stt-integration
 ```
 
 ## 작업 상태
@@ -122,7 +128,8 @@
 | PaddleOCR 서버 연동    | ✅ 완료      | 100%   | High     | (현재는 Windows SDK OCR로 대체됨)
 | OnVoice COM Bridge 통합 | ✅ 완료      | 100%   | High     |
 | AudioManager 트레이 통합 | ✅ 완료      | 100%   | High     |
-| Windows SDK OCR 통합  | ✅ 완료      | 100%   | High     |
+| Windows OCR 성능 최적화 | ✅ 완료      | 100%   | High     |
+| Deepgram 실시간 스트리밍 | ✅ 완료      | 100%   | High     |
 
 ## 최근 변경 사항 (2025-11-22)
 
@@ -131,3 +138,11 @@
   - 서버 불필요, 네이티브 성능 활용
 - **venv310 환경 사용**: Python 3.10 가상환경(venv310)으로 변경
 - **OCR 아키텍처 개선**: 서버 기반 → 클라이언트 기반 (Windows SDK)
+- **Task 34: Windows OCR 성능 최적화 완료**
+  - 처리 시간: 2-3초 → 14-17ms (약 120-200배 개선)
+  - 서버 분석 제거, Node.js 로컬 분석으로 전환
+  - OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
+- **Task 35: Deepgram 실시간 스트리밍 완료**
+  - 레이턴시: ~2.0초 → ~0.5초 (버퍼링 제거)
+  - 중간 결과(Interim Results) 지원으로 문장 완성 전에도 감지 가능
+  - WebSocket 기반 실시간 양방향 통신

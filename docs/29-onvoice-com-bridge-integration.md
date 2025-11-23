@@ -8,6 +8,8 @@ Windows에서 **프로세스별 오디오 캡처**를 위해 C++ COM DLL(`OnVoic
 
 기존 `naudiodon2` 기반 시스템 전체 오디오 캡처와 달리, **Edge/Chrome 등 특정 프로세스의 오디오만 선택적으로 캡처**할 수 있습니다.
 
+**참고**: 이 모듈은 Windows SDK OCR 기능도 포함하고 있으며, Task 34에서 성능 최적화가 완료되었습니다 (처리 시간: 2-3초 → 14-17ms).
+
 ## 🎯 핵심 목표
 
 - ✅ **재사용 가능한 COM 브리지 모듈** 생성
@@ -247,6 +249,8 @@ node examples/deepgram_onvoice_client.js
 - **Task 24**: 음성 STT API (서버 WebSocket 기반)
 - **Task 25**: 음성 Electron 연동
 - **Task 27**: Deepgram STT 통합
+- **Task 34**: Windows OCR 성능 최적화 (이 모듈의 OCR 기능 최적화)
+- **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거)
 
 ## 📝 다음 단계
 
