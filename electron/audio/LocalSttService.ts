@@ -292,10 +292,8 @@ export class LocalSttService {
         // 한글 인식 정확도 향상을 위한 옵션 설정
         const result = await this.transcriber(combinedBuffer, {
           return_timestamps: false,
-          language: 'ko', // 한국어 지정
-          // chunk_length_s: 30, // 청크 길이 (기본값 사용)
-          // stride_length_s: 5, // 스트라이드 길이 (기본값 사용)
-          // task: 'transcribe', // transcribe 또는 translate
+          language: 'ko', // 한국어 명시적 지정
+          // 추가 옵션은 기본값 사용 (정확도 우선)
         });
         
         // result가 배열일 수 있으므로 처리
@@ -401,42 +399,80 @@ export class LocalSttService {
   }
 
   /**
-   * 텍스트에서 반복 패턴 제거 및 중복 필터링 (정확도 향상을 위해 덜 공격적으로)
+   * 텍스트에서 반복 패턴 제거 및 중복 필터링 (강화된 버전)
    */
   private deduplicateTextFast(text: string): string {
     if (!text) return '';
 
     let cleaned = text.trim();
     
-    // 1. 같은 문장이 반복되는 패턴 제거 (3번 이상 반복만 제거)
-    // "-문장. -문장. -문장." 패턴을 "-문장."으로
-    const dashPattern = /^([-]\s*[^.-]+[.-]?)(\s*\1\s*){2,}/;
-    const dashMatch = cleaned.match(dashPattern);
-    if (dashMatch) {
-      cleaned = dashMatch[1].trim();
-    }
+    // 1. 단어 반복 패턴 제거 (예: "시원한 시원한 시원한..." → "시원한")
+    // 2글자 이상 단어가 3번 이상 반복되면 첫 번째만 유지
+    const wordRepeatPattern = /\b(\S{2,})\s+(\1\s+){2,}/g;
+    cleaned = cleaned.replace(wordRepeatPattern, (match, word) => {
+      return word + ' ';
+    });
     
-    // 2. 짧은 단어 반복 제거 (5번 이상 반복만 제거, 정확도 보호)
+    // 2. 문장 패턴 반복 제거 (예: "-너는 사기에요. -네. -너는 사기에요. -네." → "-너는 사기에요. -네.")
+    // "-문장. -문장." 패턴이 2번 이상 반복되면 첫 번째만 유지
+    const sentencePattern = /([-]\s*[^.-]+[.-]?\s*)(\1\s*){1,}/g;
+    cleaned = cleaned.replace(sentencePattern, (match, firstSentence) => {
+      return firstSentence.trim();
+    });
+    
+    // 3. 복합 패턴 제거 (예: "-너는 사기에요. -네." 반복)
+    // 문장 쌍이 반복되는 경우
+    const pairPattern = /((?:[-]\s*[^.-]+[.-]?\s*){1,2})(\s*\1\s*){2,}/g;
+    cleaned = cleaned.replace(pairPattern, (match, firstPair) => {
+      return firstPair.trim();
+    });
+    
+    // 4. 짧은 단어 반복 제거 (1-2글자 단어가 5번 이상 반복)
     const shortRepeat = /(\b\S{1,2}\b)(\s*[,\s]?\s*\1){4,}/g;
     cleaned = cleaned.replace(shortRepeat, (match) => {
       const parts = match.split(/[,\s]+/).filter((p: string) => p.trim());
-      // 반복이 너무 많으면 첫 2개만 유지
       if (parts.length > 5) {
         return parts.slice(0, 2).join(' ');
       }
       return match;
     });
     
-    // 3. 이전 결과와 동일하면 제거 (시간 간격을 2초로 늘려 정확도 보호)
+    // 5. "-네. -네. -네." 같은 패턴 제거
+    const nePattern = /([-]\s*네[.\s]*)(\1\s*){2,}/g;
+    cleaned = cleaned.replace(nePattern, (match) => {
+      return '-네. ';
+    });
+    
+    // 6. 최종 정리: 연속된 공백 제거
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    // 7. 이전 결과와 동일하면 제거
     const now = Date.now();
     if (cleaned === this.lastProcessedText && now - this.lastProcessedTime < 2000) {
       return '';
     }
     
-    // 4. 너무 짧은 텍스트는 제거하지 않음 (한 글자도 의미 있을 수 있음)
-    // 대신 1글자 미만만 제거
+    // 8. 너무 짧은 텍스트 제거
     if (cleaned.length < 1) {
       return '';
+    }
+    
+    // 9. 반복이 여전히 많이 남아있으면 더 공격적으로 제거
+    // 같은 단어가 전체 텍스트의 50% 이상을 차지하면 제거
+    const words = cleaned.split(/\s+/);
+    if (words.length > 5) {
+      const wordCounts = new Map<string, number>();
+      words.forEach(word => {
+        wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+      });
+      
+      const maxCount = Math.max(...Array.from(wordCounts.values()));
+      if (maxCount > words.length * 0.5) {
+        // 가장 많이 반복되는 단어가 50% 이상이면 첫 번째만 유지
+        const mostRepeated = Array.from(wordCounts.entries())
+          .sort((a, b) => b[1] - a[1])[0][0];
+        cleaned = mostRepeated;
+      }
     }
     
     this.lastProcessedText = cleaned;
