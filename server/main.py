@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ✅ websockets: legacy asyncio API 사용
+# 주의: websockets 14.0+ 버전에서도 호환성을 위해 legacy 모듈 사용
+# requirements.txt에 버전을 명시하는 것이 좋습니다.
 from websockets.legacy.client import connect as ws_connect
 
 # NLP Classifier (수정된 harmful_classifier.py 사용 전제)
@@ -76,6 +78,7 @@ def check_keywords(text: str) -> List[str]:
 class DeepgramWebSocketManager:
     """
     FastAPI WebSocket(Electron)과 Deepgram STT WebSocket(v1 / nova-2, ko)을 중계하는 클래스
+    Task 35: 실시간 스트리밍 및 중간 결과 처리 지원
     """
     def __init__(self, websocket: WebSocket, api_key: str, keywords: List[str], classifier_instance: Optional[HarmfulTextClassifier]):
         self.websocket = websocket
@@ -112,6 +115,7 @@ class DeepgramWebSocketManager:
                 pass
             self.receive_task = None
 
+        # Task 35: interim_results=true 설정 (중간 결과 수신)
         url = (
             "wss://api.deepgram.com/v1/listen"
             "?model=nova-2&language=ko&smart_format=true"
@@ -163,7 +167,7 @@ class DeepgramWebSocketManager:
             if self.dg_ws.closed:
                 LOGGER.warning("[Deepgram] WebSocket이 닫혀있음. 재연결 시도...")
                 self.is_running = False
-                # 재연결은 상위에서 처리하도록 함
+                # 재연결은 상위(audio_stream)에서 처리하도록 함
                 return
             
             await self.dg_ws.send(audio_bytes)
@@ -175,7 +179,6 @@ class DeepgramWebSocketManager:
             if "1011" in error_msg or "closed" in error_msg.lower() or "timeout" in error_msg.lower():
                 LOGGER.warning("[Deepgram] 연결 오류 감지. 재연결 필요")
                 self.is_running = False
-                # WebSocket 닫기
                 try:
                     if self.dg_ws and not self.dg_ws.closed:
                         await self.dg_ws.close()
@@ -198,7 +201,6 @@ class DeepgramWebSocketManager:
         except Exception as e:
             error_msg = str(e)
             LOGGER.error("[Deepgram] 수신 루프 오류: %s", e)
-            # 타임아웃이나 연결 오류인 경우
             if "1011" in error_msg or "timeout" in error_msg.lower() or "closed" in error_msg.lower():
                 LOGGER.warning("[Deepgram] WebSocket 연결이 끊어짐")
         finally:
@@ -223,15 +225,10 @@ class DeepgramWebSocketManager:
         self.last_transcript = transcript
         self.last_is_final = is_final
 
-        # 🔇 키워드 체크 주석처리 (kanana-lora-v1 모델만 사용)
-        # # 1차: 키워드
-        # matched = check_keywords(transcript)
-        # is_harmful_keyword = len(matched) > 0
-
-        # ✅ AI (Kanana LoRA)만 사용 - 모든 텍스트에 대해 AI 판별 수행
+        # ✅ AI (Kanana LoRA/KoElectra) 판별 로직
         is_harmful_ai = False
         ai_confidence = 0.0
-        # 🔇 matched_keywords는 하위 호환성을 위해 유지하지만 빈 배열로 설정
+        # 🔇 matched_keywords는 하위 호환성을 위해 유지하지만 빈 배열로 설정 (AI Only Mode)
         matched_keywords = []
         
         if is_final and self.classifier:
@@ -240,12 +237,10 @@ class DeepgramWebSocketManager:
                 if result.is_harmful:
                     is_harmful_ai = True
                     ai_confidence = result.confidence
-                    # AI 감지 정보는 별도 필드로 전달 (키워드가 아님)
             except Exception as e:
                 LOGGER.error("[AI] 분류 에러: %s", e)
 
         is_harmful = is_harmful_ai
-        
         model_name = self._get_classifier_model_name()
 
         response_data = {
@@ -264,8 +259,8 @@ class DeepgramWebSocketManager:
             "ai_checked": is_final and (self.classifier is not None),
         }
 
-        # 로그 출력
-        if not is_final: return # 진행 중인 결과는 클라이언트에 안 보냄
+        # 로그 출력 (중간 결과는 클라이언트로 전송 안 함 [Task 35])
+        if not is_final: return
         
         print(f"[STT] [확정] {transcript}", flush=True)
         if is_harmful:
@@ -299,14 +294,13 @@ class DeepgramWebSocketManager:
 async def lifespan(app: FastAPI):
     global classifier
     
-    # 🔇 키워드 로드 주석처리 (kanana-lora-v1 모델만 사용)
+    # 🔇 키워드 로드 주석처리 (AI 모델만 사용)
     # load_keywords()
     
     # ✅ 모델 로드 로직 (Kanana 또는 KoElectra 선택 가능)
     try:
-        # .env에서 모델 타입 가져오기
-        model_type_env = os.getenv("MODEL_TYPE", "kanana").lower()  # "kanana" 또는 "koelectra"
-        model_path_env = os.getenv("MODEL_PATH", "")  # 빈 문자열 = base 모델만 사용
+        model_type_env = os.getenv("MODEL_TYPE", "kanana").lower()
+        model_path_env = os.getenv("MODEL_PATH", "")
         base_model_env = os.getenv("BASE_MODEL_NAME", "")
         
         if model_type_env == "koelectra":
@@ -318,7 +312,7 @@ async def lifespan(app: FastAPI):
             LOGGER.info(f" - Model: {base_model_env}")
             
             classifier = HarmfulTextClassifier(
-                model_path="",  # KoElectra는 LoRA 불필요
+                model_path="",
                 base_model_name=base_model_env
             )
             LOGGER.info("[Init] ✅ KoElectra 모델 로드 완료!")
@@ -328,34 +322,28 @@ async def lifespan(app: FastAPI):
             if not base_model_env:
                 base_model_env = "kakaocorp/kanana-nano-2.1b-instruct"
             
-            # Base 모델만 사용할지 확인
             use_base_only = not model_path_env or model_path_env.strip() == ""
             
             if use_base_only:
                 LOGGER.info("[Init] 🚀 Kanana Base 모델 로딩 시작...")
                 LOGGER.info(f" - Base Model: {base_model_env}")
-                LOGGER.info(f" - LoRA Adapter: 사용 안 함 (Base 모델만 사용)")
                 
-                # HarmfulTextClassifier 초기화 (model_path를 빈 문자열로 전달하여 base만 사용)
                 classifier = HarmfulTextClassifier(
-                    model_path="",  # 빈 문자열 = base 모델만 사용
+                    model_path="",
                     base_model_name=base_model_env
                 )
                 LOGGER.info("[Init] ✅ Kanana-Nano Base 모델 로드 완료!")
                 model_type = "Kanana-Base"
             else:
-                # 절대 경로 변환
                 base_dir = os.path.dirname(__file__)
                 full_model_path = os.path.join(base_dir, model_path_env)
 
                 if os.path.exists(full_model_path):
                     LOGGER.info("[Init] 🚀 Kanana LoRA 모델 로딩 시작...")
                     LOGGER.info(f" - Adapter Path: {full_model_path}")
-                    LOGGER.info(f" - Base Model: {base_model_env}")
                     
-                    # HarmfulTextClassifier 초기화 (새로운 파라미터 적용)
                     classifier = HarmfulTextClassifier(
-                        model_path=model_path_env, # harmful_classifier 내부에서 상대경로 처리함
+                        model_path=model_path_env,
                         base_model_name=base_model_env
                     )
                     LOGGER.info("[Init] ✅ Kanana-Nano LoRA 모델 로드 완료!")
@@ -364,7 +352,7 @@ async def lifespan(app: FastAPI):
                     LOGGER.warning(f"[Init] ⚠️ 모델 경로를 찾을 수 없음: {full_model_path}")
                     LOGGER.warning("[Init] Base 모델만 사용합니다.")
                     classifier = HarmfulTextClassifier(
-                        model_path="",  # 빈 문자열 = base 모델만 사용
+                        model_path="",
                         base_model_name=base_model_env
                     )
                     model_type = "Kanana-Base"
@@ -381,9 +369,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="OnVoice Filter API", lifespan=lifespan)
 
+# ✅ CORS 설정: Task 37 배포 시 프로덕션 도메인으로 제한 필요
+# 현재는 개발 편의를 위해 모든 오리진 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # 프로덕션 예: ["https://app.your-domain.com", "http://localhost:3000"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -411,6 +401,7 @@ async def audio_stream(websocket: WebSocket):
         model_status = "Kanana-Base" if not getattr(classifier, 'use_lora', True) else "Kanana-LoRA"
     else:
         model_status = "Not Available"
+        
     await websocket.send_json({
         "status": "connected",
         "message": "Deepgram Streaming Ready",
@@ -421,12 +412,16 @@ async def audio_stream(websocket: WebSocket):
         while True:
             message = await websocket.receive()
             if message["type"] == "websocket.disconnect": break
+            
             if "bytes" in message and message["bytes"]:
                 await dg_manager.process_audio(message["bytes"])
                 
                 # Deepgram 연결이 끊어진 경우 재연결 시도
                 if not dg_manager.is_running:
-                    LOGGER.info("[WS] Deepgram 재연결 시도...")
+                    LOGGER.warning("[WS] Deepgram 연결 끊김 감지. 1초 후 재연결 시도...")
+                    # ✅ [Backoff] 무한 루프 및 로그 폭주 방지를 위한 대기
+                    await asyncio.sleep(1)
+
                     success = await dg_manager.start()
                     if not success:
                         LOGGER.error("[WS] Deepgram 재연결 실패")
@@ -434,6 +429,7 @@ async def audio_stream(websocket: WebSocket):
                             "status": "error",
                             "detail": "Deepgram Reconnection Failed"
                         })
+                        # 재연결 실패 시 루프 탈출
                         break
                     else:
                         LOGGER.info("[WS] Deepgram 재연결 성공")
@@ -453,7 +449,7 @@ async def audio_stream(websocket: WebSocket):
 async def health_check():
     return {
         "status": "ok",
-        "keywords_count": 0,  # 🔇 키워드 기능 비활성화
+        "keywords_count": 0,  # 🔇 키워드 기능 비활성화 상태
         "stt_service": "Deepgram (nova-2)",
         "ai_model": (
             "Kanana-Nano-2.1b (Base)" if (classifier and not getattr(classifier, 'use_lora', True))
@@ -480,11 +476,6 @@ class AnalyzeRequest(BaseModel):
 
 @app.post("/analyze")
 async def analyze_text(request: AnalyzeRequest):
-    # 🔇 키워드 체크 주석처리 (kanana-lora-v1 모델만 사용)
-    # # 1차: 키워드
-    # matched = check_keywords(request.text)
-    # is_harmful_keyword = len(matched) > 0
-    
     # ✅ AI (Kanana LoRA)만 사용
     is_harmful_ai = False
     ai_confidence = 0.0
