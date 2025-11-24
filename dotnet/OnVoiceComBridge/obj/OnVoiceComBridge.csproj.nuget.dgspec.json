@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj": {}
+    "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj": {}
   },
   "projects": {
-    "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj": {
+    "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
+        "projectUniqueName": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
         "projectName": "OnVoiceComBridge",
-        "projectPath": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
-        "packagesPath": "C:\\Users\\김원\\.nuget\\packages\\",
-        "outputPath": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\obj\\",
+        "projectPath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
+        "packagesPath": "C:\\Users\\Won Kim\\.nuget\\packages\\",
+        "outputPath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\김원\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "C:\\Users\\Won Kim\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net6.0-windows10.0.19041.0"
@@ -32,7 +32,13 @@
           "warnAsError": [
             "NU1605"
           ]
-        }
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net6.0-windows10.0.19041": {
@@ -61,18 +67,18 @@
           "downloadDependencies": [
             {
               "name": "Microsoft.Windows.SDK.NET.Ref",
-              "version": "[10.0.19041.52, 10.0.19041.52]"
+              "version": "[10.0.19041.55, 10.0.19041.55]"
             }
           ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             },
-            "Microsoft.Windows.SDK.NET.Ref": {
+            "Microsoft.Windows.SDK.NET.Ref.Windows": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\6.0.428\\RuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.100\\RuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OnVoiceComBridge")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7531138a76602020244bda5a4dcea2cc8a680964")]
 [assembly: System.Reflection.AssemblyProductAttribute("OnVoiceComBridge")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OnVoiceComBridge")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
