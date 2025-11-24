@@ -42,6 +42,7 @@
   - **KoElectra** (`monologg/koelectra-base-v3-discriminator`): 빠른 추론, 경량 모델 (약 110M 파라미터)
   - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
+    - **8-bit 양자화 지원**: GPU 사용 시 메모리 사용량 감소 및 추론 속도 2-4배 향상 (기본 활성화)
 - **오디오 캡처**: [OnVoice COM Bridge](https://github.com/cccwon2/onvoice-com-bridge) (Windows WASAPI 기반 프로세스별 오디오 캡처)
 - **백엔드**: FastAPI (Python 3.12, venv312 환경)
 
@@ -83,6 +84,12 @@ BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
 # Base 모델만 사용하려면 비워두거나 주석 처리
 #MODEL_PATH=models/kanana-lora-v1
 MODEL_PATH=
+
+# 8-bit 양자화 사용 여부 (기본값: true)
+# GPU 사용 시 메모리 사용량 감소 및 추론 속도 향상 (약 2-4배 빠름)
+# CPU 사용 시에는 자동으로 비활성화됨
+# bitsandbytes 패키지가 필요함 (requirements.txt에 포함됨)
+USE_QUANTIZATION=true
 ```
 
 **참고**:
@@ -96,6 +103,8 @@ MODEL_PATH=
   - `MODEL_PATH`를 설정하면 Kanana LoRA 어댑터 사용 (더 정확한 유해성 판별)
 
 ## 🚀 빠른 시작
+
+### CPU 사용 (기본)
 
 ```bash
 # FastAPI 백엔드 (터미널 1)
@@ -112,6 +121,53 @@ venv312\Scripts\activate
 
 # 서버 실행
 uvicorn main:app --reload
+```
+
+### GPU 사용 (CUDA) - 성능 향상
+
+**GPU를 사용하면 추론 속도가 2-4배 빨라집니다!**
+
+#### 1. NVIDIA GPU 확인
+```bash
+# GPU 확인 (Windows)
+nvidia-smi
+```
+
+#### 2. CUDA 지원 PyTorch 설치
+
+**방법 1: PyTorch 공식 사이트 사용 (권장)**
+1. https://pytorch.org/get-started/locally/ 접속
+2. 환경 선택 (OS, Python, CUDA 버전)
+3. 생성된 명령어 실행
+
+**방법 2: 직접 설치 (CUDA 12.1 예시)**
+```bash
+# venv312 활성화 후
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+**방법 3: CUDA 11.8 사용 시**
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+#### 3. 나머지 패키지 설치
+```bash
+# PyTorch 설치 후 나머지 패키지 설치
+pip install -r requirements.txt
+```
+
+#### 4. GPU 인식 확인
+서버 실행 시 로그에서 다음 메시지 확인:
+```
+🚀 Device selected: cuda
+✅ 8-bit 양자화 활성화 (성능 개선: 메모리 사용량 감소, 추론 속도 향상)
+```
+
+**참고:**
+- CUDA Toolkit을 별도로 설치할 필요는 없습니다 (PyTorch가 자체 CUDA 런타임 포함)
+- NVIDIA 드라이버는 최신 버전으로 업데이트 권장
+- GPU가 없으면 자동으로 CPU로 동작합니다
 
 # Electron 앱 (터미널 2)
 npm install

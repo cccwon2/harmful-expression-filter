@@ -46,6 +46,7 @@ class HarmfulTextClassifier:
         num_labels: int = 2,
         max_length: int = 128, # 학습 시 설정했던 길이 (분석 결과 반영)
         torch_module: Optional[Any] = None,
+        use_quantization: bool = True,  # 8-bit 양자화 사용 여부 (성능 개선)
     ) -> None:
         """
         Args:
@@ -61,6 +62,7 @@ class HarmfulTextClassifier:
         
         self.base_model_name = base_model_name
         self.max_length = max_length
+        self.use_quantization = use_quantization
 
         # 1. PyTorch 로드
         if torch_module is None:
@@ -121,25 +123,45 @@ class HarmfulTextClassifier:
         # 6. 모델 로드
         logger.info("Loading Model: %s", self.base_model_name)
         
-        # 메모리 효율을 위해 float16 사용 (CPU일 경우 float32 자동 전환 고려 필요)
-        torch_dtype = self._torch.float16 if self.device != "cpu" else self._torch.float32
+        # 8-bit 양자화 설정 (bitsandbytes 사용)
+        load_kwargs = {}
+        if self.use_quantization and self.device == "cuda":
+            try:
+                from transformers import BitsAndBytesConfig
+                quantization_config = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    llm_int8_threshold=6.0,
+                )
+                load_kwargs["quantization_config"] = quantization_config
+                load_kwargs["device_map"] = "auto"  # 양자화 시 자동 디바이스 매핑
+                logger.info("✅ 8-bit 양자화 활성화 (성능 개선: 메모리 사용량 감소, 추론 속도 향상)")
+            except ImportError:
+                logger.warning("⚠️ bitsandbytes가 설치되지 않아 양자화를 건너뜁니다. `pip install bitsandbytes` 설치 권장")
+                self.use_quantization = False
+                torch_dtype = self._torch.float16 if self.device != "cpu" else self._torch.float32
+                load_kwargs["dtype"] = torch_dtype
+                load_kwargs["device_map"] = self.device
+        else:
+            # CPU나 양자화 비활성화 시 float16/float32 사용
+            torch_dtype = self._torch.float16 if self.device != "cpu" else self._torch.float32
+            load_kwargs["dtype"] = torch_dtype
+            load_kwargs["device_map"] = self.device
 
         if is_koelectra:
             # KoElectra는 이미 sequence classification으로 학습된 모델
             logger.info("Loading KoElectra model (no LoRA needed)")
             self.model = AutoModelForSequenceClassification.from_pretrained(
                 self.base_model_name,
-                torch_dtype=torch_dtype,
-                device_map=self.device
+                **load_kwargs
             )
             logger.info("✅ KoElectra model ready")
         else:
             # Kanana 모델 로드
+            load_kwargs["num_labels"] = num_labels
+            
             self.base_model = AutoModelForSequenceClassification.from_pretrained(
                 self.base_model_name,
-                num_labels=num_labels,
-                torch_dtype=torch_dtype,
-                device_map=self.device 
+                **load_kwargs
             )
 
             # Base 모델만 사용할지 확인 (model_path가 None이거나 빈 문자열이거나 존재하지 않으면 base만 사용)
@@ -152,6 +174,7 @@ class HarmfulTextClassifier:
                 logger.info("✅ Kanana-Nano Base model ready")
             else:
                 logger.info("Loading LoRA Adapter from: %s", self.model_path)
+                # LoRA는 양자화된 모델과 호환 가능
                 self.model = PeftModel.from_pretrained(
                     self.base_model, 
                     self.model_path
@@ -167,7 +190,7 @@ class HarmfulTextClassifier:
         if not text or not text.strip():
             return ClassificationResult(is_harmful=False, confidence=0.0, text="")
 
-        # 토크나이징
+        # 토크나이징 (캐싱은 제외 - 텍스트가 매번 다르므로)
         encoded = self.tokenizer(
             text,
             return_tensors="pt",
@@ -179,9 +202,13 @@ class HarmfulTextClassifier:
         # 입력을 디바이스로 이동
         encoded = {k: v.to(self.device) for k, v in encoded.items()}
 
-        # 추론
+        # 추론 (최적화: no_grad + inference_mode)
         with self._torch.no_grad():
-            outputs = self.model(**encoded)
+            if hasattr(self._torch, "inference_mode"):
+                with self._torch.inference_mode():
+                    outputs = self.model(**encoded)
+            else:
+                outputs = self.model(**encoded)
 
         # 결과 처리
         logits = outputs.logits

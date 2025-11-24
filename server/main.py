@@ -315,6 +315,8 @@ async def lifespan(app: FastAPI):
         model_type_env = os.getenv("MODEL_TYPE", "kanana").lower()
         model_path_env = os.getenv("MODEL_PATH", "")
         base_model_env = os.getenv("BASE_MODEL_NAME", "")
+        # 양자화 옵션 (기본값: true, GPU 사용 시 성능 개선)
+        use_quantization = os.getenv("USE_QUANTIZATION", "true").lower() == "true"
         
         if model_type_env == "koelectra":
             # KoElectra 모델 사용
@@ -323,10 +325,12 @@ async def lifespan(app: FastAPI):
             
             LOGGER.info("[Init] 🚀 KoElectra 모델 로딩 시작...")
             LOGGER.info(f" - Model: {base_model_env}")
+            LOGGER.info(f" - Quantization: {use_quantization}")
             
             classifier = HarmfulTextClassifier(
                 model_path="",
-                base_model_name=base_model_env
+                base_model_name=base_model_env,
+                use_quantization=use_quantization
             )
             LOGGER.info("[Init] ✅ KoElectra 모델 로드 완료!")
             model_type = "KoElectra"
@@ -340,10 +344,12 @@ async def lifespan(app: FastAPI):
             if use_base_only:
                 LOGGER.info("[Init] 🚀 Kanana Base 모델 로딩 시작...")
                 LOGGER.info(f" - Base Model: {base_model_env}")
+                LOGGER.info(f" - Quantization: {use_quantization}")
                 
                 classifier = HarmfulTextClassifier(
                     model_path="",
-                    base_model_name=base_model_env
+                    base_model_name=base_model_env,
+                    use_quantization=use_quantization
                 )
                 LOGGER.info("[Init] ✅ Kanana-Nano Base 모델 로드 완료!")
                 model_type = "Kanana-Base"
@@ -354,10 +360,12 @@ async def lifespan(app: FastAPI):
                 if os.path.exists(full_model_path):
                     LOGGER.info("[Init] 🚀 Kanana LoRA 모델 로딩 시작...")
                     LOGGER.info(f" - Adapter Path: {full_model_path}")
+                    LOGGER.info(f" - Quantization: {use_quantization}")
                     
                     classifier = HarmfulTextClassifier(
                         model_path=model_path_env,
-                        base_model_name=base_model_env
+                        base_model_name=base_model_env,
+                        use_quantization=use_quantization
                     )
                     LOGGER.info("[Init] ✅ Kanana-Nano LoRA 모델 로드 완료!")
                     model_type = "Kanana-LoRA"
@@ -366,7 +374,8 @@ async def lifespan(app: FastAPI):
                     LOGGER.warning("[Init] Base 모델만 사용합니다.")
                     classifier = HarmfulTextClassifier(
                         model_path="",
-                        base_model_name=base_model_env
+                        base_model_name=base_model_env,
+                        use_quantization=use_quantization
                     )
                     model_type = "Kanana-Base"
 
