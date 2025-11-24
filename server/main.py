@@ -94,6 +94,7 @@ class DeepgramWebSocketManager:
         self.last_transcript: str = ""
         self.last_is_final: bool = False
         self.last_audio_time: float = 0.0  # 마지막 오디오 전송 시간 추적용
+        self.audio_chunk_times: List[float] = []  # 오디오 청크별 타임스탬프 (최근 N개만 유지)
 
     async def start(self) -> bool:
         if not self.api_key:
@@ -233,17 +234,29 @@ class DeepgramWebSocketManager:
         # 로그 출력 (중간 결과는 클라이언트로 전송 안 함 [Task 35])
         if not is_final: return
         
-        # ✅ STT 지연 시간 측정 (오디오 전송부터 결과 수신까지)
+        # ✅ STT 지연 시간 측정 개선
+        # Deepgram WebSocket 스트리밍은 연속적으로 오디오를 전송하므로,
+        # 실제 STT 지연은 마지막 오디오 전송부터 결과 수신까지의 시간
+        result_time = time.time()
         stt_latency = 0.0
+        
         if self.last_audio_time > 0:
-            stt_latency = time.time() - self.last_audio_time
+            # 마지막 오디오 전송부터 결과 수신까지의 시간
+            stt_latency = result_time - self.last_audio_time
             # 오디오 전송 시간 초기화 (다음 측정을 위해)
             self.last_audio_time = 0.0
+        elif len(self.audio_chunk_times) > 0:
+            # 마지막 오디오 청크 시간 사용 (더 정확한 측정)
+            oldest_chunk_time = self.audio_chunk_times[0]
+            stt_latency = result_time - oldest_chunk_time
+            # 사용한 타임스탬프 제거
+            self.audio_chunk_times = []
         
         # ✅ 성능 개선: STT 결과를 즉시 전송하고, AI 판별은 백그라운드에서 처리
         # 모든 STT 결과를 명확하게 표시 (유해/비유해 구분 없이)
+        # 참고: 실제 체감 지연은 Deepgram이 문장을 완성할 때까지의 버퍼링 시간이 포함될 수 있음
         if stt_latency > 0:
-            print(f"[STT] [확정] {transcript} (STT 지연: {stt_latency:.3f}초)", flush=True)
+            print(f"[STT] [확정] {transcript} (서버 측정 STT 지연: {stt_latency:.3f}초)", flush=True)
         else:
             print(f"[STT] [확정] {transcript}", flush=True)
         
@@ -266,7 +279,38 @@ class DeepgramWebSocketManager:
             # 전역 inference_executor 사용
             global inference_executor
             if inference_executor:
+                print(f"[AI] AI 판별 시작: '{transcript[:50]}...'", flush=True)
                 asyncio.create_task(self._check_harmful_async(transcript, confidence))
+            else:
+                # classifier는 있지만 executor가 없는 경우, AI 판별 없이 완료 처리
+                print(f"[AI] ⚠️ Executor가 없어 AI 판별을 건너뜁니다.", flush=True)
+                no_ai_response = {
+                    "status": "ok",
+                    "text": transcript,
+                    "is_harmful": 0,
+                    "confidence": confidence,
+                    "matched_keywords": [],
+                    "ai_detection": None,
+                    "is_final": True,
+                    "timestamp": time.time(),
+                    "ai_checked": True,
+                }
+                self.result_queue.put_nowait(no_ai_response)
+        else:
+            # classifier가 없는 경우, AI 판별 없이 완료 처리
+            print(f"[AI] ⚠️ Classifier가 없어 AI 판별을 건너뜁니다.", flush=True)
+            no_ai_response = {
+                "status": "ok",
+                "text": transcript,
+                "is_harmful": 0,
+                "confidence": confidence,
+                "matched_keywords": [],
+                "ai_detection": None,
+                "is_final": True,
+                "timestamp": time.time(),
+                "ai_checked": True,
+            }
+            self.result_queue.put_nowait(no_ai_response)
     
     async def _check_harmful_async(self, transcript: str, stt_confidence: float):
         """백그라운드에서 유해 표현 판별 수행"""
@@ -274,6 +318,7 @@ class DeepgramWebSocketManager:
             start_time = time.time()
             loop = asyncio.get_event_loop()
             global inference_executor
+            print(f"[AI] Executor로 AI 판별 실행 중...", flush=True)
             result = await loop.run_in_executor(
                 inference_executor,
                 self.classifier.predict,
@@ -285,9 +330,9 @@ class DeepgramWebSocketManager:
             ai_confidence = result.confidence
             model_name = self._get_classifier_model_name()
             
-            # 로그 출력
-            if is_harmful_ai:
-                print(f"🚨 유해 표현 감지({model_name}-AI): ['[전체 문장]'] (추론 시간: {inference_time:.3f}초)", flush=True)
+            # AI 판별 결과 항상 로그 출력 (디버깅용)
+            status = "🚨 유해" if is_harmful_ai else "✅ 정상"
+            print(f"[AI] {status} ({model_name}): '{transcript[:50]}...' (신뢰도: {ai_confidence:.3f}, 추론 시간: {inference_time:.3f}초)", flush=True)
             
             # AI 판별 결과를 별도로 클라이언트에 전송
             ai_response = {
@@ -306,9 +351,24 @@ class DeepgramWebSocketManager:
                 "timestamp": time.time(),
                 "ai_checked": True,
             }
+            print(f"[AI] AI 판별 결과 전송: is_harmful={int(is_harmful_ai)}, confidence={ai_confidence:.3f}", flush=True)
             self.result_queue.put_nowait(ai_response)
         except Exception as e:
             LOGGER.error("[AI] 분류 에러: %s", e, exc_info=True)
+            print(f"[AI] ❌ 분류 에러 발생: {e}", flush=True)
+            # 에러 발생 시에도 클라이언트에 응답 전송 (is_harmful=0)
+            error_response = {
+                "status": "ok",
+                "text": transcript,
+                "is_harmful": 0,
+                "confidence": stt_confidence,
+                "matched_keywords": [],
+                "ai_detection": None,
+                "is_final": True,
+                "timestamp": time.time(),
+                "ai_checked": True,
+            }
+            self.result_queue.put_nowait(error_response)
 
     def _get_classifier_model_name(self) -> str:
         if not self.classifier:

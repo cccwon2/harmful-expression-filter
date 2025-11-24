@@ -351,21 +351,30 @@ export class OnVoiceService {
       // 서버 응답 형식: status="ok", text, is_harmful, confidence 등
       if (message.status === "ok" && message.text) {
         const text = message.text;
+        if (!text || !text.trim()) return;
+        
         const isHarmful = message.is_harmful === 1 || message.is_harmful === true;
+        const aiChecked = message.ai_checked === true;
         const confidence = message.confidence || 0;
         const rawText = message.raw_text || text;
 
-        if (text && text.trim()) {
-          console.log(`[OnVoiceService] [STT] ${text} (confidence: ${confidence.toFixed(2)})`);
+        // AI 판별이 완료된 경우에만 처리 (중복 방지)
+        // 서버에서 STT 결과를 먼저 보내고, AI 판별 후 다시 보내므로
+        // ai_checked가 true인 경우만 로그 출력 및 처리
+        if (!aiChecked) {
+          // AI 판별 전 초기 STT 결과는 무시 (중복 방지)
+          return;
+        }
 
-          if (isHarmful) {
-            // 서버에서 키워드 정보를 제공하지 않으므로, 텍스트 전체를 사용
-            const matchedKeywords = message.matched_keywords || [rawText];
-            console.warn(
-              `[OnVoiceService] 🚨 유해 표현 감지 (confidence: ${confidence.toFixed(2)}): ${matchedKeywords.join(", ")}`
-            );
-            this.broadcastHarmfulDetection(text, matchedKeywords);
-          }
+        console.log(`[OnVoiceService] [STT] ${text} (confidence: ${confidence.toFixed(2)})`);
+
+        if (isHarmful) {
+          // 서버에서 키워드 정보를 제공하지 않으므로, 텍스트 전체를 사용
+          const matchedKeywords = message.matched_keywords || [rawText];
+          console.warn(
+            `[OnVoiceService] 🚨 유해 표현 감지 (confidence: ${confidence.toFixed(2)}): ${matchedKeywords.join(", ")}`
+          );
+          this.broadcastHarmfulDetection(text, matchedKeywords);
         }
       } else if (message.status === "buffering") {
         // 버퍼링 메시지는 DEBUG 레벨로만 출력 (너무 많이 출력됨)

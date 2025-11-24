@@ -91,62 +91,72 @@ export class VolumeController {
 
   /**
    * 특정 앱의 볼륨 설정 (0.0 ~ 1.0)
+   * 비동기로 처리하여 블로킹 방지
    */
   private async setAppVolume(volume: number): Promise<boolean> {
-    if (!this.defaultDevice) {
-      console.warn('[VolumeController] Default device not initialized');
-      return false;
-    }
-
-    if (!this.targetAppName) {
-      console.warn('[VolumeController] Target app not set, cannot adjust volume');
-      return false;
-    }
-
-    try {
-      const sessions = this.defaultDevice.sessions || [];
-      const activeSessions = sessions.filter(s => s.state === 1);
-
-      if (activeSessions.length === 0) {
-        console.warn('[VolumeController] No active sessions found');
-        return false;
-      }
-
-      // 대상 앱 이름으로 세션 찾기 (부분 매칭, 대소문자 무시)
-      const targetSessions = activeSessions.filter(session => {
-        const name = (session.name || '').toLowerCase();
-        const appName = (session.appName || '').toLowerCase();
-        
-        // 검색 이름 목록 중 하나라도 매칭되면 선택
-        return this.targetAppSearchNames.some(searchName => 
-          name.includes(searchName.toLowerCase()) || appName.includes(searchName.toLowerCase())
-        );
-      });
-
-      if (targetSessions.length === 0) {
-        console.warn(`[VolumeController] ⚠️ Target app "${this.targetAppName}" not found in active sessions`);
-        console.log(`[VolumeController] Available apps: ${activeSessions.map(s => s.name || s.appName).join(', ')}`);
-        return false;
-      }
-
-      // 대상 앱의 모든 세션 볼륨 조절
-      let successCount = 0;
-      targetSessions.forEach(session => {
+    // setImmediate를 사용하여 이벤트 루프를 블로킹하지 않음
+    return new Promise((resolve) => {
+      setImmediate(() => {
         try {
-          session.volume = volume;
-          successCount++;
-          console.log(`[VolumeController] 🔊 ${session.name || session.appName}: ${Math.round(volume * 100)}%`);
+          if (!this.defaultDevice) {
+            console.warn('[VolumeController] Default device not initialized');
+            resolve(false);
+            return;
+          }
+
+          if (!this.targetAppName) {
+            console.warn('[VolumeController] Target app not set, cannot adjust volume');
+            resolve(false);
+            return;
+          }
+
+          const sessions = this.defaultDevice.sessions || [];
+          const activeSessions = sessions.filter(s => s.state === 1);
+
+          if (activeSessions.length === 0) {
+            console.warn('[VolumeController] No active sessions found');
+            resolve(false);
+            return;
+          }
+
+          // 대상 앱 이름으로 세션 찾기 (부분 매칭, 대소문자 무시)
+          const targetSessions = activeSessions.filter(session => {
+            const name = (session.name || '').toLowerCase();
+            const appName = (session.appName || '').toLowerCase();
+            
+            // 검색 이름 목록 중 하나라도 매칭되면 선택
+            return this.targetAppSearchNames.some(searchName => 
+              name.includes(searchName.toLowerCase()) || appName.includes(searchName.toLowerCase())
+            );
+          });
+
+          if (targetSessions.length === 0) {
+            console.warn(`[VolumeController] ⚠️ Target app "${this.targetAppName}" not found in active sessions`);
+            console.log(`[VolumeController] Available apps: ${activeSessions.map(s => s.name || s.appName).join(', ')}`);
+            resolve(false);
+            return;
+          }
+
+          // 대상 앱의 모든 세션 볼륨 조절
+          let successCount = 0;
+          targetSessions.forEach(session => {
+            try {
+              session.volume = volume;
+              successCount++;
+              console.log(`[VolumeController] 🔊 ${session.name || session.appName}: ${Math.round(volume * 100)}%`);
+            } catch (err) {
+              console.error(`[VolumeController] Failed to set volume for session ${session.name}:`, err);
+            }
+          });
+
+          console.log(`[VolumeController] 🔊 Volume adjusted to: ${Math.round(volume * 100)}% for ${this.targetAppName} (${successCount} sessions)`);
+          resolve(successCount > 0);
         } catch (err) {
-          console.error(`[VolumeController] Failed to set volume for session ${session.name}:`, err);
+          console.error('[VolumeController] Failed to set app volume:', err);
+          resolve(false);
         }
       });
-
-      console.log(`[VolumeController] 🔊 Volume adjusted to: ${Math.round(volume * 100)}% for ${this.targetAppName} (${successCount} sessions)`);
-      return successCount > 0;
-    } catch (err) {
-      console.error('[VolumeController] Failed to set app volume:', err);
-      return false;
-    }
+    });
   }
 
   /**
