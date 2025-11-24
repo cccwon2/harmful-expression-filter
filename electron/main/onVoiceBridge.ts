@@ -14,25 +14,25 @@ type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 // 타임아웃: 5초
 const BRIDGE_TIMEOUT_MS = 5000;
 
-// 🔥 유해어 리스트 (Node.js 로컬 분석용)
-const HARMFUL_KEYWORDS = [
-  "새끼",
-  "시발",
-  "씨발",
-  "병신",
-  "꺼져",
-  "죽어",
-  "미친",
-  "지랄",
-  "존나",
-  "개새끼",
-  "느금마",
-  "애미",
-  "느개비",
-  "놈",
-  "년",
-  // 필요한 단어 추가
-];
+// 🔇 키워드 리스트 주석처리 (kanana-lora-v1 모델만 사용)
+// const HARMFUL_KEYWORDS = [
+//   "새끼",
+//   "시발",
+//   "씨발",
+//   "병신",
+//   "꺼져",
+//   "죽어",
+//   "미친",
+//   "지랄",
+//   "존나",
+//   "개새끼",
+//   "느금마",
+//   "애미",
+//   "느개비",
+//   "놈",
+//   "년",
+//   // 필요한 단어 추가
+// ];
 
 export interface OCRResult {
   ok: boolean;
@@ -122,14 +122,18 @@ function callBridge(payload: any): Promise<any> {
   });
 }
 
+// 🔇 로컬 키워드 분석 함수 주석처리 (kanana-lora-v1 모델만 사용)
 export function analyzeTextLocally(text: string): { isHarmful: boolean; matched: string[] } {
-  if (!text || !text.trim()) return { isHarmful: false, matched: [] };
-  const matched: string[] = [];
-  const cleanText = text.replace(/\s+/g, " ");
-  for (const keyword of HARMFUL_KEYWORDS) {
-    if (cleanText.includes(keyword)) matched.push(keyword);
-  }
-  return { isHarmful: matched.length > 0, matched };
+  // 키워드 기반 분석 비활성화 - 서버의 AI 모델만 사용
+  return { isHarmful: false, matched: [] };
+  
+  // if (!text || !text.trim()) return { isHarmful: false, matched: [] };
+  // const matched: string[] = [];
+  // const cleanText = text.replace(/\s+/g, " ");
+  // for (const keyword of HARMFUL_KEYWORDS) {
+  //   if (cleanText.includes(keyword)) matched.push(keyword);
+  // }
+  // return { isHarmful: matched.length > 0, matched };
 }
 
 export const onVoiceBridge: OnVoiceBridge = {
@@ -199,20 +203,23 @@ export const onVoiceBridge: OnVoiceBridge = {
 
       const extractedText = result.text || "";
 
+      // 🔇 로컬 키워드 분석 주석처리 (kanana-lora-v1 모델만 사용)
       // 3. Node.js 로컬 분석
-      const analysis = analyzeTextLocally(extractedText);
+      // const analysis = analyzeTextLocally(extractedText);
+      // 로컬 분석 비활성화 - 서버의 AI 모델을 통해 분석해야 함
+      const analysis = { isHarmful: false, matched: [] };
 
       if (extractedText.trim().length > 0) {
         console.log(
-          `[OnVoiceBridge] 결과: "${extractedText.substring(0, 20)}..." (${analysis.isHarmful ? "🚨유해" : "✅정상"})`
+          `[OnVoiceBridge] 결과: "${extractedText.substring(0, 20)}..." (로컬 분석 비활성화 - 서버 AI 모델 사용 필요)`
         );
       }
 
       return {
         ok: true,
         text: extractedText,
-        isHarmful: analysis.isHarmful,
-        matchedKeywords: analysis.matched,
+        isHarmful: false, // 🔇 로컬 분석 비활성화 - 서버에서 AI 모델로 분석 필요
+        matchedKeywords: [], // 🔇 로컬 분석 비활성화
         confidence: result.confidence || 0,
         blurredImage: undefined,
       };

@@ -45,7 +45,9 @@ class AudioProcessingPipeline:
             raise ValueError("DEEPGRAM_API_KEY가 설정되지 않았습니다.")
 
         self.api_key = DEEPGRAM_API_KEY
-        self.keywords = keywords or ["새끼", "쉐끼", "시끼", "시발", "씨발", "병신", "존나", "미친", "니미", "좆", "도 아니고"]
+        # 🔇 키워드 리스트 주석처리 (kanana-lora-v1 모델만 사용)
+        # self.keywords = keywords or ["새끼", "쉐끼", "시끼", "시발", "씨발", "병신", "존나", "미친", "니미", "좆", "도 아니고"]
+        self.keywords = []
         
         # Deepgram 클라이언트 및 연결 객체
         self.dg_client = DeepgramClient(self.api_key)
@@ -154,16 +156,18 @@ class AudioProcessingPipeline:
             LOGGER.error(f"[Handler] Message Error: {e}")
 
     def _check_harmful(self, text: str, confidence: float):
-        """단순 키워드 매칭으로 유해 표현 검사 (가장 빠름)"""
-        detected = [word for word in self.keywords if word in text]
-        
-        if detected:
-            msg = f"🚨 유해 표현 감지: '{text}' (키워드: {detected}, 정확도: {confidence:.2f})"
-            print(f"\n{msg}\n", flush=True)
-            LOGGER.warning(msg)
-            
-            # TODO: 여기서 Electron으로 알림을 보내는 코드를 추가할 수 있습니다.
-            # 예: send_socket_alert(detected)
+        """🔇 키워드 매칭 비활성화 (kanana-lora-v1 모델만 사용)"""
+        # 키워드 기반 분석 비활성화 - 서버의 AI 모델만 사용
+        # detected = [word for word in self.keywords if word in text]
+        # 
+        # if detected:
+        #     msg = f"🚨 유해 표현 감지: '{text}' (키워드: {detected}, 정확도: {confidence:.2f})"
+        #     print(f"\n{msg}\n", flush=True)
+        #     LOGGER.warning(msg)
+        #     
+        #     # TODO: 여기서 Electron으로 알림을 보내는 코드를 추가할 수 있습니다.
+        #     # 예: send_socket_alert(detected)
+        pass
 
     def _on_error(self, error, **kwargs):
         LOGGER.error(f"[Deepgram] Error: {error}")

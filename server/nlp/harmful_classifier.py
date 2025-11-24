@@ -104,7 +104,7 @@ class HarmfulTextClassifier:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # 5. 모델 로드 (Base Model -> LoRA Adapter 결합)
+        # 5. 모델 로드 (Base Model -> LoRA Adapter 결합 또는 Base Model만)
         logger.info("Loading Base Model: %s", self.base_model_name)
         
         # 메모리 효율을 위해 float16 사용 (CPU일 경우 float32 자동 전환 고려 필요)
@@ -117,14 +117,23 @@ class HarmfulTextClassifier:
             device_map=self.device 
         )
 
-        logger.info("Loading LoRA Adapter from: %s", self.model_path)
-        self.model = PeftModel.from_pretrained(
-            self.base_model, 
-            self.model_path
-        )
+        # Base 모델만 사용할지 확인 (model_path가 None이거나 빈 문자열이거나 존재하지 않으면 base만 사용)
+        use_base_only = not self.model_path or self.model_path.strip() == "" or not os.path.exists(self.model_path)
+        self.use_lora = not use_base_only  # LoRA 사용 여부 저장
+        
+        if use_base_only:
+            logger.info("Using Base Model only (LoRA adapter disabled)")
+            self.model = self.base_model
+            logger.info("✅ Kanana-Nano Base model ready")
+        else:
+            logger.info("Loading LoRA Adapter from: %s", self.model_path)
+            self.model = PeftModel.from_pretrained(
+                self.base_model, 
+                self.model_path
+            )
+            logger.info("✅ Kanana-Nano LoRA model ready")
         
         self.model.eval()
-        logger.info("✅ Kanana-Nano LoRA model ready")
 
     def predict(self, text: str) -> ClassificationResult:
         """

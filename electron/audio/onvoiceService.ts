@@ -274,41 +274,44 @@ export class OnVoiceService {
     const callId = ++OnVoiceService._audioDataCallCount;
     const shouldLog = callId <= 3 || callId % 100 === 0;
 
-    if (shouldLog) {
-      console.log(`[OnVoiceService] 🎵 handleAudioData 호출됨! (callId=${callId}, size=${buf.length} bytes)`);
-    }
-
-    try {
-      if (this.deepgramWs && this.deepgramWs.readyState === WebSocket.OPEN) {
-        if (shouldLog) {
-          console.log(`[OnVoiceService] 📤 Deepgram WebSocket으로 전송 (callId=${callId})`);
-        }
-        this.deepgramWs.send(buf);
-        if (shouldLog) {
-          console.log(`[OnVoiceService] ✅ Deepgram 전송 완료 (callId=${callId})`);
-        }
-      } else if (this.serverWs && this.serverWs.readyState === WebSocket.OPEN) {
-        if (shouldLog) {
-          console.log(`[OnVoiceService] 📤 서버 WebSocket으로 전송 (callId=${callId})`);
-        }
-        this.serverWs.send(buf);
-        if (shouldLog) {
-          console.log(`[OnVoiceService] ✅ 서버 전송 완료 (callId=${callId})`);
-        }
-      } else {
-        // 연결 문제는 경고로 출력
-        if (shouldLog) {
-          console.warn(
-            `[OnVoiceService] ⚠️ WebSocket 연결이 없어 오디오 데이터를 전송할 수 없습니다. (callId=${callId})`
-          );
-          console.warn(
-            `[OnVoiceService] Deepgram 상태: ${this.deepgramWs?.readyState}, 서버 상태: ${this.serverWs?.readyState}`
-          );
-        }
+    // 비동기로 처리하여 COM 이벤트 스레드가 블로킹되지 않도록 함
+    setImmediate(() => {
+      if (shouldLog) {
+        console.log(`[OnVoiceService] 🎵 handleAudioData 호출됨! (callId=${callId}, size=${buf.length} bytes)`);
       }
-    } catch (err) {
-      console.error(`[OnVoiceService] ❌ WebSocket 전송 오류 (callId=${callId}):`, err);
-    }
+
+      try {
+        if (this.deepgramWs && this.deepgramWs.readyState === WebSocket.OPEN) {
+          if (shouldLog) {
+            console.log(`[OnVoiceService] 📤 Deepgram WebSocket으로 전송 (callId=${callId})`);
+          }
+          this.deepgramWs.send(buf);
+          if (shouldLog) {
+            console.log(`[OnVoiceService] ✅ Deepgram 전송 완료 (callId=${callId})`);
+          }
+        } else if (this.serverWs && this.serverWs.readyState === WebSocket.OPEN) {
+          if (shouldLog) {
+            console.log(`[OnVoiceService] 📤 서버 WebSocket으로 전송 (callId=${callId})`);
+          }
+          this.serverWs.send(buf);
+          if (shouldLog) {
+            console.log(`[OnVoiceService] ✅ 서버 전송 완료 (callId=${callId})`);
+          }
+        } else {
+          // 연결 문제는 경고로 출력
+          if (shouldLog) {
+            console.warn(
+              `[OnVoiceService] ⚠️ WebSocket 연결이 없어 오디오 데이터를 전송할 수 없습니다. (callId=${callId})`
+            );
+            console.warn(
+              `[OnVoiceService] Deepgram 상태: ${this.deepgramWs?.readyState}, 서버 상태: ${this.serverWs?.readyState}`
+            );
+          }
+        }
+      } catch (err) {
+        console.error(`[OnVoiceService] ❌ WebSocket 전송 오류 (callId=${callId}):`, err);
+      }
+    });
   }
 
   /**
