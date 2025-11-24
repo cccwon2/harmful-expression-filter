@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 import asyncio
 import json
@@ -46,6 +47,7 @@ if not DEEPGRAM_API_KEY:
 # ============== 전역 변수 ==============
 BAD_WORDS: List[str] = []
 classifier: Optional[HarmfulTextClassifier] = None
+inference_executor: Optional[ThreadPoolExecutor] = None
 
 
 # ============== 유틸리티 함수 ==============
@@ -193,7 +195,7 @@ class DeepgramWebSocketManager:
                 if isinstance(message, bytes): continue
                 try:
                     payload = json.loads(message)
-                    self._handle_result_payload(payload)
+                    await self._handle_result_payload(payload)
                 except json.JSONDecodeError:
                     continue
         except asyncio.CancelledError:
@@ -206,7 +208,7 @@ class DeepgramWebSocketManager:
         finally:
             self.is_running = False
 
-    def _handle_result_payload(self, payload: dict):
+    async def _handle_result_payload(self, payload: dict):
         channel = payload.get("channel")
         if not isinstance(channel, dict): return
         alternatives = channel.get("alternatives")
@@ -225,15 +227,21 @@ class DeepgramWebSocketManager:
         self.last_transcript = transcript
         self.last_is_final = is_final
 
-        # ✅ AI (Kanana LoRA/KoElectra) 판별 로직
+        # ✅ AI (Kanana LoRA/KoElectra) 판별 로직 (비동기 처리)
         is_harmful_ai = False
         ai_confidence = 0.0
         # 🔇 matched_keywords는 하위 호환성을 위해 유지하지만 빈 배열로 설정 (AI Only Mode)
         matched_keywords = []
         
-        if is_final and self.classifier:
+        if is_final and self.classifier and inference_executor:
             try:
-                result = self.classifier.predict(transcript)
+                # ThreadPoolExecutor를 사용하여 블로킹 모델 추론을 비동기로 처리
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    inference_executor,
+                    self.classifier.predict,
+                    transcript
+                )
                 if result.is_harmful:
                     is_harmful_ai = True
                     ai_confidence = result.confidence
@@ -292,7 +300,12 @@ class DeepgramWebSocketManager:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global classifier
+    global classifier, inference_executor
+    
+    # ✅ ThreadPoolExecutor 생성 (모델 추론용)
+    # 데모용으로 4개면 충분. 메인 이벤트 루프 간섭 최소화.
+    inference_executor = ThreadPoolExecutor(max_workers=4)
+    LOGGER.info("[Init] ✅ 모델 추론용 ThreadPoolExecutor 시작 (Workers: 4)")
     
     # 🔇 키워드 로드 주석처리 (AI 모델만 사용)
     # load_keywords()
@@ -364,6 +377,12 @@ async def lifespan(app: FastAPI):
 
     LOGGER.info(f"[INFO] 🚀 서버 시작 완료 (Deepgram Streaming + {model_type})")
     yield
+    
+    # ✅ ThreadPoolExecutor 종료
+    if inference_executor:
+        inference_executor.shutdown(wait=True)
+        LOGGER.info("[Init] 🛑 ThreadPoolExecutor 종료")
+    
     LOGGER.info("[INFO] 👋 서버 종료")
 
 
@@ -476,14 +495,20 @@ class AnalyzeRequest(BaseModel):
 
 @app.post("/analyze")
 async def analyze_text(request: AnalyzeRequest):
-    # ✅ AI (Kanana LoRA)만 사용
+    # ✅ AI (Kanana LoRA)만 사용 (비동기 처리)
     is_harmful_ai = False
     ai_confidence = 0.0
     matched = []
     
-    if classifier:
+    if classifier and inference_executor:
         try:
-            result = classifier.predict(request.text)
+            # ThreadPoolExecutor를 사용하여 블로킹 모델 추론을 비동기로 처리
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                inference_executor,
+                classifier.predict,
+                request.text
+            )
             if result.is_harmful:
                 is_harmful_ai = True
                 ai_confidence = result.confidence
