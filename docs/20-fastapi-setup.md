@@ -25,30 +25,30 @@ Electron 클라이언트와 연동할 백엔드 API 서버의 토대를 FastAPI�
 - [x] API 문서(스웨거/Redoc) 접근 경로 확인
 
 ## 의존성
-- **Python 3.10+** (venv310 가상환경 사용 필수)
+- **Python 3.12+** (venv312 가상환경 사용 필수)
 - FastAPI, Uvicorn
 - pydantic, python-dotenv
 - [PROJECT_SPEC.md](./PROJECT_SPEC.md)의 서버 아키텍처 섹션
 
 ## ⚠️ 중요: 가상환경 관리
 
-**server 폴더의 모든 Python 라이브러리는 `venv310` 가상환경에서만 관리합니다.**
+**server 폴더의 모든 Python 라이브러리는 `venv312` 가상환경에서만 관리합니다.**
 
 ### 가상환경 활성화
 ```bash
 cd server
 
 # Windows
-venv310\Scripts\activate
+venv312\Scripts\activate
 
 # Linux/Mac
-source venv310/bin/activate
+source venv312/bin/activate
 ```
 
 ### 의존성 설치
 ```bash
-# venv310 활성화 후
-.\venv310\Scripts\python.exe -m pip install -r requirements.txt
+# venv312 활성화 후
+.\venv312\Scripts\python.exe -m pip install -r requirements.txt
 
 # 또는 활성화된 상태에서
 pip install -r requirements.txt
@@ -56,7 +56,7 @@ pip install -r requirements.txt
 
 ### 서버 실행
 ```bash
-# venv310 활성화 후
+# venv312 활성화 후
 uvicorn main:app --reload
 ```
 
@@ -104,14 +104,14 @@ MODEL_PATH=
 ```bash
 cd server
 
-# venv310 가상환경 사용 (이미 생성되어 있음)
+# venv312 가상환경 사용 (이미 생성되어 있음)
 # Windows
-venv310\Scripts\activate
+venv312\Scripts\activate
 # Linux/Mac
-# source venv310/bin/activate
+# source venv312/bin/activate
 
 # 의존성 설치
-.\venv310\Scripts\python.exe -m pip install -r requirements.txt
+.\venv312\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ### 2. 기본 애플리케이션 작성

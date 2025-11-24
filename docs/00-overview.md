@@ -147,7 +147,7 @@
 - **Windows SDK OCR 적용**: PaddleOCR 제거, Windows.Media.Ocr API 사용
   - Electron에서 C# COM Bridge를 통해 직접 처리
   - 서버 불필요, 네이티브 성능 활용
-- **venv310 환경 사용**: Python 3.10 가상환경(venv310)으로 변경
+- **venv312 환경 사용**: Python 3.12 가상환경(venv312)으로 변경
 - **OCR 아키텍처 개선**: 서버 기반 → 클라이언트 기반 (Windows SDK)
 - **Task 34: Windows OCR 성능 최적화 완료**
   - 처리 시간: 2-3초 → 14-17ms (약 120-200배 개선)

@@ -14,8 +14,8 @@ FastAPI 백엔드 서버를 Ubuntu 서버에 프로덕션 환경으로 배포합
 
 ### 시스템 요구사항
 
-  - Ubuntu 20.04 LTS 이상 (권장: Ubuntu 22.04 LTS)
-  - Python 3.10 이상
+  - Ubuntu 20.04 LTS 이상 (권장: Ubuntu 24.04 LTS)
+  - Python 3.12 이상
   - **RAM**:
       - 최소 2GB (단순 STT 중계만 수행 시)
       - **권장 4GB** (KoELECTRA 등 NLP 모델 로드 및 유해성 분석 수행 시)
@@ -30,7 +30,7 @@ FastAPI 백엔드 서버를 Ubuntu 서버에 프로덕션 환경으로 배포합
 
 ## 의존성
 
-  - **Python 3.10+** (venv310 가상환경 사용 필수)
+  - **Python 3.12+** (venv312 가상환경 사용 필수)
   - FastAPI, Uvicorn, Gunicorn
   - systemd (서비스 관리)
   - Nginx (리버스 프록시)
@@ -48,8 +48,8 @@ sudo apt update && sudo apt upgrade -y
 
 # 필수 패키지 설치
 sudo apt install -y \
-    python3.10 \
-    python3.10-venv \
+    python3.12 \
+    python3.12-venv \
     python3-pip \
     git \
     build-essential \
@@ -87,11 +87,11 @@ git clone <repository-url> .
 ```bash
 cd /opt/harmful-expression-filter/server
 
-# Python 3.10 가상환경 생성
-python3.10 -m venv venv310
+# Python 3.12 가상환경 생성
+python3.12 -m venv venv312
 
 # 가상환경 활성화
-source venv310/bin/activate
+source venv312/bin/activate
 
 # pip 업그레이드
 pip install --upgrade pip setuptools wheel
@@ -100,7 +100,7 @@ pip install --upgrade pip setuptools wheel
 ### 4. 의존성 설치
 
 ```bash
-# venv310 활성화 상태에서
+# venv312 활성화 상태에서
 cd /opt/harmful-expression-filter/server
 
 # 시스템 의존성 (PyTorch/KoELECTRA 등 NLP 라이브러리 구동에 필요)
@@ -186,7 +186,7 @@ NLP 모델을 사용하는 경우, 서버 최초 시작 시 모델 다운로드�
 
 ```bash
 # 가상환경 활성화
-source venv310/bin/activate
+source venv312/bin/activate
 
 # 유해 표현 감지 모델 사전 캐싱
 # .env 파일의 MODEL_TYPE과 BASE_MODEL_NAME에 맞게 모델을 다운로드합니다
@@ -247,10 +247,10 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/opt/harmful-expression-filter/server
-Environment="PATH=/opt/harmful-expression-filter/server/venv310/bin"
+Environment="PATH=/opt/harmful-expression-filter/server/venv312/bin"
 # .env 파일을 직접 로드하지 못할 경우 EnvironmentFile 사용 고려 또는 앱 내에서 로드
 # 여기서는 앱 내 python-dotenv가 로드한다고 가정
-ExecStart=/opt/harmful-expression-filter/server/venv310/bin/uvicorn \
+ExecStart=/opt/harmful-expression-filter/server/venv312/bin/uvicorn \
     main:app \
     --host 0.0.0.0 \
     --port 8000 \

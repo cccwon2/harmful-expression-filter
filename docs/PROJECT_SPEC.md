@@ -296,7 +296,7 @@ interface Window {
 - Vite 5.0.5
 
 ### 서버 (FastAPI)
-- **Python 3.10+** (venv310 가상환경 사용 필수)
+- **Python 3.12+** (venv312 가상환경 사용 필수)
 - FastAPI
 - Deepgram STT (음성 인식)
   - **실시간 WebSocket 스트리밍** (Task 35)
@@ -308,9 +308,9 @@ interface Window {
   - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
 
-**⚠️ 중요**: server 폴더의 모든 Python 라이브러리는 `venv310` 가상환경에서만 관리합니다.
-- 가상환경 활성화: `venv310\Scripts\activate` (Windows) 또는 `source venv310/bin/activate` (Linux/Mac)
-- 의존성 설치: `.\venv310\Scripts\python.exe -m pip install -r requirements.txt`
+**⚠️ 중요**: server 폴더의 모든 Python 라이브러리는 `venv312` 가상환경에서만 관리합니다.
+- 가상환경 활성화: `venv312\Scripts\activate` (Windows) 또는 `source venv312/bin/activate` (Linux/Mac)
+- 의존성 설치: `.\venv312\Scripts\python.exe -m pip install -r requirements.txt`
 
 ### OCR 처리
 - **Windows SDK OCR**: Windows.Media.Ocr API를 C# COM Bridge를 통해 사용

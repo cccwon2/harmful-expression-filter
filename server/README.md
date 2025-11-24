@@ -4,9 +4,9 @@ FastAPI 기반 백엔드 서버입니다.
 
 ## ⚠️ 중요: 가상환경 관리
 
-**server 폴더의 모든 Python 라이브러리는 `venv310` 가상환경에서만 관리합니다.**
+**server 폴더의 모든 Python 라이브러리는 `venv312` 가상환경에서만 관리합니다.**
 
-다른 가상환경(예: `venv`)을 사용하지 마세요. 모든 의존성은 `venv310`에만 설치합니다.
+다른 가상환경(예: `venv`)을 사용하지 마세요. 모든 의존성은 `venv312`에만 설치합니다.
 
 ## 환경 설정
 
@@ -14,17 +14,17 @@ FastAPI 기반 백엔드 서버입니다.
 
 ```bash
 # Windows
-venv310\Scripts\activate
+venv312\Scripts\activate
 
 # Linux/Mac
-source venv310/bin/activate
+source venv312/bin/activate
 ```
 
 ### 의존성 설치
 
 ```bash
-# venv310 활성화 후
-.\venv310\Scripts\python.exe -m pip install -r requirements.txt
+# venv312 활성화 후
+.\venv312\Scripts\python.exe -m pip install -r requirements.txt
 
 # 또는 활성화된 상태에서
 pip install -r requirements.txt
@@ -34,14 +34,14 @@ pip install -r requirements.txt
 
 ```bash
 # 방법 1: 가상환경 활성화 후 실행 (권장)
-venv310\Scripts\activate
+venv312\Scripts\activate
 uvicorn main:app --reload
 
 # 방법 2: 가상환경 Python 직접 사용 (Windows)
-.\venv310\Scripts\python.exe -m uvicorn main:app --reload
+.\venv312\Scripts\python.exe -m uvicorn main:app --reload
 
 # 방법 3: 가상환경 Python 직접 사용 (Linux/Mac)
-venv310/bin/python -m uvicorn main:app --reload
+venv312/bin/python -m uvicorn main:app --reload
 ```
 
 ## 환경 변수

@@ -6,13 +6,13 @@
 
 ## ⚠️ 중요: Python 환경 설정
 
-**Whisper 호환성 문제로 인해 `server/venv310` (Python 3.10) 환경을 사용해야 합니다.**
+**Python 3.12 환경(`server/venv312`)을 사용합니다.**
 
 ```bash
-# 서버 실행 시 venv310 활성화 필수
+# 서버 실행 시 venv312 활성화 필수
 cd server
-venv310\Scripts\activate  # Windows
-# source venv310/bin/activate  # Linux/Mac
+venv312\Scripts\activate  # Windows
+# source venv312/bin/activate  # Linux/Mac
 uvicorn main:app --reload
 ```
 
@@ -56,10 +56,10 @@ websockets==12.0     # 이미 있음 (T24)
 
 - [x] **1.1. Deepgram SDK 설치 및 테스트**
 ```bash
-  # ⚠️ Whisper 호환성을 위해 venv310 사용 필요
+  # ⚠️ venv312 사용 필요
   cd server
-  venv310\Scripts\activate  # Windows
-  # source venv310/bin/activate  # Linux/Mac
+  venv312\Scripts\activate  # Windows
+  # source venv312/bin/activate  # Linux/Mac
   
   pip install --upgrade deepgram-sdk>=5.3.0
   
@@ -477,16 +477,16 @@ class DeepgramSTTService:
   **실행**:
 ```bash
   # 서버 실행 (터미널 1)
-  # ⚠️ Whisper 호환성을 위해 venv310 사용 필요
+  # ⚠️ venv312 사용 필요
   cd server
-  venv310\Scripts\activate  # Windows
-  # source venv310/bin/activate  # Linux/Mac
+  venv312\Scripts\activate  # Windows
+  # source venv312/bin/activate  # Linux/Mac
   uvicorn main:app --reload
   
   # E2E 테스트 (터미널 2)
   cd server
-  venv310\Scripts\activate  # Windows
-  # source venv310/bin/activate  # Linux/Mac
+  venv312\Scripts\activate  # Windows
+  # source venv312/bin/activate  # Linux/Mac
   python tests/test_e2e_deepgram.py
 ```
 
@@ -653,10 +653,10 @@ export class AudioService {
 ## ⚠️ 주의사항
 
 1. **Python 환경 설정**
-   - **Whisper 호환성 문제로 인해 `server/venv310` (Python 3.10) 환경을 사용해야 합니다.**
-   - 서버 실행 및 테스트 시 venv310 활성화 필수
-   - Windows: `venv310\Scripts\activate`
-   - Linux/Mac: `source venv310/bin/activate`
+   - **Python 3.12 환경(`server/venv312`)을 사용합니다.**
+   - 서버 실행 및 테스트 시 venv312 활성화 필수
+   - Windows: `venv312\Scripts\activate`
+   - Linux/Mac: `source venv312/bin/activate`
 
 2. **API 키 보안**
    - `.env` 파일에 `DEEPGRAM_API_KEY` 추가

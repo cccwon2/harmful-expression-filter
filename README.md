@@ -43,7 +43,7 @@
   - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
 - **오디오 캡처**: [OnVoice COM Bridge](https://github.com/cccwon2/onvoice-com-bridge) (Windows WASAPI 기반 프로세스별 오디오 캡처)
-- **백엔드**: FastAPI (Python 3.10, venv310 환경)
+- **백엔드**: FastAPI (Python 3.12, venv312 환경)
 
 ## ⚙️ 환경 변수 설정
 
@@ -99,14 +99,14 @@ MODEL_PATH=
 
 ```bash
 # FastAPI 백엔드 (터미널 1)
-# ⚠️ 중요: server 폴더의 모든 Python 라이브러리는 venv310 가상환경에서만 관리합니다
+# ⚠️ 중요: server 폴더의 모든 Python 라이브러리는 venv312 가상환경에서만 관리합니다
 cd server
 
 # Windows
-venv310\Scripts\activate
+venv312\Scripts\activate
 
-# 의존성 설치 (venv310 활성화 후)
-.\venv310\Scripts\python.exe -m pip install -r requirements.txt
+# 의존성 설치 (venv312 활성화 후)
+.\venv312\Scripts\python.exe -m pip install -r requirements.txt
 # 또는
 # python -m pip install -r requirements.txt
 
@@ -169,11 +169,10 @@ harmful-expression-filter/
 │   ├── nlp/                 # 자연어 처리 모듈
 │   │   └── harmful_classifier.py  # 유해 표현 분류기
 │   ├── services/            # 외부 서비스 연동
-│   │   └── paddle_ocr_service.py  # PaddleOCR 서비스 (레거시)
 │   ├── data/                # 데이터 파일
 │   │   └── bad_words.json   # 유해어 목록
 │   ├── tests/               # 테스트 파일
-│   └── venv310/             # Python 3.10 가상환경
+│   └── venv312/             # Python 3.12 가상환경
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```
 

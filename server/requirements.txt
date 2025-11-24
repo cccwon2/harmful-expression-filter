@@ -1,28 +1,25 @@
-# FastAPI 및 웹 서버
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.10.4
-python-multipart==0.0.6
+# FastAPI
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.10.4
+python-multipart>=0.0.6
 
-# WebSocket 클라이언트 (Deepgram WebSocket 연결용)
-# ⚠️ 중요: 코드에서 legacy API를 사용 중이므로 버전을 고정합니다.
+# WebSocket (버전 명시 필수)
 websockets==12.0
 
-# 환경 변수 관리
-python-dotenv==1.0.0
+# Env
+python-dotenv
 
-# Transformers & LoRA 모델
-# 개발 완료 후 'pip freeze'로 버전을 고정하는 것을 권장합니다.
-transformers
+# AI Models (최신 Python 호환성을 위해 버전 제한 해제 권장)
+transformers>=4.38.0
 peft
 accelerate
 
-# PyTorch
-# 주의: 서버가 CPU 전용인 경우 설치 시 --index-url 옵션을 확인하세요.
+# PyTorch (3.12 호환되는 최신 버전을 받기 위해 버전 제거)
 torch
 torchaudio
 torchvision
 
-# 테스트 (개발 환경)
-pytest==7.4.3
-httpx==0.25.2
+# Test
+pytest
+httpx

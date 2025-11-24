@@ -35,20 +35,20 @@
 #### 1.1 PaddleOCR 의존성 설치
 ```bash
 # [Server: server/]
-# ⚠️ 중요: venv310 가상환경에서만 설치합니다
+# ⚠️ 중요: venv312 가상환경에서만 설치합니다
 
 # Windows
 cd server
-venv310\Scripts\activate
-.\venv310\Scripts\python.exe -m pip install paddleocr==2.7.0.3 paddlepaddle==2.6.1 Pillow
+venv312\Scripts\activate
+.\venv312\Scripts\python.exe -m pip install paddleocr==2.7.0.3 paddlepaddle==2.6.1 Pillow
 
 # Linux/Mac
 cd server
-source venv310/bin/activate
+source venv312/bin/activate
 python -m pip install paddleocr==2.7.0.3 paddlepaddle==2.6.1 Pillow
 
 # 또는 requirements.txt에서 설치
-.\venv310\Scripts\python.exe -m pip install -r requirements.txt
+.\venv312\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 #### 1.2 OCR 서비스 모듈 생성
@@ -644,12 +644,12 @@ npm install
 #### 5.1 서버 단독 테스트
 ```bash
 # [Server: server/]
-# ⚠️ 중요: venv310 가상환경에서 실행합니다
+# ⚠️ 중요: venv312 가상환경에서 실행합니다
 
 # 1. 가상환경 활성화
 cd server
-venv310\Scripts\activate  # Windows
-# source venv310/bin/activate  # Linux/Mac
+venv312\Scripts\activate  # Windows
+# source venv312/bin/activate  # Linux/Mac
 
 # 2. 서버 시작
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -667,10 +667,10 @@ curl -X POST "http://localhost:8000/api/ocr-and-analyze" \
 ```
 
 #### 5.2 Electron 통합 테스트
-1. **서버 시작** (venv310 활성화 후):
+1. **서버 시작** (venv312 활성화 후):
    ```bash
    cd server
-   venv310\Scripts\activate
+   venv312\Scripts\activate
    uvicorn main:app --reload
    ```
 2. **Electron 시작**: `npm run start`
@@ -757,7 +757,7 @@ PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속 (NVIDIA GPU만 지원)
 - `PADDLEOCR_LANG`: OCR 언어 설정 (기본값: 'korean')
 - `PADDLEOCR_USE_GPU`: GPU 사용 여부 (기본값: false, AMD Radeon은 지원 안 됨)
 
-**⚠️ 중요**: 서버의 모든 Python 라이브러리는 `venv310` 가상환경에서만 관리합니다.
+**⚠️ 중요**: 서버의 모든 Python 라이브러리는 `venv312` 가상환경에서만 관리합니다.
 
 ---
 
@@ -797,7 +797,7 @@ PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속 (NVIDIA GPU만 지원)
 - `server/services/paddle_ocr_service.py` 생성 완료
 - PaddleOCRService 클래스 구현 (환경 변수 연동)
 - 싱글톤 패턴 `get_ocr_service()` 함수 구현
-- venv310 환경에 의존성 설치 완료
+- venv312 환경에 의존성 설치 완료
 
 ### Phase 2: FastAPI OCR 엔드포인트 추가 ✅
 - `/api/ocr` 엔드포인트 추가
@@ -825,7 +825,7 @@ PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속 (NVIDIA GPU만 지원)
 
 ### 주요 변경 사항
 - **환경 변수 연동**: `.env` 파일에서 `SERVER_URL`, `PADDLEOCR_LANG`, `PADDLEOCR_USE_GPU` 설정
-- **가상환경 관리**: server 폴더의 모든 Python 라이브러리는 `venv310`에서만 관리
+- **가상환경 관리**: server 폴더의 모든 Python 라이브러리는 `venv312`에서만 관리
 - **의존성 호환성**: NumPy 1.x 사용 (PaddleOCR/imgaug 호환성)
 - **상태 동기화**: harmful=true/false 모두 ALERT_FROM_SERVER로 전송하여 블라인드 상태 정확히 관리
 
