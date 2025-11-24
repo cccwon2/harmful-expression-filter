@@ -140,7 +140,13 @@ PORT=8000
 # 로깅 레벨
 LOG_LEVEL=INFO
 
-# 모델 경로 (HuggingFace 캐시 디렉토리 지정)
+# 로컬 모델 경로 (선택사항)
+# 설정하지 않으면 Hugging Face Hub에서 기본 모델을 다운로드합니다
+# 상대 경로: models/your-custom-model
+# 절대 경로: /opt/harmful-expression-filter/server/models/your-custom-model
+MODEL_PATH=models/your-custom-model
+
+# HuggingFace 캐시 디렉토리 (선택사항, MODEL_PATH 미설정 시 사용)
 HF_HOME=/opt/harmful-expression-filter/server/models
 ```
 
@@ -149,19 +155,61 @@ HF_HOME=/opt/harmful-expression-filter/server/models
 chmod 600 .env
 ```
 
-### 6. 데이터 디렉토리 및 모델 사전 다운로드 (중요)
+### 6. 데이터 디렉토리 및 모델 준비
 
-NLP 모델을 사용하는 경우, 서버 최초 시작 시 모델 다운로드로 인해 Systemd 타임아웃이 발생할 수 있습니다. 미리 다운로드합니다.
+#### 6.1. 디렉토리 생성
 
 ```bash
 # 디렉토리 생성
 mkdir -p /opt/harmful-expression-filter/server/models
+mkdir -p /opt/harmful-expression-filter/server/data
 mkdir -p /opt/harmful-expression-filter/server/logs
+```
+
+#### 6.2. 모델 준비 (두 가지 방법 중 선택)
+
+**방법 A: Hugging Face Hub에서 모델 다운로드**
+
+NLP 모델을 사용하는 경우, 서버 최초 시작 시 모델 다운로드로 인해 Systemd 타임아웃이 발생할 수 있습니다. 미리 다운로드합니다.
+
+```bash
+# 가상환경 활성화
+source venv310/bin/activate
 
 # 유해 표현 감지 모델(KoELECTRA 등) 사전 캐싱
 # 실제 사용하는 모델명으로 변경하세요 (예: monologg/koelectra-base-v3-discriminator)
-source venv310/bin/activate
 python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model_name='monologg/koelectra-base-v3-discriminator'; AutoTokenizer.from_pretrained(model_name); AutoModelForSequenceClassification.from_pretrained(model_name); print('✅ 모델 다운로드 완료')"
+```
+
+**방법 B: 로컬 학습 모델 사용**
+
+직접 학습한 모델을 사용하는 경우:
+
+```bash
+# 모델 폴더 구조 준비
+# 예: /opt/harmful-expression-filter/server/models/your-custom-model/
+mkdir -p /opt/harmful-expression-filter/server/models/your-custom-model
+
+# 학습한 모델 파일 복사
+# 필수 파일:
+# - config.json
+# - pytorch_model.bin (또는 model.safetensors)
+# - tokenizer_config.json
+# - vocab.txt
+# - 기타 필요한 파일들
+
+# .env 파일에 모델 경로 설정
+# MODEL_PATH=models/your-custom-model
+```
+
+**모델 폴더 구조 예시**:
+```
+server/models/your-custom-model/
+├── config.json
+├── pytorch_model.bin (또는 model.safetensors)
+├── tokenizer_config.json
+├── vocab.txt
+└── ... (기타 필요한 파일)
 ```
 
 ### 7. systemd 서비스 설정

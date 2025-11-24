@@ -309,8 +309,18 @@ async def lifespan(app: FastAPI):
     
     # KoELECTRA 모델 로드
     try:
-        LOGGER.info("[Init] KoELECTRA 모델 로딩 시작...")
-        classifier = HarmfulTextClassifier()
+        # 환경 변수에서 모델 경로 확인 (로컬 모델 우선)
+        model_path = os.getenv("MODEL_PATH")
+        if model_path:
+            # 로컬 경로인 경우 절대 경로로 변환
+            if not os.path.isabs(model_path):
+                model_path = os.path.join(os.path.dirname(__file__), model_path)
+            LOGGER.info("[Init] 로컬 모델 경로 사용: %s", model_path)
+            classifier = HarmfulTextClassifier(model_name=model_path)
+        else:
+            # 기본값: Hugging Face Hub에서 다운로드
+            LOGGER.info("[Init] KoELECTRA 모델 로딩 시작 (Hugging Face Hub)...")
+            classifier = HarmfulTextClassifier()
         LOGGER.info("[Init] ✅ KoELECTRA 모델 로드 완료")
     except Exception as e:
         LOGGER.error("[Init] ❌ KoELECTRA 모델 로드 실패: %s", e)
