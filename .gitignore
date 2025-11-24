@@ -35,6 +35,7 @@ Thumbs.db
 **/server/venv/
 **/server/venv310/
 **/server/venv311/
+**/server/venv312/
 **/server/tests/
 **/server/__pycache__/
 **/server/.pytest_cache/
