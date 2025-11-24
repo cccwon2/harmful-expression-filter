@@ -16,11 +16,11 @@ peft
 accelerate
 bitsandbytes  # 8-bit 양자화를 위한 패키지 (성능 개선)
 
-# PyTorch (torch 2.6+ required for safetensors support, versions must match)
-# Note: CPU version is installed. For CUDA, use: pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
-torch==2.6.0
-torchaudio==2.6.0
-torchvision==0.21.0
+# PyTorch (안정적인 버전 조합 사용, versions must match)
+# Note: CPU version is installed. For CUDA, use: pip install torch==2.4.1+cu121 torchvision==0.19.1+cu121 torchaudio==2.4.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+torch==2.4.1
+torchaudio==2.4.1
+torchvision==0.19.1
 
 # Test
 pytest
