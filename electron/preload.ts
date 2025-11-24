@@ -1,7 +1,48 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ROI } from './ipc/roi';
-// TypeScript import 사용 (CommonJS로 컴파일됨)
-import { SERVER_CHANNELS, AUDIO_CHANNELS, ONVOICE_CHANNELS, IPC_CHANNELS } from './ipc/channels';
+
+// Preload 스크립트는 sandbox 환경에서 실행되므로 직접 import 대신 상수 정의
+// IPC 채널 상수 (channels.ts와 동기화 필요)
+const IPC_CHANNELS = {
+  ROI_SELECTED: 'roi:selected',
+  ROI_START_SELECTION: 'roi-start-selection',
+  ROI_CANCEL_SELECTION: 'roi-cancel-selection',
+  EXIT_EDIT_MODE: 'exit-edit-mode',
+  HIDE_OVERLAY: 'hide-overlay',
+  EXIT_EDIT_MODE_AND_HIDE: 'exit-edit-mode-and-hide',
+  SET_CLICK_THROUGH: 'overlay:setClickThrough',
+  OVERLAY_SET_MODE: 'overlay:setMode',
+  OVERLAY_STATE_PUSH: 'overlay:state',
+  START_MONITORING: 'monitoring:start',
+  STOP_MONITORING: 'monitoring:stop',
+  OCR_START: 'ocr:start',
+  OCR_STOP: 'ocr:stop',
+  ALERT_FROM_SERVER: 'alert:server',
+  AUDIO_STATUS: 'audio:status',
+  AUDIO_HARMFUL_DETECTED: 'audio:harmful-detected',
+} as const;
+
+const SERVER_CHANNELS = {
+  HEALTH_CHECK: 'server:health-check',
+  ANALYZE_TEXT: 'server:analyze-text',
+  GET_KEYWORDS: 'server:get-keywords',
+  OCR_IMAGE: 'server:ocr-image',
+  OCR_AND_ANALYZE: 'server:ocr-and-analyze',
+} as const;
+
+const AUDIO_CHANNELS = {
+  START_MONITORING: 'audio:start-monitoring',
+  STOP_MONITORING: 'audio:stop-monitoring',
+  GET_STATUS: 'audio:get-status',
+  SET_VOLUME_LEVEL: 'audio:set-volume-level',
+  SET_BEEP_ENABLED: 'audio:set-beep-enabled',
+} as const;
+
+const ONVOICE_CHANNELS = {
+  START_CAPTURE: 'onvoice:startCapture',
+  STOP_CAPTURE: 'onvoice:stopCapture',
+  GET_STATUS: 'onvoice:get-status',
+} as const;
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
