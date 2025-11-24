@@ -63,7 +63,28 @@ using System.IO;
 - 서버 의존성 완전 제거를 코드 레벨에서 명확히 표현
 - 불필요한 네임스페이스 제거로 코드 가독성 향상
 
-### 1.2 현재 상태
+### 1.2 ocrAndBlur 주석 개선
+
+**수정 내용**:
+
+```csharp
+case "ocrAndBlur":
+    try
+    {
+        // Node.js에서 유해 표현 분석을 수행하므로, 이 메서드는
+        // OCR 텍스트만 반환하고 blur는 별도 "blur" 명령에서 처리합니다.
+        
+        byte[] imageBytes = (byte[])input.imageData;
+        // ...
+    }
+```
+
+**효과**:
+
+- 메서드의 역할이 명확해짐
+- OCR과 blur의 분리 의도가 명시됨
+
+### 1.3 현재 상태
 
 - ✅ `HttpClient`, `_serverUrl`, `AnalyzeTextForHarmfulContent` 같은 서버 분석 로직 완전 제거
 - ✅ `ocr`, `ocrAndBlur`, `blur` 모두 **로컬 작업(OCR / Blur)**만 수행
@@ -85,9 +106,11 @@ using System.IO;
 ```typescript
 /**
  * PID로 프로세스 경로 조회 (Windows 전용)
- * 
- * TODO: WMIC은 최신 Windows에서 deprecated 상태입니다.
- * 향후 PowerShell(Get-Process) 또는 C# 브리지로 대체 예정입니다.
+ *
+ * NOTE:
+ *  - wmic은 최신 Windows에서 deprecated 상태입니다.
+ *  - 현재는 PoC 용도로 사용하고, 추후 PowerShell(Get-Process) 또는
+ *    C# 브리지 메서드로 대체하는 것이 좋습니다.
  */
 private async getProcessPathByPid(pid: number): Promise<string | null> {
   // ...
@@ -207,37 +230,73 @@ export class VolumeController {
 import { AppVolumeController } from './appVolumeController';
 
 export class VolumeController {
-  constructor(
-    private appVolumeController: AppVolumeController,
-    targetAppName?: string,
-  ) {
-    if (targetAppName) this.setTargetApp(targetAppName);
+  private readonly appVolumeController: AppVolumeController;
+  private currentVolumeLevel: number = DEFAULT_VOLUME_LEVEL;
+  private targetAppKey: string | null = null;
+  private targetAppIdentifier: string | null = null;
+
+  constructor(appVolumeController: AppVolumeController, targetAppName?: string | null) {
+    this.appVolumeController = appVolumeController;
+    if (targetAppName) {
+      this.setTargetApp(targetAppName);
+    }
   }
+}
+```
+
+**앱 이름 매핑 개선**:
+
+```typescript
+/**
+ * 대상 앱 이름 설정
+ *
+ * - "chrome" → "chrome.exe"
+ * - "edge"   → "msedge.exe"
+ * - "discord" → "Discord.exe"
+ * - 그 외에는 입력값 그대로 사용
+ */
+setTargetApp(targetApp: 'chrome' | 'edge' | 'discord' | string | null): void {
+  if (!targetApp) {
+    this.targetAppKey = null;
+    this.targetAppIdentifier = null;
+    return;
+  }
+
+  const lower = targetApp.toLowerCase();
+  const appNameMap: Record<string, string> = {
+    chrome: 'chrome.exe',
+    edge: 'msedge.exe',
+    discord: 'Discord.exe',
+  };
+
+  this.targetAppKey = lower;
+  this.targetAppIdentifier = appNameMap[lower] ?? targetApp;
 }
 ```
 
 **볼륨 설정 로직 변경**:
 
 ```typescript
-// ❌ 이전: 직접 세션 접근
-private async setAppVolume(volume: number): Promise<boolean> {
-  const sessions = this.defaultDevice.sessions || [];
-  const activeSessions = sessions.filter(s => s.state === 1);
-  // ... 세션 찾기 및 볼륨 조절
-}
-
 // ✅ 개선: AppVolumeController 위임
-private async setAppVolume(volumeLevel0to10: number): Promise<boolean> {
-  if (!this.targetAppName) return false;
-  
-  const searchNames = this.targetAppSearchNames.length > 0
-    ? this.targetAppSearchNames
-    : (this.targetAppName ? [this.targetAppName] : []);
-  
-  return await this.appVolumeController.setAppVolume(
-    searchNames[0],
-    volumeLevel0to10,
-    3000 // 기본 복원 지연 시간
+async setVolumeLevel(
+  level: number,
+  options?: { restoreDelayMs?: number },
+): Promise<void> {
+  const clampedLevel = this.clampLevel(level);
+  this.currentVolumeLevel = clampedLevel;
+
+  if (!this.targetAppIdentifier) {
+    console.warn('[VolumeController] Target app not set');
+    return;
+  }
+
+  const controllerLevel = this.volumeLevelToControllerLevel(clampedLevel);
+  const restoreDelay = options?.restoreDelayMs;
+
+  await this.appVolumeController.setAppVolume(
+    this.targetAppIdentifier,
+    controllerLevel,
+    restoreDelay,
   );
 }
 ```
@@ -247,38 +306,60 @@ private async setAppVolume(volumeLevel0to10: number): Promise<boolean> {
 - `native-sound-mixer` 의존성은 모두 `AppVolumeController` 안으로 집중
 - `VolumeController`는 "레벨(1~9), 타겟 앱 추상화"에만 집중
 - 디바이스/세션 중복 접근 제거
+- 앱 이름 매핑이 명확해짐
 
-### 3.2 생성자 버그 수정
+### 3.2 생성자 버그 수정 및 PID 기반 제어 추가
 
 **문제점**:
 
 - 생성자에서 `targetAppName`만 설정하고 `setTargetApp()`을 호출하지 않음
-- `targetAppSearchNames`가 빈 배열로 남아있어 `setAppVolume()`에서 세션 매칭 실패
+- PID 기반 볼륨 제어 기능이 없음
 
 **수정 내용**:
 
 ```typescript
-// ❌ 이전: setTargetApp 호출 안 함
+// ❌ 이전: setTargetApp 호출 안 함, PID 지원 없음
 constructor(targetAppName?: string) {
   this.targetAppName = targetAppName || null;
   this.initializeDefaultDevice();
 }
 
-// ✅ 개선: setTargetApp 자동 호출
-constructor(
-  private appVolumeController: AppVolumeController,
-  targetAppName?: string,
-) {
+// ✅ 개선: setTargetApp 자동 호출, PID 지원 추가
+constructor(appVolumeController: AppVolumeController, targetAppName?: string | null) {
+  this.appVolumeController = appVolumeController;
   if (targetAppName) {
     this.setTargetApp(targetAppName);
   }
+}
+
+/**
+ * PID 기반 볼륨 제어
+ */
+async setVolumeByPid(
+  pid: number,
+  level?: number,
+  options?: { restoreDelayMs?: number },
+): Promise<boolean> {
+  const effectiveLevel = level ?? this.currentVolumeLevel ?? DEFAULT_VOLUME_LEVEL;
+  const clampedLevel = this.clampLevel(effectiveLevel);
+  this.currentVolumeLevel = clampedLevel;
+
+  const controllerLevel = this.volumeLevelToControllerLevel(clampedLevel);
+  const restoreDelay = options?.restoreDelayMs;
+
+  return await this.appVolumeController.setVolumeByPid(
+    pid,
+    controllerLevel,
+    restoreDelay,
+  );
 }
 ```
 
 **효과**:
 
 - 생성자에서 `targetAppName`을 넘기면 자동으로 `setTargetApp()` 호출
-- `targetAppSearchNames`가 올바르게 초기화됨
+- `targetAppIdentifier`가 올바르게 초기화됨
+- PID 기반 볼륨 제어 지원으로 `AudioManager`에서 직접 PID로 제어 가능
 
 ### 3.3 볼륨 스케일링 명시화
 
@@ -292,27 +373,47 @@ constructor(
 
 ```typescript
 /**
- * 볼륨 레벨(1~9)을 AppVolumeController의 스케일(0~10)로 변환
- * 1 → 1, 9 → 9 (직접 매핑)
- * 필요시 1~9를 0~10 범위로 선형 변환할 수도 있음
+ * 레벨(1~9)을 10%~90% 퍼센트로 변환
  */
-private level1to9To0to10(level: number): number {
-  const clamped = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
-  // 1~9를 0~10으로 선형 변환: 1→1.11..., 9→10
-  // 또는 단순히 1→1, 9→9로 매핑 (현재는 단순 매핑 사용)
-  return clamped; // 1~9를 그대로 1~9로 사용 (10은 별도 처리 필요시 확장)
+private volumeLevelToPercent(level: number): number {
+  const clampedLevel = this.clampLevel(level);
+  return clampedLevel * 10; // 1~9 → 10%~90%
+}
+
+/**
+ * 레벨(1~9)을 AppVolumeController에서 사용하는 0~10 스케일로 변환
+ * 여기서는 "최대 90%" 정책을 유지하기 위해 1~9를 그대로 1~9로 사용 (10은 사용 안 함)
+ */
+private volumeLevelToControllerLevel(level: number): number {
+  return this.clampLevel(level); // 1~9 유지 (AppVolumeController: 0~10 → 0%~100%)
+}
+
+/**
+ * 레벨 범위 보정 (1~9)
+ */
+private clampLevel(level: number): number {
+  return Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
 }
 ```
 
 **사용 위치**:
 
 ```typescript
-async setVolumeLevel(level: number): Promise<void> {
-  const clampedLevel = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
-  const targetVolume0to10 = this.level1to9To0to10(clampedLevel); // 1~9 → 0~10 스케일로 변환
-  
+async setVolumeLevel(
+  level: number,
+  options?: { restoreDelayMs?: number },
+): Promise<void> {
+  const clampedLevel = this.clampLevel(level);
   this.currentVolumeLevel = clampedLevel;
-  await this.setAppVolume(targetVolume0to10);
+
+  const controllerLevel = this.volumeLevelToControllerLevel(clampedLevel); // 1~9
+  const restoreDelay = options?.restoreDelayMs;
+
+  await this.appVolumeController.setAppVolume(
+    this.targetAppIdentifier,
+    controllerLevel,
+    restoreDelay,
+  );
 }
 ```
 
@@ -320,6 +421,7 @@ async setVolumeLevel(level: number): Promise<void> {
 
 - 변환 규칙이 명시적으로 함수로 분리됨
 - 향후 스케일 변경 시 수정 용이
+- 레벨 보정 로직이 명확해짐
 
 ### 3.4 주석 오타 수정
 
@@ -354,6 +456,17 @@ getCurrentVolumeLevel(): number {
 // AppVolumeController를 생성하고 VolumeController에 주입
 this.appVolumeController = new AppVolumeController();
 this.volumeController = new VolumeController(this.appVolumeController);
+
+// 유해 표현 감지 시 PID 기반 볼륨 제어
+async handleHarmfulExpressionDetected() {
+  if (this.currentPid) {
+    // PID 기반 볼륨 감소 (예: 레벨 1 = 10%)
+    await volumeController.setVolumeByPid(this.currentPid, 1);
+  } else {
+    // PID 없으면 fallback으로 타깃 앱 이름 기반
+    await volumeController.setVolumeLevel(1);
+  }
+}
 ```
 
 ### 4.2 onvoiceService.ts
@@ -374,6 +487,7 @@ if (this.options.enableVolumeControl) {
 ### Startup.cs
 - ✅ 불필요한 using 제거 (`System.Net.Http`, `System.Text.Json`, `System.Text`)
 - ✅ 서버 의존성 완전 제거를 코드 레벨에서 명확히 표현
+- ✅ `ocrAndBlur` 주석 개선 (OCR과 blur 분리 의도 명시)
 
 ### AppVolumeController.ts
 - ✅ WMIC 의존성 주석 추가 (향후 PowerShell/C# 브리지로 대체 예정)
@@ -382,9 +496,11 @@ if (this.options.enableVolumeControl) {
 
 ### VolumeController.ts
 - ✅ AppVolumeController 주입 구조로 변경
-- ✅ `native-sound-mixer` 의존성 제거 (모두 AppVolumeController로 위임)
+- ✅ `native-sound-mixer` 의존성 완전 제거 (모두 AppVolumeController로 위임)
 - ✅ 생성자 버그 수정 (자동으로 `setTargetApp()` 호출)
-- ✅ 볼륨 스케일링 명시화 (`level1to9To0to10()` 함수 추가)
+- ✅ PID 기반 볼륨 제어 추가 (`setVolumeByPid()` 메서드)
+- ✅ 앱 이름 매핑 개선 (chrome → chrome.exe, edge → msedge.exe, discord → Discord.exe)
+- ✅ 볼륨 스케일링 명시화 (`clampLevel()`, `volumeLevelToControllerLevel()` 함수 추가)
 - ✅ 주석 오타 수정 (0~9 → 1~9)
 
 ### 사용처 업데이트
