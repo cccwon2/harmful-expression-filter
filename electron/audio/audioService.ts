@@ -175,14 +175,13 @@ export class AudioService {
         if (success) {
           console.log(`[AudioService] ✅ Successfully muted ${this.targetAppName}`);
         } else {
-          console.warn(`[AudioService] ⚠️ Failed to mute ${this.targetAppName}, falling back to mute all apps`);
-          // 폴백: 특정 앱을 찾을 수 없으면 모든 앱 음소거
-          await this.volumeController.muteAllApps(0);
+          console.warn(`[AudioService] ⚠️ Failed to mute ${this.targetAppName}`);
+          // muteAllApps는 더 이상 사용하지 않음
+          // 특정 앱을 찾을 수 없으면 경고만 출력
         }
       } else {
-        // 모든 앱 음소거 (폴백 방식)
-        console.log(`[AudioService] 🔇 Muting all apps due to harmful content (no auto-restore)`);
-        await this.volumeController.muteAllApps(0); // 자동 복원 없음 (0 = 복원 안함)
+        // targetAppName이 없으면 볼륨 조절 불가
+        console.warn(`[AudioService] ⚠️ Target app not set, cannot adjust volume`);
       }
     } catch (error) {
       console.error("[AudioService] Failed to mute apps:", error);
