@@ -140,13 +140,25 @@ PORT=8000
 # 로깅 레벨
 LOG_LEVEL=INFO
 
-# 로컬 모델 경로 (선택사항)
-# 설정하지 않으면 Hugging Face Hub에서 기본 모델을 다운로드합니다
-# 상대 경로: models/your-custom-model
-# 절대 경로: /opt/harmful-expression-filter/server/models/your-custom-model
-MODEL_PATH=models/your-custom-model
+# [AI 모델 설정]
 
-# HuggingFace 캐시 디렉토리 (선택사항, MODEL_PATH 미설정 시 사용)
+# 모델 타입 (koelectra, kanana 기본값)
+# - koelectra: KoElectra 모델 사용 (빠른 추론, 경량) - 권장
+# - kanana: Kanana Nano 모델 사용 (더 정확하지만 느림)
+MODEL_TYPE=koelectra
+
+# Base 모델 (Hugging Face 모델 이름)
+# KoElectra 사용 시:
+BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+# Kanana 사용 시:
+#BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
+
+# 학습된 LoRA 어댑터 경로 (server 폴더 기준 상대 경로)
+# Base 모델만 사용하려면 비워두거나 주석 처리
+#MODEL_PATH=models/kanana-lora-v1
+MODEL_PATH=
+
+# HuggingFace 캐시 디렉토리 (선택사항)
 HF_HOME=/opt/harmful-expression-filter/server/models
 ```
 
@@ -176,9 +188,13 @@ NLP 모델을 사용하는 경우, 서버 최초 시작 시 모델 다운로드�
 # 가상환경 활성화
 source venv310/bin/activate
 
-# 유해 표현 감지 모델(KoELECTRA 등) 사전 캐싱
-# 실제 사용하는 모델명으로 변경하세요 (예: monologg/koelectra-base-v3-discriminator)
-python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model_name='monologg/koelectra-base-v3-discriminator'; AutoTokenizer.from_pretrained(model_name); AutoModelForSequenceClassification.from_pretrained(model_name); print('✅ 모델 다운로드 완료')"
+# 유해 표현 감지 모델 사전 캐싱
+# .env 파일의 MODEL_TYPE과 BASE_MODEL_NAME에 맞게 모델을 다운로드합니다
+# KoElectra 사용 시:
+python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model_name='monologg/koelectra-base-v3-discriminator'; AutoTokenizer.from_pretrained(model_name); AutoModelForSequenceClassification.from_pretrained(model_name); print('✅ KoElectra 모델 다운로드 완료')"
+
+# Kanana 사용 시:
+# python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model_name='kakaocorp/kanana-nano-2.1b-instruct'; AutoTokenizer.from_pretrained(model_name); AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2); print('✅ Kanana 모델 다운로드 완료')"
 ```
 
 **방법 B: 로컬 학습 모델 사용**

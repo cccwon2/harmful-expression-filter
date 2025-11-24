@@ -60,6 +60,38 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
+### 환경 변수 설정
+
+`server/.env` 파일을 생성하여 다음 환경 변수를 설정합니다:
+
+```env
+# Deepgram API Key (STT용)
+DEEPGRAM_API_KEY=your_deepgram_api_key_here
+
+# [AI 모델 설정]
+
+# 모델 타입 (koelectra, kanana 기본값)
+# - koelectra: KoElectra 모델 사용 (빠른 추론, 경량)
+# - kanana: Kanana Nano 모델 사용 (더 정확하지만 느림)
+MODEL_TYPE=koelectra
+
+# Base 모델 (Hugging Face 모델 이름)
+# KoElectra 사용 시:
+BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+# Kanana 사용 시:
+#BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
+
+# 학습된 LoRA 어댑터 경로 (server 폴더 기준 상대 경로)
+# Base 모델만 사용하려면 비워두거나 주석 처리
+#MODEL_PATH=models/kanana-lora-v1
+MODEL_PATH=
+```
+
+**모델 선택 가이드**:
+- **KoElectra**: 빠른 추론 속도, 경량 모델 (약 110M 파라미터) - **권장**
+- **Kanana Base**: 더 정확하지만 느림 (약 2.1B 파라미터)
+- **Kanana LoRA**: 가장 정확하지만 느림 (LoRA 어댑터 필요)
+
 ## 관련 파일
 - `backend/app/main.py`
 - `backend/app/config.py`

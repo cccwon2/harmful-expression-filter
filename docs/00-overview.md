@@ -157,8 +157,12 @@
   - 레이턴시: ~2.0초 → ~0.5초 (버퍼링 제거)
   - 중간 결과(Interim Results) 지원으로 문장 완성 전에도 감지 가능
   - WebSocket 기반 실시간 양방향 통신
-- **Task 36: 로컬 Whisper 폴백 시스템 완료**
-  - 서버 연결 실패 시 자동으로 로컬 Whisper 모드로 전환
-  - 오프라인 환경에서도 STT 기능 유지
-  - `Xenova/whisper-tiny` 모델 사용 (quantized, ~75MB)
-  - 3초 버퍼링 후 로컬 STT 처리 및 유해성 분석
+- **Task 36: 로컬 Whisper 폴백 시스템** ⚠️ 제거됨
+  - ~~서버 연결 실패 시 자동으로 로컬 Whisper 모드로 전환~~
+  - **현재**: 서버 STT만 사용, 자동 재연결 로직으로 대체
+  - LocalSTT 관련 코드 제거, 서버 WebSocket 연결만 사용
+- **KoElectra 모델 지원 추가**
+  - 빠른 추론 속도를 위한 KoElectra 모델 지원
+  - 환경 변수 `MODEL_TYPE`으로 모델 선택 가능 (koelectra/kanana)
+  - KoElectra: 경량 모델 (약 110M 파라미터), 빠른 추론
+  - Kanana: 더 정확하지만 느림 (약 2.1B 파라미터)

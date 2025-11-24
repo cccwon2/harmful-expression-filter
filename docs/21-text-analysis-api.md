@@ -25,8 +25,9 @@ OCR 및 음성 인식 결과를 입력받아 잠재적 유해 표현을 감지�
 
 ## 의존성
 - `docs/20-fastapi-setup.md`에서 정의한 FastAPI 기본 구조
-- `server/data/bad_words.json` 키워드 목록
+- `server/data/bad_words.json` 키워드 목록 (현재는 사용 안 함, AI 모델만 사용)
 - `docs/PROJECT_SPEC.md`의 유해 표현 카테고리 정의
+- AI 모델: KoElectra 또는 Kanana Nano (환경 변수로 선택)
 
 ## 관련 파일
 - `server/main.py`

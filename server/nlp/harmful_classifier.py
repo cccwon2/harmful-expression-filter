@@ -27,8 +27,12 @@ class ClassificationResult:
 
 class HarmfulTextClassifier:
     """
-    Kanana Nano 2.1b (LoRA Fine-tuned) 모델을 활용해 텍스트의 유해성을 판별하는 서비스.
-
+    텍스트의 유해성을 판별하는 서비스.
+    
+    지원 모델:
+    - Kanana Nano 2.1b (LoRA Fine-tuned)
+    - KoElectra (monologg/koelectra-base-v3-discriminator)
+    
     Hugging Face의 `AutoTokenizer`, `AutoModelForSequenceClassification` 및 `PeftModel`을 사용한다.
     """
 
@@ -92,46 +96,67 @@ class HarmfulTextClassifier:
         
         logger.info("🚀 Device selected: %s", self.device)
 
-        # 4. 토크나이저 로드 (로컬 어댑터 경로 우선)
-        logger.info("Loading Tokenizer from: %s", self.model_path)
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
-        except Exception:
-            logger.warning("로컬 토크나이저 로드 실패. Base 모델에서 다운로드합니다.")
+        # 4. KoElectra 모델인지 확인
+        is_koelectra = "koelectra" in self.base_model_name.lower()
+        self.use_lora = False  # 기본값
+        
+        # 5. 토크나이저 로드
+        if is_koelectra:
+            # KoElectra는 바로 base 모델에서 로드
+            logger.info("Loading KoElectra Tokenizer from: %s", self.base_model_name)
             self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name)
+        else:
+            # Kanana 모델: 로컬 어댑터 경로 우선
+            logger.info("Loading Tokenizer from: %s", self.model_path)
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+            except Exception:
+                logger.warning("로컬 토크나이저 로드 실패. Base 모델에서 다운로드합니다.")
+                self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_name)
 
         # 패딩 토큰 설정 (Llama 계열 모델은 기본 패딩 토큰이 없을 수 있음)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # 5. 모델 로드 (Base Model -> LoRA Adapter 결합 또는 Base Model만)
-        logger.info("Loading Base Model: %s", self.base_model_name)
+        # 6. 모델 로드
+        logger.info("Loading Model: %s", self.base_model_name)
         
         # 메모리 효율을 위해 float16 사용 (CPU일 경우 float32 자동 전환 고려 필요)
         torch_dtype = self._torch.float16 if self.device != "cpu" else self._torch.float32
 
-        self.base_model = AutoModelForSequenceClassification.from_pretrained(
-            self.base_model_name,
-            num_labels=num_labels,
-            torch_dtype=torch_dtype,
-            device_map=self.device 
-        )
-
-        # Base 모델만 사용할지 확인 (model_path가 None이거나 빈 문자열이거나 존재하지 않으면 base만 사용)
-        use_base_only = not self.model_path or self.model_path.strip() == "" or not os.path.exists(self.model_path)
-        self.use_lora = not use_base_only  # LoRA 사용 여부 저장
-        
-        if use_base_only:
-            logger.info("Using Base Model only (LoRA adapter disabled)")
-            self.model = self.base_model
-            logger.info("✅ Kanana-Nano Base model ready")
-        else:
-            logger.info("Loading LoRA Adapter from: %s", self.model_path)
-            self.model = PeftModel.from_pretrained(
-                self.base_model, 
-                self.model_path
+        if is_koelectra:
+            # KoElectra는 이미 sequence classification으로 학습된 모델
+            logger.info("Loading KoElectra model (no LoRA needed)")
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.base_model_name,
+                torch_dtype=torch_dtype,
+                device_map=self.device
             )
-            logger.info("✅ Kanana-Nano LoRA model ready")
+            logger.info("✅ KoElectra model ready")
+        else:
+            # Kanana 모델 로드
+            self.base_model = AutoModelForSequenceClassification.from_pretrained(
+                self.base_model_name,
+                num_labels=num_labels,
+                torch_dtype=torch_dtype,
+                device_map=self.device 
+            )
+
+            # Base 모델만 사용할지 확인 (model_path가 None이거나 빈 문자열이거나 존재하지 않으면 base만 사용)
+            use_base_only = not self.model_path or self.model_path.strip() == "" or not os.path.exists(self.model_path)
+            self.use_lora = not use_base_only  # LoRA 사용 여부 저장
+            
+            if use_base_only:
+                logger.info("Using Base Model only (LoRA adapter disabled)")
+                self.model = self.base_model
+                logger.info("✅ Kanana-Nano Base model ready")
+            else:
+                logger.info("Loading LoRA Adapter from: %s", self.model_path)
+                self.model = PeftModel.from_pretrained(
+                    self.base_model, 
+                    self.model_path
+                )
+                logger.info("✅ Kanana-Nano LoRA model ready")
         
         self.model.eval()
 

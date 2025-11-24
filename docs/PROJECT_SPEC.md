@@ -302,6 +302,11 @@ interface Window {
   - **실시간 WebSocket 스트리밍** (Task 35)
   - 레이턴시: ~0.5초 (버퍼링 제거)
   - 중간 결과(Interim Results) 지원
+  - 서버 연결 실패 시 자동 재연결
+- NLP 모델 (환경 변수로 선택)
+  - **KoElectra** (`monologg/koelectra-base-v3-discriminator`): 빠른 추론, 경량 (약 110M 파라미터)
+  - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
+    - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
 
 **⚠️ 중요**: server 폴더의 모든 Python 라이브러리는 `venv310` 가상환경에서만 관리합니다.
 - 가상환경 활성화: `venv310\Scripts\activate` (Windows) 또는 `source venv310/bin/activate` (Linux/Mac)

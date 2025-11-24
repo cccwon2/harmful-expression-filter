@@ -255,7 +255,11 @@ class DeepgramWebSocketManager:
             "ai_detection": {
                 "detected": is_harmful_ai,
                 "confidence": ai_confidence,
-                "model": "Kanana-Base" if (self.classifier and not getattr(self.classifier, 'use_lora', True)) else "Kanana-LoRA"
+                "model": (
+                    "KoElectra" if (self.classifier and "koelectra" in getattr(self.classifier, 'base_model_name', '').lower())
+                    else "Kanana-Base" if (self.classifier and not getattr(self.classifier, 'use_lora', True))
+                    else "Kanana-LoRA"
+                )
             } if is_final and self.classifier else None,
             "is_final": is_final,
             "timestamp": time.time(),
@@ -289,56 +293,79 @@ async def lifespan(app: FastAPI):
     # 🔇 키워드 로드 주석처리 (kanana-lora-v1 모델만 사용)
     # load_keywords()
     
-    # ✅ Kanana-Nano 모델 로드 로직 (Base 모델만 사용하도록 설정)
+    # ✅ 모델 로드 로직 (Kanana 또는 KoElectra 선택 가능)
     try:
-        # .env에서 경로 가져오기 (없으면 빈 문자열로 설정하여 base 모델만 사용)
+        # .env에서 모델 타입 가져오기
+        model_type_env = os.getenv("MODEL_TYPE", "kanana").lower()  # "kanana" 또는 "koelectra"
         model_path_env = os.getenv("MODEL_PATH", "")  # 빈 문자열 = base 모델만 사용
-        base_model_env = os.getenv("BASE_MODEL_NAME", "kakaocorp/kanana-nano-2.1b-instruct")
-
-        # Base 모델만 사용할지 확인
-        use_base_only = not model_path_env or model_path_env.strip() == ""
+        base_model_env = os.getenv("BASE_MODEL_NAME", "")
         
-        if use_base_only:
-            LOGGER.info("[Init] 🚀 Kanana Base 모델 로딩 시작...")
-            LOGGER.info(f" - Base Model: {base_model_env}")
-            LOGGER.info(f" - LoRA Adapter: 사용 안 함 (Base 모델만 사용)")
+        if model_type_env == "koelectra":
+            # KoElectra 모델 사용
+            if not base_model_env:
+                base_model_env = "monologg/koelectra-base-v3-discriminator"
             
-            # HarmfulTextClassifier 초기화 (model_path를 빈 문자열로 전달하여 base만 사용)
+            LOGGER.info("[Init] 🚀 KoElectra 모델 로딩 시작...")
+            LOGGER.info(f" - Model: {base_model_env}")
+            
             classifier = HarmfulTextClassifier(
-                model_path="",  # 빈 문자열 = base 모델만 사용
+                model_path="",  # KoElectra는 LoRA 불필요
                 base_model_name=base_model_env
             )
-            LOGGER.info("[Init] ✅ Kanana-Nano Base 모델 로드 완료!")
+            LOGGER.info("[Init] ✅ KoElectra 모델 로드 완료!")
+            model_type = "KoElectra"
         else:
-            # 절대 경로 변환
-            base_dir = os.path.dirname(__file__)
-            full_model_path = os.path.join(base_dir, model_path_env)
-
-            if os.path.exists(full_model_path):
-                LOGGER.info("[Init] 🚀 Kanana LoRA 모델 로딩 시작...")
-                LOGGER.info(f" - Adapter Path: {full_model_path}")
+            # Kanana 모델 사용
+            if not base_model_env:
+                base_model_env = "kakaocorp/kanana-nano-2.1b-instruct"
+            
+            # Base 모델만 사용할지 확인
+            use_base_only = not model_path_env or model_path_env.strip() == ""
+            
+            if use_base_only:
+                LOGGER.info("[Init] 🚀 Kanana Base 모델 로딩 시작...")
                 LOGGER.info(f" - Base Model: {base_model_env}")
+                LOGGER.info(f" - LoRA Adapter: 사용 안 함 (Base 모델만 사용)")
                 
-                # HarmfulTextClassifier 초기화 (새로운 파라미터 적용)
-                classifier = HarmfulTextClassifier(
-                    model_path=model_path_env, # harmful_classifier 내부에서 상대경로 처리함
-                    base_model_name=base_model_env
-                )
-                LOGGER.info("[Init] ✅ Kanana-Nano LoRA 모델 로드 완료!")
-            else:
-                LOGGER.warning(f"[Init] ⚠️ 모델 경로를 찾을 수 없음: {full_model_path}")
-                LOGGER.warning("[Init] Base 모델만 사용합니다.")
+                # HarmfulTextClassifier 초기화 (model_path를 빈 문자열로 전달하여 base만 사용)
                 classifier = HarmfulTextClassifier(
                     model_path="",  # 빈 문자열 = base 모델만 사용
                     base_model_name=base_model_env
                 )
+                LOGGER.info("[Init] ✅ Kanana-Nano Base 모델 로드 완료!")
+                model_type = "Kanana-Base"
+            else:
+                # 절대 경로 변환
+                base_dir = os.path.dirname(__file__)
+                full_model_path = os.path.join(base_dir, model_path_env)
+
+                if os.path.exists(full_model_path):
+                    LOGGER.info("[Init] 🚀 Kanana LoRA 모델 로딩 시작...")
+                    LOGGER.info(f" - Adapter Path: {full_model_path}")
+                    LOGGER.info(f" - Base Model: {base_model_env}")
+                    
+                    # HarmfulTextClassifier 초기화 (새로운 파라미터 적용)
+                    classifier = HarmfulTextClassifier(
+                        model_path=model_path_env, # harmful_classifier 내부에서 상대경로 처리함
+                        base_model_name=base_model_env
+                    )
+                    LOGGER.info("[Init] ✅ Kanana-Nano LoRA 모델 로드 완료!")
+                    model_type = "Kanana-LoRA"
+                else:
+                    LOGGER.warning(f"[Init] ⚠️ 모델 경로를 찾을 수 없음: {full_model_path}")
+                    LOGGER.warning("[Init] Base 모델만 사용합니다.")
+                    classifier = HarmfulTextClassifier(
+                        model_path="",  # 빈 문자열 = base 모델만 사용
+                        base_model_name=base_model_env
+                    )
+                    model_type = "Kanana-Base"
 
     except Exception as e:
         LOGGER.error("[Init] ❌ AI 모델 로드 실패: %s", e, exc_info=True)
         classifier = None
+        model_type = "None"
 
-    model_type = "Base" if (not model_path_env or model_path_env.strip() == "") else "LoRA"
-    LOGGER.info(f"[INFO] 🚀 서버 시작 완료 (Deepgram Streaming + Kanana {model_type})")
+    LOGGER.info(f"[INFO] 🚀 서버 시작 완료 (Deepgram Streaming + {model_type})")
     yield
     LOGGER.info("[INFO] 👋 서버 종료")
 

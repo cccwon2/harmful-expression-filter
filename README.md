@@ -26,7 +26,7 @@
 - **Task 33**: AudioManager 트레이 통합 (보안 강화, 시스템 트레이 직접 제어)
 - **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
-- **Task 36**: 로컬 Whisper 폴백 시스템 (서버 연결 실패 시 로컬 STT 자동 전환)
+- **Task 36**: 로컬 Whisper 폴백 시스템 (⚠️ 제거됨 - 서버 STT만 사용, 자동 재연결)
 - **Task 37**: Ubuntu 서버 FastAPI 배포 (systemd, Nginx 리버스 프록시, 프로덕션 환경 구성)
 
 ### 주요 기술 스택
@@ -34,12 +34,14 @@
 - **OCR**: Windows SDK OCR (Windows.Media.Ocr) - C# COM Bridge를 통해 사용
   - **성능**: 14-17ms 처리 시간 (서버 분석 제거, 로컬 분석으로 전환)
   - **최적화**: OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
-- **STT**: Deepgram (WebSocket 기반 실시간 음성 인식) + 로컬 Whisper 폴백
+- **STT**: Deepgram (WebSocket 기반 실시간 음성 인식) - 서버 STT만 사용
   - **정상 모드**: Deepgram 실시간 스트리밍 (~0.5초 레이턴시)
     - 중간 결과(Interim Results) 지원, 문장 완성 전에도 감지 가능
-  - **폴백 모드**: 로컬 Whisper (서버 연결 실패 시 자동 전환)
-    - 모델: `Xenova/whisper-tiny` (quantized, ~75MB)
-    - 오프라인 환경에서도 STT 기능 유지
+    - 서버 연결 실패 시 자동 재연결 시도
+- **NLP 모델**: KoElectra 또는 Kanana Nano (환경 변수로 선택)
+  - **KoElectra** (`monologg/koelectra-base-v3-discriminator`): 빠른 추론, 경량 모델 (약 110M 파라미터)
+  - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
+    - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
 - **오디오 캡처**: [OnVoice COM Bridge](https://github.com/cccwon2/onvoice-com-bridge) (Windows WASAPI 기반 프로세스별 오디오 캡처)
 - **백엔드**: FastAPI (Python 3.10, venv310 환경)
 
@@ -63,6 +65,24 @@ SERVER_WS_URL=ws://127.0.0.1:8000/ws/audio
 # Deepgram API Key (STT용)
 # 발급: https://console.deepgram.com/signup
 DEEPGRAM_API_KEY=your_deepgram_api_key_here
+
+# [AI 모델 설정]
+
+# 모델 타입 (koelectra, kanana 기본값)
+# - koelectra: KoElectra 모델 사용 (빠른 추론, 경량)
+# - kanana: Kanana Nano 모델 사용 (더 정확하지만 느림)
+MODEL_TYPE=koelectra
+
+# Base 모델 (Hugging Face 모델 이름)
+# KoElectra 사용 시:
+BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+# Kanana 사용 시:
+#BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
+
+# 학습된 LoRA 어댑터 경로 (server 폴더 기준 상대 경로)
+# Base 모델만 사용하려면 비워두거나 주석 처리
+#MODEL_PATH=models/kanana-lora-v1
+MODEL_PATH=
 ```
 
 **참고**:
@@ -70,6 +90,10 @@ DEEPGRAM_API_KEY=your_deepgram_api_key_here
 - `.env` 파일은 `.gitignore`에 포함되어 있어 Git에 커밋되지 않습니다.
 - Deepgram API 키는 [Deepgram Console](https://console.deepgram.com/signup)에서 발급받을 수 있습니다.
 - 무료 크레딧: $200 (약 16,000분 사용 가능)
+- **모델 선택**:
+  - `MODEL_TYPE=koelectra`: 빠른 추론 속도, 경량 모델 (약 110M 파라미터)
+  - `MODEL_TYPE=kanana`: 더 정확하지만 느림 (약 2.1B 파라미터)
+  - `MODEL_PATH`를 설정하면 Kanana LoRA 어댑터 사용 (더 정확한 유해성 판별)
 
 ## 🚀 빠른 시작
 
@@ -168,7 +192,6 @@ harmful-expression-filter/
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
 - `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
 - `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
-- `electron/audio/LocalSttService.ts` – 로컬 Whisper STT 서비스 (폴백용, Singleton)
 - `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (electron-edge-js 기반, Windows SDK OCR 포함)
 - `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합, 폴백 로직 포함)
 - `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)

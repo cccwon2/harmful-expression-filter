@@ -1,10 +1,16 @@
 # Task 36: 로컬 Whisper 폴백(Fallback) 시스템 구현
 
-## ⚠️ 상태: 완료
+## ⚠️ 상태: 제거됨
 
 ## 📋 작업 개요
 
-Deepgram 서버 연결 실패 시 Electron 내부에서 로컬 Whisper 모델을 사용하여 STT를 수행하는 폴백 시스템을 구현합니다.
+~~Deepgram 서버 연결 실패 시 Electron 내부에서 로컬 Whisper 모델을 사용하여 STT를 수행하는 폴백 시스템을 구현합니다.~~
+
+**현재 상태 (2025-11-24 업데이트)**: 
+- LocalSTT 관련 코드가 제거되었습니다
+- 서버 STT(WebSocket)만 사용하며, 연결 실패 시 자동 재연결 로직으로 대체되었습니다
+- `electron/audio/LocalSttService.ts` 파일 삭제
+- `electron/main/AudioManager.ts`에서 폴백 모드 로직 제거
 
 **목표**:
 
