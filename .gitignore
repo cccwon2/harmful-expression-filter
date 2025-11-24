@@ -22,7 +22,7 @@ Thumbs.db
 *.swo
 *~
 
-# Environment
+# Environment (Secrets - 중요!)
 .env
 .env.local
 .env.*.local
@@ -30,7 +30,7 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 
-# Server
+# Server (Python Environment & Caches)
 **/server/data/
 **/server/venv/
 **/server/venv310/
@@ -40,11 +40,35 @@ Thumbs.db
 **/server/.pytest_cache/
 **/server/logs/
 
+# ==========================================
+# 🧠 AI Model Management (New)
+# ==========================================
+
+# 1. 기본 안전장치: 모든 모델 가중치 파일 무시 (실수로 4GB 파일 올라가는 것 방지)
+server/models/**/*.bin
+server/models/**/*.safetensors
+server/models/**/*.pt
+server/models/**/*.pth
+server/models/**/*.msgpack
+server/models/**/*.h5
+
+# 2. Base Model 폴더 무시 (다운로드 받았다면)
+server/models/kakaocorp/
+
+# 3. 예외 허용: 내가 학습시킨 LoRA 어댑터는 업로드 허용! (약 24MB)
+# (kanana-lora-v1 폴더 안의 파일들은 Git에 포함시킴)
+!server/models/kanana-lora-v1/
+!server/models/kanana-lora-v1/*.json
+!server/models/kanana-lora-v1/*.bin
+!server/models/kanana-lora-v1/*.safetensors
+
+# ==========================================
+
 # .NET / C# Build Folders
 **/bin/
 **/obj/
 
-# Visual Studio User specific files (사용자 설정 파일 등)
+# Visual Studio User specific files
 *.user
 *.suo
 .vs/

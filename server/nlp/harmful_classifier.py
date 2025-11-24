@@ -34,7 +34,8 @@ class HarmfulTextClassifier:
 
     def __init__(
         self,
-        # 기본적으로 로컬에 저장된 LoRA 어댑터 폴더를 가리킵니다.
+        # 기본값은 제거하고 main.py에서 주입받는 구조로 변경 권장하지만, 
+        # 테스트 편의를 위해 기본값 유지 (단, main.py에서는 항상 값을 넘겨주도록 설정됨)
         model_path: str = "models/kanana-lora-v1", 
         base_model_name: str = "kakaocorp/kanana-nano-2.1b-instruct",
         *,
@@ -44,14 +45,16 @@ class HarmfulTextClassifier:
     ) -> None:
         """
         Args:
-            model_path: 학습된 LoRA 어댑터가 저장된 로컬 폴더 경로 (상대 경로 권장)
+            model_path: 학습된 LoRA 어댑터가 저장된 로컬 폴더 경로
             base_model_name: Hugging Face Base 모델 이름
             num_labels: 분류 라벨 수 (0: 정상, 1: 유해)
             max_length: 토큰 최대 길이
             torch_module: torch 대체 모듈 (테스트용 주입 가능)
         """
 
-        self.model_path = os.path.join(os.path.dirname(__file__), model_path)
+        # ✅ 수정: 입력받은 경로를 가공하지 않고 그대로 사용 (main.py에서 절대 경로 처리됨)
+        self.model_path = model_path
+        
         self.base_model_name = base_model_name
         self.max_length = max_length
 
@@ -89,7 +92,7 @@ class HarmfulTextClassifier:
         
         logger.info("🚀 Device selected: %s", self.device)
 
-        # 4. 토크나이저 로드 (로컬 어댑터 경로 우선, 없으면 베이스 모델)
+        # 4. 토크나이저 로드 (로컬 어댑터 경로 우선)
         logger.info("Loading Tokenizer from: %s", self.model_path)
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
@@ -120,9 +123,6 @@ class HarmfulTextClassifier:
             self.model_path
         )
         
-        # (선택) 추론 속도 향상을 위해 어댑터 병합
-        # self.model = self.model.merge_and_unload()
-
         self.model.eval()
         logger.info("✅ Kanana-Nano LoRA model ready")
 

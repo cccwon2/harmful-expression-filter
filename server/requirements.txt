@@ -10,13 +10,17 @@ websockets
 # 환경 변수 관리
 python-dotenv==1.0.0
 
-# Transformers & LoRA 모델 (Python 3.10 지원)
-transformers==4.35.0
+# Transformers & LoRA 모델
+# (peft 최신 버전과의 호환성을 위해 transformers 버전 제한을 풀었습니다)
+transformers
 peft
 accelerate
 
-# PyTorch (Transformers 의존성)
-torch==2.1.0
+# PyTorch
+# (Windows/Linux 환경에 맞는 최신 버전을 자동으로 설치하도록 버전 명시 제거)
+torch
+torchaudio
+torchvision
 
 # 테스트 (개발 환경)
 pytest==7.4.3
