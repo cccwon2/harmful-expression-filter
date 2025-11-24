@@ -40,9 +40,10 @@
     - 서버 연결 실패 시 자동 재연결 시도
 - **NLP 모델**: KoElectra 또는 Kanana Nano (환경 변수로 선택)
   - **KoElectra** (`monologg/koelectra-base-v3-discriminator`): 빠른 추론, 경량 모델 (약 110M 파라미터)
+    - CPU 환경에 최적화, `optimum`/`onnxruntime`로 추가 가속 가능
   - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
-    - **8-bit 양자화 지원**: GPU 사용 시 메모리 사용량 감소 및 추론 속도 2-4배 향상 (기본 활성화)
+    - **8-bit 양자화 지원**: GPU 사용 시 `bitsandbytes` 설치 후 메모리 사용량 감소 및 추론 속도 2-4배 향상 가능 (CPU에서는 동작하지 않음)
 - **오디오 캡처**: [OnVoice COM Bridge](https://github.com/cccwon2/onvoice-com-bridge) (Windows WASAPI 기반 프로세스별 오디오 캡처)
 - **백엔드**: FastAPI (Python 3.12, venv312 환경)
 
@@ -67,29 +68,21 @@ SERVER_WS_URL=ws://127.0.0.1:8000/ws/audio
 # 발급: https://console.deepgram.com/signup
 DEEPGRAM_API_KEY=your_deepgram_api_key_here
 
-# [AI 모델 설정]
-
-# 모델 타입 (koelectra, kanana 기본값)
-# - koelectra: KoElectra 모델 사용 (빠른 추론, 경량)
-# - kanana: Kanana Nano 모델 사용 (더 정확하지만 느림)
+# ==========================================
+# [MODE 1] KoElectra (CPU 추천, 빠름)
+# ==========================================
 MODEL_TYPE=koelectra
-
-# Base 모델 (Hugging Face 모델 이름)
-# KoElectra 사용 시:
 BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
-# Kanana 사용 시:
-#BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
-
-# 학습된 LoRA 어댑터 경로 (server 폴더 기준 상대 경로)
-# Base 모델만 사용하려면 비워두거나 주석 처리
-#MODEL_PATH=models/kanana-lora-v1
 MODEL_PATH=
+USE_QUANTIZATION=false
 
-# 8-bit 양자화 사용 여부 (기본값: true)
-# GPU 사용 시 메모리 사용량 감소 및 추론 속도 향상 (약 2-4배 빠름)
-# CPU 사용 시에는 자동으로 비활성화됨
-# bitsandbytes 패키지가 필요함 (requirements.txt에 포함됨)
-USE_QUANTIZATION=true
+# ==========================================
+# [MODE 2] Kanana (GPU 추천, 정확함)
+# ==========================================
+# MODEL_TYPE=kanana
+# BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
+# MODEL_PATH=models/kanana-lora-v1
+# USE_QUANTIZATION=false
 ```
 
 **참고**:
@@ -98,11 +91,27 @@ USE_QUANTIZATION=true
 - Deepgram API 키는 [Deepgram Console](https://console.deepgram.com/signup)에서 발급받을 수 있습니다.
 - 무료 크레딧: $200 (약 16,000분 사용 가능)
 - **모델 선택**:
-  - `MODEL_TYPE=koelectra`: 빠른 추론 속도, 경량 모델 (약 110M 파라미터)
-  - `MODEL_TYPE=kanana`: 더 정확하지만 느림 (약 2.1B 파라미터)
-  - `MODEL_PATH`를 설정하면 Kanana LoRA 어댑터 사용 (더 정확한 유해성 판별)
+  - **MODE 1 (KoElectra)**: CPU 환경에 추천, 빠른 추론 속도, 경량 모델 (약 110M 파라미터)
+    - `MODEL_TYPE=koelectra`로 설정
+    - `USE_QUANTIZATION=false` (CPU에서는 양자화 불필요)
+  - **MODE 2 (Kanana)**: GPU 환경에 추천, 더 정확하지만 느림 (약 2.1B 파라미터)
+    - `MODEL_TYPE=kanana`로 설정
+    - `MODEL_PATH`를 설정하면 LoRA 어댑터 사용 가능 (더 정확한 유해성 판별)
+    - `USE_QUANTIZATION=false` (CPU 사용 시 자동으로 비활성화됨)
 
 ## 🚀 빠른 시작
+
+### Python 의존성 (requirements.txt)
+
+`server/requirements.txt`는 CPU 환경에 최적화되어 있습니다:
+
+- **FastAPI & Web**: FastAPI, uvicorn, pydantic, websockets
+- **AI Models**: transformers, accelerate
+  - `bitsandbytes`: CPU 호환 불가로 제거됨 (GPU 사용 시 별도 설치)
+  - `peft`: 학습이 아닌 추론만 한다면 불필요 (LoRA 어댑터 사용 시 필요)
+- **PyTorch**: CPU 버전 권장 (`torch`, `torchaudio`)
+  - `torchvision`: KoElectra와 무관하므로 제거됨
+- **CPU 추론 가속 (선택)**: `optimum`, `onnxruntime` (추천)
 
 ### CPU 사용 (기본)
 
@@ -115,19 +124,32 @@ cd server
 venv312\Scripts\activate
 
 # 의존성 설치 (venv312 활성화 후)
-.\venv312\Scripts\python.exe -m pip install -r requirements.txt
+# 1. 먼저 CPU 버전의 PyTorch 설치 (OS에 따라 다를 수 있으나 Linux/Windows 공통적으로 아래 인덱스 권장)
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# 2. 나머지 패키지 설치
+pip install -r requirements.txt
 # 또는
-# python -m pip install -r requirements.txt
+# .\venv312\Scripts\python.exe -m pip install -r requirements.txt
 
 # 서버 실행
 uvicorn main:app --reload
 ```
+
+**참고:**
+
+- `requirements.txt`는 CPU 최적화를 위해 구성되어 있습니다:
+  - `bitsandbytes`: CPU 호환 불가로 제거됨
+  - `peft`: 학습(Fine-tuning)이 아닌 추론(Inference)만 한다면 필요 없음 (유지해도 무방)
+  - `torchvision`: KoElectra와 무관하므로 제거됨
+  - `optimum`, `onnxruntime`: CPU 추론 가속용 (선택 사항, 추천)
 
 ### GPU 사용 (CUDA) - 성능 향상
 
 **GPU를 사용하면 추론 속도가 2-4배 빨라집니다!**
 
 #### 1. NVIDIA GPU 확인
+
 ```bash
 # GPU 확인 (Windows)
 nvidia-smi
@@ -136,40 +158,57 @@ nvidia-smi
 #### 2. CUDA 지원 PyTorch 설치
 
 **방법 1: PyTorch 공식 사이트 사용 (권장)**
+
 1. https://pytorch.org/get-started/locally/ 접속
 2. 환경 선택 (OS, Python, CUDA 버전)
 3. 생성된 명령어 실행
 
 **방법 2: 직접 설치 (CUDA 12.1 예시)**
+
 ```bash
 # venv312 활성화 후
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# torchvision은 KoElectra와 무관하므로 선택 사항
 ```
 
 **방법 3: CUDA 11.8 사용 시**
+
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
 #### 3. 나머지 패키지 설치
+
 ```bash
 # PyTorch 설치 후 나머지 패키지 설치
 pip install -r requirements.txt
 ```
 
+**참고:**
+
+- GPU 사용 시 `bitsandbytes`를 별도로 설치하면 8-bit 양자화 사용 가능 (CPU에서는 동작하지 않음)
+- `peft`는 LoRA 어댑터 사용 시 필요 (Base 모델만 사용하면 불필요)
+
 #### 4. GPU 인식 확인
+
 서버 실행 시 로그에서 다음 메시지 확인:
+
 ```
 🚀 Device selected: cuda
 ✅ 8-bit 양자화 활성화 (성능 개선: 메모리 사용량 감소, 추론 속도 향상)
 ```
 
+**참고:** CPU 환경에서는 자동으로 `Device selected: cpu`로 표시됩니다.
+
 **참고:**
+
 - CUDA Toolkit을 별도로 설치할 필요는 없습니다 (PyTorch가 자체 CUDA 런타임 포함)
 - NVIDIA 드라이버는 최신 버전으로 업데이트 권장
 - GPU가 없으면 자동으로 CPU로 동작합니다
 
-# Electron 앱 (터미널 2)
+### Electron 앱 (터미널 2)
+
+```bash
 npm install
 npm run dev
 ```
