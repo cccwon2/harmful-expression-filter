@@ -58,20 +58,29 @@ class HarmfulTextClassifier:
         else:
             self.use_quantization = use_quantization
 
-        # 2. 라이브러리 로드
+        # 2. 라이브러리 로드 (transformers는 필수, peft는 선택)
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
-            from peft import PeftModel
         except ImportError as exc:
-            raise TransformersNotAvailableError("transformers or peft not installed") from exc
+            raise TransformersNotAvailableError("transformers 패키지가 설치되지 않았습니다. `pip install transformers`") from exc
+
+        # Peft는 선택적 로드 (LoRA 어댑터 사용 시에만 필요)
+        try:
+            from peft import PeftModel
+            self._peft_available = True
+        except ImportError:
+            self._peft_available = False
+            PeftModel = None  # 타입 힌트용 혹은 참조용
 
         # 3. 모델 타입 감지
         self.is_koelectra = "koelectra" in self.base_model_name.lower()
         self.use_lora = False
 
         # 4. 토크나이저 로드
+        # KoElectra인 경우 base_model_name 사용, Kanana인 경우 model_path가 있으면 거기서 로드 시도
         tokenizer_path = self.model_path if (self.model_path and not self.is_koelectra) else self.base_model_name
         logger.info(f"Loading Tokenizer from: {tokenizer_path}")
+        
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         except Exception:
@@ -111,7 +120,7 @@ class HarmfulTextClassifier:
         logger.info(f"Loading Model: {self.base_model_name}")
         
         if self.is_koelectra:
-            # KoElectra
+            # KoElectra (일반 HuggingFace 모델)
             try:
                 self.model = AutoModelForSequenceClassification.from_pretrained(
                     self.base_model_name, **load_kwargs
@@ -135,8 +144,15 @@ class HarmfulTextClassifier:
                     self.base_model_name, **load_kwargs
                 )
 
-            # LoRA 적용 여부
+            # LoRA 적용 여부 확인
             if self.model_path and os.path.exists(self.model_path):
+                # LoRA를 사용하려면 PEFT 패키지가 필수
+                if not self._peft_available:
+                    raise ImportError(
+                        "LoRA 모델을 로드하려면 'peft' 패키지가 필요합니다. "
+                        "`pip install peft`를 실행하거나, Base 모델만 사용하세요."
+                    )
+                
                 logger.info(f"Loading LoRA Adapter: {self.model_path}")
                 self.model = PeftModel.from_pretrained(
                     self.base_model,
