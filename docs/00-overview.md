@@ -140,7 +140,7 @@
 | Windows OCR 성능 최적화 | ✅ 완료      | 100%   | High     |
 | Deepgram 실시간 스트리밍 | ✅ 완료      | 100%   | High     |
 | 로컬 Whisper 폴백 시스템 | ✅ 완료      | 100%   | High     |
-| Ubuntu 서버 FastAPI 배포 | 🔄 진행 중   | 0%     | Medium   |
+| Ubuntu 서버 FastAPI 배포 | ✅ 문서화 완료 | 100%   | Medium   |
 
 ## 최근 변경 사항 (2025-11-22)
 
@@ -161,6 +161,9 @@
   - ~~서버 연결 실패 시 자동으로 로컬 Whisper 모드로 전환~~
   - **현재**: 서버 STT만 사용, 자동 재연결 로직으로 대체
   - LocalSTT 관련 코드 제거, 서버 WebSocket 연결만 사용
+- **Task 37: Ubuntu 서버 배포 가이드 작성 완료**
+  - systemd, Nginx, SSL, Gunicorn 설정 가이드 제공
+  - `docs/37-ubuntu-fastapi-deployment.md` 참조
 - **KoElectra 모델 지원 추가**
   - 빠른 추론 속도를 위한 KoElectra 모델 지원
   - 환경 변수 `MODEL_TYPE`으로 모델 선택 가능 (koelectra/kanana)

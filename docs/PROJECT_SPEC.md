@@ -200,6 +200,8 @@ export const IPC_CHANNELS = {
   SET_CLICK_THROUGH: 'overlay:setClickThrough',
   OVERLAY_SET_MODE: 'overlay:setMode',
   OVERLAY_STATE_PUSH: 'overlay:state',
+  START_MONITORING: 'monitoring:start',
+  STOP_MONITORING: 'monitoring:stop',
   OCR_START: 'ocr:start',
   OCR_STOP: 'ocr:stop',
   ALERT_FROM_SERVER: 'alert:server',
@@ -211,6 +213,8 @@ export const SERVER_CHANNELS = {
   HEALTH_CHECK: 'server:health-check',
   ANALYZE_TEXT: 'server:analyze-text',
   GET_KEYWORDS: 'server:get-keywords',
+  OCR_IMAGE: 'server:ocr-image',              // 🆕 OCR만
+  OCR_AND_ANALYZE: 'server:ocr-and-analyze',  // 🆕 OCR + 분석
 } as const;
 
 export const AUDIO_CHANNELS = {
@@ -219,6 +223,7 @@ export const AUDIO_CHANNELS = {
   GET_STATUS: 'audio:get-status',
   SET_VOLUME_LEVEL: 'audio:set-volume-level',
   SET_BEEP_ENABLED: 'audio:set-beep-enabled',
+  SET_TARGET_APP: 'audio:set-target-app',
 } as const;
 ```
 

@@ -27,7 +27,7 @@
 - **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
 - **Task 36**: 로컬 Whisper 폴백 시스템 (⚠️ 제거됨 - 서버 STT만 사용, 자동 재연결)
-- **Task 37**: Ubuntu 서버 FastAPI 배포 (systemd, Nginx 리버스 프록시, 프로덕션 환경 구성)
+- **Task 37**: Ubuntu 서버 FastAPI 배포 가이드 (systemd, Nginx, SSL, 프로덕션 환경 구성)
 
 ### 주요 기술 스택
 

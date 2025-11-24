@@ -453,23 +453,24 @@ export function getStoreSnapshot(): StoreData;
 
 주요 역할:
 - `captureAndProcessROI()`로 ROI 영역을 주기적으로 캡처
-- `tesseract.js` 기반 `performOCR()`로 텍스트 추출
-- `sendToServer()`를 통해 OCR 결과/이미지를 외부 엔드포인트로 전송
+- `onVoiceBridge` (Windows SDK OCR) 기반 `performOCR()`로 텍스트 추출
+- `sendImageToServer()`를 통해 OCR 결과 및 유해성 분석 수행 (C# Bridge 내부 처리)
 - `START_MONITORING` / `STOP_MONITORING` IPC로 렌더러와 동기화
 
 ---
 
 ### 15. 오디오 모니터링 서비스
-**파일**: `electron/audio/audioService.ts`
+**파일**: `electron/audio/audioService.ts` (Legacy), `electron/main/AudioManager.ts` (New)
 
-오디오 캡처, 처리, WebSocket 통신을 통합 관리합니다. Task 25에서 도입되었습니다.
+**AudioManager (권장)**:
+- 시스템 트레이 중심의 오디오 스트리밍 관리자 (Singleton)
+- OnVoice Bridge를 통해 프로세스별 오디오 캡처
+- Deepgram Realtime Streaming (WebSocket) 연동
+- 자동 재연결 및 상태 관리
 
-**주요 기능**:
-- Windows 오디오 캡처 (WASAPI Loopback)
-- 오디오 리샘플링 (48kHz → 16kHz)
-- WebSocket을 통한 서버 전송
-- 서버 응답 기반 유해성 감지
-- 앱별 볼륨 조절 (AppVolumeController 사용)
+**AudioService (Legacy)**:
+- `naudiodon` 기반의 시스템 오디오 캡처 (현재는 AudioManager로 대체되는 추세)
+- `audioHandlers.ts`를 통해 일부 IPC 기능 제공
 
 ---
 
