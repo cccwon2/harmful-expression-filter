@@ -1,33 +1,23 @@
+# FastAPI 및 웹 서버
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.10.4
 python-multipart==0.0.6
-pytest==7.4.3
-httpx==0.25.2
 
-# NumPy 2.x는 PaddleOCR 호환 안됨 → 1.x로 제한
-numpy<2.0
+# WebSocket 클라이언트 (Deepgram WebSocket 연결용)
+websockets
 
-# Transformers는 Python 3.10에서는 잘 동작
-transformers==4.35.0
-
-pydub==0.25.1
-
-# Whisper & Torch 계열 (Python 3.10 지원)
-torch==2.1.0
-torchaudio==2.1.0
-openai-whisper==20231117
-
-# Deepgram V5
-deepgram-sdk>=5.3.0
-
-# 환경 변수 및 유틸
+# 환경 변수 관리
 python-dotenv==1.0.0
 
-# PaddleOCR & PaddlePaddle (Python 3.10 권장 버전)
-paddleocr==2.7.0.3
-paddlepaddle==2.6.2
-PyMuPDF==1.20.2
+# Transformers & LoRA 모델 (Python 3.10 지원)
+transformers==4.35.0
+peft
+accelerate
 
-# 이미지 처리
-Pillow>=9.0.0
+# PyTorch (Transformers 의존성)
+torch==2.1.0
+
+# 테스트 (개발 환경)
+pytest==7.4.3
+httpx==0.25.2
