@@ -246,6 +246,8 @@ class DeepgramWebSocketManager:
 
         is_harmful = is_harmful_ai
         
+        model_name = self._get_classifier_model_name()
+
         response_data = {
             "status": "ok",
             "text": transcript,
@@ -255,11 +257,7 @@ class DeepgramWebSocketManager:
             "ai_detection": {
                 "detected": is_harmful_ai,
                 "confidence": ai_confidence,
-                "model": (
-                    "KoElectra" if (self.classifier and "koelectra" in getattr(self.classifier, 'base_model_name', '').lower())
-                    else "Kanana-Base" if (self.classifier and not getattr(self.classifier, 'use_lora', True))
-                    else "Kanana-LoRA"
-                )
+                "model": model_name
             } if is_final and self.classifier else None,
             "is_final": is_final,
             "timestamp": time.time(),
@@ -271,9 +269,20 @@ class DeepgramWebSocketManager:
         
         print(f"[STT] [확정] {transcript}", flush=True)
         if is_harmful:
-            print(f"🚨 유해 표현 감지(Kanana-AI): {matched_keywords or ['[전체 문장]']}", flush=True)
+            print(f"🚨 유해 표현 감지({model_name}-AI): {matched_keywords or ['[전체 문장]']}", flush=True)
 
         self.result_queue.put_nowait(response_data)
+
+    def _get_classifier_model_name(self) -> str:
+        if not self.classifier:
+            return "AI"
+        base_name = getattr(self.classifier, "base_model_name", "")
+        base_lower = base_name.lower()
+        if "koelectra" in base_lower:
+            return "KoElectra"
+        if not getattr(self.classifier, "use_lora", True):
+            return "Kanana-Base"
+        return "Kanana-LoRA"
 
     async def _send_results_to_client(self):
         while self.is_running:
