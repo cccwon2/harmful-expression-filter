@@ -1,27 +1,28 @@
-# FastAPI
+# FastAPI & Web
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.10.4
 python-multipart>=0.0.6
-
-# WebSocket (버전 명시 필수)
 websockets==12.0
 
 # Env
 python-dotenv
 
-# AI Models (최신 Python 호환성을 위해 버전 제한 해제 권장)
+# AI Models (CPU Optimized)
 transformers>=4.38.0
-peft
 accelerate
-bitsandbytes  # 8-bit 양자화를 위한 패키지 (성능 개선)
+# bitsandbytes  <-- CPU 호환 불가로 제거
+# peft          <-- 학습(Fine-tuning)이 아닌 추론(Inference)만 한다면 굳이 필요 없음 (유지해도 무방)
 
-# PyTorch (안정적인 버전 조합 사용, versions must match)
-# Note: CPU version is installed. For CUDA, use: pip install torch==2.4.1+cu121 torchvision==0.19.1+cu121 torchaudio==2.4.1+cu121 --index-url https://download.pytorch.org/whl/cu121
-torch==2.4.1
-torchaudio==2.4.1
-torchvision==0.19.1
+# PyTorch (CPU 버전 설치 권장)
+torch
+torchaudio      # 음성 데이터 처리 필요 시 유지, 아니면 제거 권장
+# torchvision   # KoElectra와 무관하므로 제거 권장
 
 # Test
 pytest
 httpx
+
+# Optional: CPU Inference Speedup (추천)
+optimum         # Hugging Face 모델을 CPU/ONNX로 최적화
+onnxruntime     # CPU 추론 가속용
