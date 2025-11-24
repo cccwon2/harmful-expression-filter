@@ -374,6 +374,10 @@ namespace OnVoiceComBridge
         internal static void OnAudioData(byte[] buffer)
         {
             if (buffer == null || _audioCallback == null) return;
+            
+            // [DEBUG] 오디오 데이터 수신 시각 로깅
+            // Console.WriteLine($"[OnVoiceComBridge] Audio Data Recv: {buffer.Length} bytes at {DateTime.UtcNow:HH:mm:ss.fff}");
+
             var cb = _audioCallback;
             var ctx = _mainThreadContext;
 
@@ -385,7 +389,11 @@ namespace OnVoiceComBridge
         
         private static void InvokeJs(Func<object, Task<object>> cb, byte[] buffer)
         {
-             try { cb(new { type = "audio", data = buffer }); } catch { }
+             try { 
+                // 타임스탬프 추가 (Unix Milliseconds)
+                long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                cb(new { type = "audio", data = buffer, timestamp = timestamp }); 
+             } catch { }
         }
 
         private static string LoadServerUrlFromEnv()

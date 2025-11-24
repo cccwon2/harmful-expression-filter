@@ -46,7 +46,7 @@ export interface OCRResult {
 
 export interface OnVoiceBridge {
   events: EventEmitter;
-  init(onAudioData: (pcm: Buffer) => void): Promise<void>;
+  init(onAudioData: (pcm: Buffer, timestamp?: number) => void): Promise<void>;
   findProcess(target: "chrome" | "edge" | "discord"): Promise<number>;
   startCapture(pid: number): Promise<void>;
   stopCapture(): Promise<void>;
@@ -139,7 +139,7 @@ export function analyzeTextLocally(text: string): { isHarmful: boolean; matched:
 export const onVoiceBridge: OnVoiceBridge = {
   events,
 
-  async init(onAudioData: (pcm: Buffer) => void): Promise<void> {
+  async init(onAudioData: (pcm: Buffer, timestamp?: number) => void): Promise<void> {
     if (initialized) return;
     await callBridge({
       command: "init",
@@ -147,7 +147,8 @@ export const onVoiceBridge: OnVoiceBridge = {
         try {
           if (msg && msg.type === "audio" && msg.data) {
             const buf = Buffer.from(msg.data);
-            onAudioData(buf);
+            const timestamp = typeof msg.timestamp === 'number' ? msg.timestamp : undefined;
+            onAudioData(buf, timestamp);
           }
           cb(null, { ok: true });
         } catch (e) {

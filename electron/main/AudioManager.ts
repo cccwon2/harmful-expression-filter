@@ -54,8 +54,8 @@ class AudioManager {
       return;
     }
     try {
-      await onVoiceBridge.init((pcm: Buffer) => {
-        this.handleAudioData(pcm);
+      await onVoiceBridge.init((pcm: Buffer, timestamp?: number) => {
+        this.handleAudioData(pcm, timestamp);
       });
       this.isInitialized = true;
       console.log("[AudioManager] ✅ 초기화 완료");
@@ -65,7 +65,7 @@ class AudioManager {
     }
   }
 
-  private handleAudioData(pcm: Buffer): void {
+  private handleAudioData(pcm: Buffer, captureTimestamp?: number): void {
     if (!this.isStreaming) {
       return;
     }
@@ -76,7 +76,21 @@ class AudioManager {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         try {
           // 오디오 캡처 시간 기록 (전체 파이프라인 지연 측정용)
-          const captureTime = Date.now();
+          const now = Date.now();
+          const captureTime = captureTimestamp || now;
+          
+          if (captureTimestamp) {
+            const latency = now - captureTimestamp;
+            // 너무 많은 로그를 방지하기 위해 100ms 이상 지연될 때만 경고, 혹은 디버그 모드에서만 출력
+            // 여기서는 요청대로 로그를 출력 (매 패킷마다 출력하면 너무 많으므로 필요시 주석 처리)
+            // console.log(`[AudioManager] [Latency] Capture->JS: ${latency}ms`);
+            
+            // 1초에 한 번 정도만 출력하도록 할 수도 있음. 일단은 중요하므로 출력.
+            if (latency > 20) { // 20ms 이상 지연 시 로그
+                 console.log(`[AudioManager] [Latency] High Latency: ${latency}ms`);
+            }
+          }
+
           // WebSocket.send는 동기적으로 버퍼를 복사하므로 빠르게 처리됨
           this.ws.send(pcm);
           // 타임스탬프를 메타데이터로 저장 (최근 10개만 유지)

@@ -1,29 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "P8lWItgDBYc=",
+  "dgSpecHash": "2N/Cdb++COFygVkWBhYzEmkXvv7dL9/4bHsE2rHYy6UP9QIz13ig23c87f7q8biKs1wKz31rgIt6XqmeNpN05w==",
   "success": true,
-  "projectFilePath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
+  "projectFilePath": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\Won Kim\\.nuget\\packages\\microsoft.win32.systemevents\\7.0.0\\microsoft.win32.systemevents.7.0.0.nupkg.sha512",
-    "C:\\Users\\Won Kim\\.nuget\\packages\\system.drawing.common\\7.0.0\\system.drawing.common.7.0.0.nupkg.sha512",
-    "C:\\Users\\Won Kim\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
-    "C:\\Users\\Won Kim\\.nuget\\packages\\system.text.encodings.web\\6.0.0\\system.text.encodings.web.6.0.0.nupkg.sha512",
-    "C:\\Users\\Won Kim\\.nuget\\packages\\system.text.json\\6.0.0\\system.text.json.6.0.0.nupkg.sha512",
-    "C:\\Users\\Won Kim\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.55\\microsoft.windows.sdk.net.ref.10.0.19041.55.nupkg.sha512"
+    "C:\\Users\\김원\\.nuget\\packages\\microsoft.win32.systemevents\\7.0.0\\microsoft.win32.systemevents.7.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\system.drawing.common\\7.0.0\\system.drawing.common.7.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\system.text.encodings.web\\6.0.0\\system.text.encodings.web.6.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\system.text.json\\6.0.0\\system.text.json.6.0.0.nupkg.sha512",
+    "C:\\Users\\김원\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.52\\microsoft.windows.sdk.net.ref.10.0.19041.52.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1903",
-      "level": "Warning",
-      "message": "'System.Text.Json' 6.0.0 패키지에 알려진 높음 심각도 취약성인 https://github.com/advisories/GHSA-8g4q-xg66-9fp4이(가) 있습니다.",
-      "projectPath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
-      "warningLevel": 1,
-      "filePath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
-      "libraryId": "System.Text.Json",
-      "targetGraphs": [
-        "net6.0-windows10.0.19041",
-        "net6.0-windows10.0.19041/win-x64"
-      ]
-    }
-  ]
+  "logs": []
 }
