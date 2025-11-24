@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~36**까지 완료되었습니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~37**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -27,6 +27,7 @@
 - **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
 - **Task 36**: 로컬 Whisper 폴백 시스템 (서버 연결 실패 시 로컬 STT 자동 전환)
+- **Task 37**: Ubuntu 서버 FastAPI 배포 (systemd, Nginx 리버스 프록시, 프로덕션 환경 구성)
 
 ### 주요 기술 스택
 
@@ -119,7 +120,7 @@ harmful-expression-filter/
 ├── docs/                    # 작업/문서 모음
 │   ├── PROJECT_SPEC.md      # 마스터 플랜 (전체 프로젝트 명세서)
 │   ├── INTERFACES.md        # 핵심 인터페이스 및 연결부 코드
-│   └── ...                  # 각 작업 문서 (00~34)
+│   └── ...                  # 각 작업 문서 (00~37)
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 │   ├── main/                # 메인 프로세스 핵심 모듈
 │   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)

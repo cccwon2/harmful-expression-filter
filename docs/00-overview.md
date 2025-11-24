@@ -44,6 +44,7 @@
 34. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ✅ 완료
 35. **[Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)** ✅ 완료
 36. **[로컬 Whisper 폴백 시스템](./36-local-whisper-fallback.md)** ✅ 완료
+37. **[Ubuntu 서버 FastAPI 배포](./37-ubuntu-fastapi-deployment.md)** 🔄 진행 중
 
 ## 작업 의존성 그래프
 
@@ -96,6 +97,10 @@
 36-local-whisper-fallback
     ├─ 35-deepgram-realtime-streaming
     └─ 34-windows-ocr-optimization (로컬 분석 로직 참고)
+37-ubuntu-fastapi-deployment
+    ├─ 20-fastapi-setup
+    ├─ 24-audio-stt-api
+    └─ 35-deepgram-realtime-streaming
 ```
 
 ## 작업 상태
@@ -135,6 +140,7 @@
 | Windows OCR 성능 최적화 | ✅ 완료      | 100%   | High     |
 | Deepgram 실시간 스트리밍 | ✅ 완료      | 100%   | High     |
 | 로컬 Whisper 폴백 시스템 | ✅ 완료      | 100%   | High     |
+| Ubuntu 서버 FastAPI 배포 | 🔄 진행 중   | 0%     | Medium   |
 
 ## 최근 변경 사항 (2025-11-22)
 
