@@ -93,6 +93,7 @@ class DeepgramWebSocketManager:
         self.is_running: bool = False
         self.last_transcript: str = ""
         self.last_is_final: bool = False
+        self.last_audio_time: float = 0.0  # 마지막 오디오 전송 시간 추적용
 
     async def start(self) -> bool:
         if not self.api_key:
@@ -172,6 +173,8 @@ class DeepgramWebSocketManager:
                 # 재연결은 상위(audio_stream)에서 처리하도록 함
                 return
             
+            # 오디오 전송 시간 기록 (STT 지연 측정용)
+            self.last_audio_time = time.time()
             await self.dg_ws.send(audio_bytes)
         except Exception as e:
             error_msg = str(e)
@@ -230,8 +233,19 @@ class DeepgramWebSocketManager:
         # 로그 출력 (중간 결과는 클라이언트로 전송 안 함 [Task 35])
         if not is_final: return
         
+        # ✅ STT 지연 시간 측정 (오디오 전송부터 결과 수신까지)
+        stt_latency = 0.0
+        if self.last_audio_time > 0:
+            stt_latency = time.time() - self.last_audio_time
+            # 오디오 전송 시간 초기화 (다음 측정을 위해)
+            self.last_audio_time = 0.0
+        
         # ✅ 성능 개선: STT 결과를 즉시 전송하고, AI 판별은 백그라운드에서 처리
-        print(f"[STT] [확정] {transcript}", flush=True)
+        # 모든 STT 결과를 명확하게 표시 (유해/비유해 구분 없이)
+        if stt_latency > 0:
+            print(f"[STT] [확정] {transcript} (STT 지연: {stt_latency:.3f}초)", flush=True)
+        else:
+            print(f"[STT] [확정] {transcript}", flush=True)
         
         # 1. STT 결과를 즉시 클라이언트로 전송 (AI 판별 대기 없음)
         initial_response = {

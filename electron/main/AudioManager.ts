@@ -139,9 +139,15 @@ class AudioManager {
               const isHarmful = parsed.is_harmful === 1 || parsed.is_harmful === true;
               const matchedKeywords = parsed.matched_keywords || [];
 
-              // 텍스트 출력 (로그)
+              // 텍스트 출력 (로그) - 모든 STT 결과를 명확하게 표시
               if (text && text.trim()) {
-                // 유해 표현이면 경고 로그, 아니면 일반 로그
+                // 모든 텍스트를 먼저 표시 (유해/비유해 구분 없이)
+                const confidenceInfo = parsed.confidence 
+                  ? ` (신뢰도: ${(parsed.confidence * 100).toFixed(1)}%)`
+                  : "";
+                console.log(`[AudioManager] [STT] "${text}"${confidenceInfo}`);
+                
+                // 유해 표현인 경우 추가 경고 표시
                 if (isHarmful) {
                   // 🔇 키워드 표시 완전 제거 - AI 모델만 사용
                   // matchedKeywords는 서버에서 보내는 정보이지만, 키워드 기반이 아닌 AI 감지 결과임
@@ -151,8 +157,6 @@ class AudioManager {
                   console.warn(`[AudioManager] 🚨 유해 표현 감지! "${text}" ${aiInfo}`);
                   // ⚡️ 여기서 볼륨 조절 함수 호출
                   this.handleHarmfulExpressionDetected();
-                } else {
-                  console.log(`[AudioManager] [STT] ${text}`);
                 }
               }
             }
