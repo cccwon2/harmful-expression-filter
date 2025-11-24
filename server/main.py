@@ -227,54 +227,74 @@ class DeepgramWebSocketManager:
         self.last_transcript = transcript
         self.last_is_final = is_final
 
-        # ✅ AI (Kanana LoRA/KoElectra) 판별 로직 (비동기 처리)
-        is_harmful_ai = False
-        ai_confidence = 0.0
-        # 🔇 matched_keywords는 하위 호환성을 위해 유지하지만 빈 배열로 설정 (AI Only Mode)
-        matched_keywords = []
-        
-        if is_final and self.classifier and inference_executor:
-            try:
-                # ThreadPoolExecutor를 사용하여 블로킹 모델 추론을 비동기로 처리
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(
-                    inference_executor,
-                    self.classifier.predict,
-                    transcript
-                )
-                if result.is_harmful:
-                    is_harmful_ai = True
-                    ai_confidence = result.confidence
-            except Exception as e:
-                LOGGER.error("[AI] 분류 에러: %s", e)
-
-        is_harmful = is_harmful_ai
-        model_name = self._get_classifier_model_name()
-
-        response_data = {
-            "status": "ok",
-            "text": transcript,
-            "is_harmful": int(is_harmful),
-            "confidence": max(confidence, ai_confidence) if is_harmful_ai else confidence,
-            "matched_keywords": matched_keywords,  # 🔇 빈 배열 (하위 호환성)
-            "ai_detection": {
-                "detected": is_harmful_ai,
-                "confidence": ai_confidence,
-                "model": model_name
-            } if is_final and self.classifier else None,
-            "is_final": is_final,
-            "timestamp": time.time(),
-            "ai_checked": is_final and (self.classifier is not None),
-        }
-
         # 로그 출력 (중간 결과는 클라이언트로 전송 안 함 [Task 35])
         if not is_final: return
         
+        # ✅ 성능 개선: STT 결과를 즉시 전송하고, AI 판별은 백그라운드에서 처리
         print(f"[STT] [확정] {transcript}", flush=True)
-        if is_harmful:
-            print(f"🚨 유해 표현 감지({model_name}-AI): {matched_keywords or ['[전체 문장]']}", flush=True)
-
-        self.result_queue.put_nowait(response_data)
+        
+        # 1. STT 결과를 즉시 클라이언트로 전송 (AI 판별 대기 없음)
+        initial_response = {
+            "status": "ok",
+            "text": transcript,
+            "is_harmful": 0,  # 초기값, AI 판별 후 업데이트
+            "confidence": confidence,
+            "matched_keywords": [],
+            "ai_detection": None,  # 아직 처리 중
+            "is_final": is_final,
+            "timestamp": time.time(),
+            "ai_checked": False,  # 아직 처리 중
+        }
+        self.result_queue.put_nowait(initial_response)
+        
+        # 2. AI 판별을 백그라운드 태스크로 실행 (블로킹 없음)
+        if self.classifier:
+            # 전역 inference_executor 사용
+            global inference_executor
+            if inference_executor:
+                asyncio.create_task(self._check_harmful_async(transcript, confidence))
+    
+    async def _check_harmful_async(self, transcript: str, stt_confidence: float):
+        """백그라운드에서 유해 표현 판별 수행"""
+        try:
+            start_time = time.time()
+            loop = asyncio.get_event_loop()
+            global inference_executor
+            result = await loop.run_in_executor(
+                inference_executor,
+                self.classifier.predict,
+                transcript
+            )
+            inference_time = time.time() - start_time
+            
+            is_harmful_ai = result.is_harmful
+            ai_confidence = result.confidence
+            model_name = self._get_classifier_model_name()
+            
+            # 로그 출력
+            if is_harmful_ai:
+                print(f"🚨 유해 표현 감지({model_name}-AI): ['[전체 문장]'] (추론 시간: {inference_time:.3f}초)", flush=True)
+            
+            # AI 판별 결과를 별도로 클라이언트에 전송
+            ai_response = {
+                "status": "ok",
+                "text": transcript,
+                "is_harmful": int(is_harmful_ai),
+                "confidence": max(stt_confidence, ai_confidence) if is_harmful_ai else stt_confidence,
+                "matched_keywords": [],
+                "ai_detection": {
+                    "detected": is_harmful_ai,
+                    "confidence": ai_confidence,
+                    "model": model_name,
+                    "inference_time": inference_time
+                },
+                "is_final": True,
+                "timestamp": time.time(),
+                "ai_checked": True,
+            }
+            self.result_queue.put_nowait(ai_response)
+        except Exception as e:
+            LOGGER.error("[AI] 분류 에러: %s", e, exc_info=True)
 
     def _get_classifier_model_name(self) -> str:
         if not self.classifier:
