@@ -1,28 +1,41 @@
 /**
- * Phase 5: Windows 볼륨 제어 모듈
+ * Phase 5: Windows 볼륨 제어 모듈 (PID-aware via AppVolumeController)
  *
  * 유해 표현 감지 시 특정 앱의 볼륨을 전체 볼륨 기준으로
  * 1(10%) ~ 9(90%)까지 설정할 수 있습니다.
  * 기본값: 1(10%)
- * 
+ *
  * 감시 대상 앱(Chrome, Edge, Discord)의 볼륨만 조절합니다.
- * 
- * AppVolumeController를 사용하여 디바이스/세션 관리를 중앙화합니다.
+ * 실제 볼륨 제어는 AppVolumeController가 담당하고,
+ * 이 모듈은 "레벨(1~9)" 추상화 + 타깃 앱 관리 역할만 합니다.
  */
 
 import { AppVolumeController } from './appVolumeController';
 
-const MIN_VOLUME_LEVEL = 1;  // 10% (무소음 제외)
-const MAX_VOLUME_LEVEL = 9;  // 90%
+const MIN_VOLUME_LEVEL = 1;   // 10% (무소음 제외)
+const MAX_VOLUME_LEVEL = 9;   // 90%
 const DEFAULT_VOLUME_LEVEL = 1; // 10%
 
+/**
+ * VolumeController
+ *
+ * - 1~9 레벨을 퍼센트(10%~90%)로 매핑
+ * - 이름 기반 타깃 앱 설정 (chrome / edge / discord)
+ * - 내부적으로 AppVolumeController를 통해 실제 볼륨 제어 수행
+ */
 export class VolumeController {
-  private appVolumeController: AppVolumeController;
-  private currentVolumeLevel: number = DEFAULT_VOLUME_LEVEL; // 1 ~ 9 (1 = 10%, 9 = 90%)
-  private targetAppName: string | null = null; // 대상 앱 이름 (예: "chrome", "edge", "discord")
-  private targetAppSearchNames: string[] = []; // 검색할 앱 이름 목록 (Edge의 경우 ["edge", "msedge"] 등)
+  private readonly appVolumeController: AppVolumeController;
 
-  constructor(appVolumeController: AppVolumeController, targetAppName?: string) {
+  // 1 ~ 9 (1 = 10%, 9 = 90%)
+  private currentVolumeLevel: number = DEFAULT_VOLUME_LEVEL;
+
+  // 사용자가 지정한 앱 키 (chrome / edge / discord / 기타)
+  private targetAppKey: string | null = null;
+
+  // AppVolumeController에 넘길 실제 식별자 (예: chrome.exe, msedge.exe, Discord.exe)
+  private targetAppIdentifier: string | null = null;
+
+  constructor(appVolumeController: AppVolumeController, targetAppName?: string | null) {
     this.appVolumeController = appVolumeController;
     if (targetAppName) {
       this.setTargetApp(targetAppName);
@@ -30,103 +43,153 @@ export class VolumeController {
   }
 
   /**
-   * 볼륨 레벨(1~9)을 AppVolumeController의 스케일(0~10)로 변환
-   * 1 → 1, 9 → 9 (직접 매핑)
-   * 필요시 1~9를 0~10 범위로 선형 변환할 수도 있음
-   */
-  private level1to9To0to10(level: number): number {
-    const clamped = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
-    // 1~9를 0~10으로 선형 변환: 1→1.11..., 9→10
-    // 또는 단순히 1→1, 9→9로 매핑 (현재는 단순 매핑 사용)
-    return clamped; // 1~9를 그대로 1~9로 사용 (10은 별도 처리 필요시 확장)
-  }
-
-  /**
-   * 볼륨 레벨을 퍼센트로 변환 (1~9 → 10%~90%)
-   * 1 = 10%
-   * 2 = 20%
-   * ...
-   * 9 = 90%
+   * 레벨(1~9)을 10%~90% 퍼센트로 변환
    */
   private volumeLevelToPercent(level: number): number {
-    const clampedLevel = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
+    const clampedLevel = this.clampLevel(level);
     return clampedLevel * 10; // 1~9 → 10%~90%
   }
 
   /**
-   * 대상 앱 이름 설정
+   * 레벨(1~9)을 AppVolumeController에서 사용하는 0~10 스케일로 변환
+   * 여기서는 "최대 90%" 정책을 유지하기 위해 1~9를 그대로 1~9로 사용 (10은 사용 안 함)
    */
-  setTargetApp(targetApp: "chrome" | "edge" | "discord" | string | null): void {
-    if (!targetApp) {
-      this.targetAppName = null;
-      return;
-    }
-
-    // Edge의 경우 msedge로도 찾을 수 있도록 매핑
-    const appNameMap: Record<string, string[]> = {
-      'chrome': ['chrome', 'chrome.exe'],
-      'edge': ['edge', 'msedge', 'msedge.exe'],
-      'discord': ['discord', 'discord.exe'],
-    };
-
-    const lowerTarget = targetApp.toLowerCase();
-    // 매핑된 앱 이름들 중 하나로 찾거나, 직접 제공된 이름 사용
-    const searchNames = appNameMap[lowerTarget] || [lowerTarget];
-    
-    // 첫 번째 이름을 기본으로 설정하고, 실제 찾을 때는 모든 이름을 확인
-    this.targetAppName = searchNames[0];
-    this.targetAppSearchNames = searchNames;
-    
-    console.log(`[VolumeController] Target app set to: ${this.targetAppName} (search: ${searchNames.join(', ')})`);
+  private volumeLevelToControllerLevel(level: number): number {
+    return this.clampLevel(level); // 1~9 유지 (AppVolumeController: 0~10 → 0%~100%)
   }
 
   /**
-   * 특정 앱의 볼륨 설정
-   * AppVolumeController를 통해 볼륨을 조절합니다.
+   * 레벨 범위 보정 (1~9)
    */
-  private async setAppVolume(volumeLevel0to10: number): Promise<boolean> {
-    if (!this.targetAppName) {
-      console.warn('[VolumeController] Target app not set, cannot adjust volume');
-      return false;
+  private clampLevel(level: number): number {
+    return Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
+  }
+
+  /**
+   * 대상 앱 이름 설정
+   *
+   * - "chrome" → "chrome.exe"
+   * - "edge"   → "msedge.exe"
+   * - "discord" → "Discord.exe"
+   * - 그 외에는 입력값 그대로 사용
+   */
+  setTargetApp(targetApp: 'chrome' | 'edge' | 'discord' | string | null): void {
+    if (!targetApp) {
+      this.targetAppKey = null;
+      this.targetAppIdentifier = null;
+      console.log('[VolumeController] Target app cleared');
+      return;
     }
 
-    // 검색 이름 목록이 비어있으면 targetAppName을 사용
-    const searchNames = this.targetAppSearchNames.length > 0
-      ? this.targetAppSearchNames
-      : (this.targetAppName ? [this.targetAppName] : []);
+    const lower = targetApp.toLowerCase();
 
-    if (searchNames.length === 0) {
-      console.warn('[VolumeController] No search names available');
-      return false;
-    }
+    const appNameMap: Record<string, string> = {
+      chrome: 'chrome.exe',
+      edge: 'msedge.exe',
+      discord: 'Discord.exe',
+    };
 
-    // 첫 번째 검색 이름으로 볼륨 설정 (AppVolumeController가 내부적으로 매칭 처리)
-    // 복원 지연은 기본값 사용 (필요시 파라미터로 받을 수 있음)
-    return await this.appVolumeController.setAppVolume(
-      searchNames[0],
-      volumeLevel0to10,
-      3000 // 기본 복원 지연 시간 (ms)
+    this.targetAppKey = lower;
+    this.targetAppIdentifier = appNameMap[lower] ?? targetApp;
+
+    console.log(
+      `[VolumeController] Target app set to: ${this.targetAppIdentifier} (key: ${this.targetAppKey})`,
     );
   }
 
   /**
-   * 볼륨 레벨 설정 (1~9: 1 = 10%, 9 = 90%)
+   * 현재 설정된 타깃 앱의 볼륨을 레벨 기준으로 설정 (1~9)
+   *
+   * @param level 1~9 (1 = 10%, 9 = 90%)
+   * @param options.restoreDelayMs - 복원 대기 시간(ms). 미지정 시 AppVolumeController 기본값 사용.
    */
-  async setVolumeLevel(level: number): Promise<void> {
-    // 레벨을 1~9 범위로 제한 (무소음 제외)
-    const clampedLevel = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
-    const targetVolume0to10 = this.level1to9To0to10(clampedLevel); // 1~9 → 0~10 스케일로 변환
-
+  async setVolumeLevel(
+    level: number,
+    options?: { restoreDelayMs?: number },
+  ): Promise<void> {
+    const clampedLevel = this.clampLevel(level);
     this.currentVolumeLevel = clampedLevel;
 
+    if (!this.targetAppIdentifier) {
+      console.warn(
+        '[VolumeController] Target app not set, cannot adjust volume by name',
+      );
+      return;
+    }
+
+    const controllerLevel = this.volumeLevelToControllerLevel(clampedLevel); // 1~9
+
+    const restoreDelay = options?.restoreDelayMs;
+
     try {
-      await this.setAppVolume(targetVolume0to10);
+      const ok = await this.appVolumeController.setAppVolume(
+        this.targetAppIdentifier,
+        controllerLevel,
+        restoreDelay,
+      );
+
       const percent = this.volumeLevelToPercent(clampedLevel);
-      const appInfo = this.targetAppName ? ` for ${this.targetAppName}` : '';
-      console.log(`[VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%)${appInfo}`);
-    } catch (error) {
-      console.error('[VolumeController] Failed to set volume level:', error);
-      throw error;
+
+      if (ok) {
+        console.log(
+          `[VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%) for ${this.targetAppIdentifier}`,
+        );
+      } else {
+        console.warn(
+          `[VolumeController] ⚠️ Failed to set volume for ${this.targetAppIdentifier}`,
+        );
+      }
+    } catch (err) {
+      console.error('[VolumeController] Failed to set volume level:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * PID 기반 볼륨 제어
+   *
+   * @param pid        - 대상 프로세스 ID
+   * @param level      - 1~9 (생략 시 현재 레벨 사용)
+   * @param options.restoreDelayMs - 복원 대기 시간(ms). 미지정 시 AppVolumeController 기본값 사용.
+   *
+   * 반환값: 실제로 볼륨 변경에 성공했는지 여부
+   */
+  async setVolumeByPid(
+    pid: number,
+    level?: number,
+    options?: { restoreDelayMs?: number },
+  ): Promise<boolean> {
+    const effectiveLevel = level ?? this.currentVolumeLevel ?? DEFAULT_VOLUME_LEVEL;
+    const clampedLevel = this.clampLevel(effectiveLevel);
+    this.currentVolumeLevel = clampedLevel;
+
+    const controllerLevel = this.volumeLevelToControllerLevel(clampedLevel); // 1~9
+
+    const restoreDelay = options?.restoreDelayMs;
+
+    try {
+      const ok = await this.appVolumeController.setVolumeByPid(
+        pid,
+        controllerLevel,
+        restoreDelay,
+      );
+
+      const percent = this.volumeLevelToPercent(clampedLevel);
+
+      if (ok) {
+        console.log(
+          `[VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%) for PID=${pid}`,
+        );
+      } else {
+        console.warn(
+          `[VolumeController] ⚠️ Failed to set volume for PID=${pid}`,
+        );
+      }
+
+      return ok;
+    } catch (err) {
+      console.error('[VolumeController] Failed to set volume by PID:', err);
+      return false;
     }
   }
 
@@ -144,4 +207,3 @@ export class VolumeController {
     return this.volumeLevelToPercent(this.currentVolumeLevel);
   }
 }
-

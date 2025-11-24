@@ -205,10 +205,8 @@ namespace OnVoiceComBridge
                 case "ocrAndBlur":
                     try
                     {
-                        // Task 34: 서버 분석 로직 제거
-                        // Node.js에서 분석을 수행하므로 여기서는 OCR 결과만 반환하거나
-                        // 단순히 블러 처리만 수행하는 별도 명령으로 분리하는 것이 좋음.
-                        // 현재는 OCR 결과만 반환하도록 수정.
+                        // Node.js에서 유해 표현 분석을 수행하므로, 이 메서드는
+                        // OCR 텍스트만 반환하고 blur는 별도 "blur" 명령에서 처리합니다.
                         
                         byte[] imageBytes = (byte[])input.imageData;
                         

@@ -115,9 +115,11 @@ export class AppVolumeController {
 
   /**
    * PID로 프로세스 경로 조회 (Windows 전용)
-   * 
-   * TODO: WMIC은 최신 Windows에서 deprecated 상태입니다.
-   * 향후 PowerShell(Get-Process) 또는 C# 브리지로 대체 예정입니다.
+   *
+   * NOTE:
+   *  - wmic은 최신 Windows에서 deprecated 상태입니다.
+   *  - 현재는 PoC 용도로 사용하고, 추후 PowerShell(Get-Process) 또는
+   *    C# 브리지 메서드로 대체하는 것이 좋습니다.
    */
   private async getProcessPathByPid(pid: number): Promise<string | null> {
     try {
