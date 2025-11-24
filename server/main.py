@@ -334,6 +334,10 @@ class DeepgramWebSocketManager:
             status = "🚨 유해" if is_harmful_ai else "✅ 정상"
             print(f"[AI] {status} ({model_name}): '{transcript[:50]}...' (신뢰도: {ai_confidence:.3f}, 추론 시간: {inference_time:.3f}초)", flush=True)
             
+            # ⚠️ Base 모델 사용 시 경고
+            if model_name == "Kanana-Base":
+                print(f"[AI] ⚠️ 경고: Base 모델은 학습되지 않아 유해 표현 감지 성능이 낮을 수 있습니다. LoRA 모델 사용을 권장합니다.", flush=True)
+            
             # AI 판별 결과를 별도로 클라이언트에 전송
             ai_response = {
                 "status": "ok",

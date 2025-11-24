@@ -215,6 +215,13 @@ class HarmfulTextClassifier:
         probs = self._torch.nn.functional.softmax(logits, dim=-1)
         predicted_index = int(self._torch.argmax(probs, dim=-1).item())
         confidence = float(probs[0][predicted_index].item())
+        
+        # 각 클래스의 확률 (디버깅용)
+        prob_normal = float(probs[0][0].item())  # 정상 (0)
+        prob_harmful = float(probs[0][1].item())  # 유해 (1)
+        
+        # 디버깅: 예측 상세 정보 출력
+        print(f"[Classifier] 예측 결과: index={predicted_index}, 정상={prob_normal:.3f}, 유해={prob_harmful:.3f}, 최종={confidence:.3f}", flush=True)
 
         # 0: 정상, 1: 유해 (모델 학습 라벨링에 따라 조정 필요)
         is_harmful = bool(predicted_index == 1)
