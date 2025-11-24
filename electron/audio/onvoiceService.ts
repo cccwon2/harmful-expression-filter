@@ -14,6 +14,7 @@ import { sendTextForAnalysis, AnalysisResult } from "../utils/harmfulAnalysisCli
 import { IPC_CHANNELS } from "../ipc/channels";
 import { findProcessByType } from "../utils/processFinder";
 import { VolumeController } from "./volumeController";
+import { AppVolumeController } from "./appVolumeController";
 import { getVolumeLevel, setVolumeLevel as saveVolumeLevel } from "../store";
 
 export interface OnVoiceServiceOptions {
@@ -38,6 +39,7 @@ export class OnVoiceService {
   private options: Required<OnVoiceServiceOptions>;
   private targetPid: "edge" | "chrome" | "discord" | number = "chrome";
   private volumeController: VolumeController | null = null;
+  private appVolumeController: AppVolumeController | null = null;
   private harmfulDetectionCount: number = 0; // 유해 표현 감지 횟수 추적
 
   constructor(initialWindow: BrowserWindow | null, options: OnVoiceServiceOptions = {}) {
@@ -49,9 +51,10 @@ export class OnVoiceService {
       volumeRestoreDelayMs: options.volumeRestoreDelayMs || 3000,
     };
 
-    // 볼륨 조절 활성화 시 VolumeController 초기화
+    // 볼륨 조절 활성화 시 AppVolumeController와 VolumeController 초기화
     if (this.options.enableVolumeControl) {
-      this.volumeController = new VolumeController();
+      this.appVolumeController = new AppVolumeController();
+      this.volumeController = new VolumeController(this.appVolumeController);
       // 저장된 볼륨 레벨 로드 및 설정
       const savedLevel = getVolumeLevel();
       this.volumeController.setVolumeLevel(savedLevel).catch((err) => {

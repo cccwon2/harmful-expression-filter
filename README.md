@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~37**까지 진행 중입니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~38**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -28,6 +28,8 @@
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
 - **Task 36**: 로컬 Whisper 폴백 시스템 (⚠️ 제거됨 - 서버 STT만 사용, 자동 재연결)
 - **Task 37**: Ubuntu 서버 FastAPI 배포 가이드 (systemd, Nginx, SSL, 프로덕션 환경 구성)
+- **Task 38**: 코드 리팩토링 및 정리 (서버 의존성 완전 제거, AppVolumeController 중앙화, 버그 수정)
+- **Task 38**: 코드 리팩토링 및 정리 (서버 의존성 완전 제거, AppVolumeController 중앙화, 버그 수정)
 
 ### 주요 기술 스택
 

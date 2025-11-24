@@ -21,7 +21,7 @@ export interface AudioSessionInfo {
 export class AppVolumeController {
   private originalVolumes: Map<string, number> = new Map();
   private defaultDevice: Device | null = null;
-  private restoreTimer: NodeJS.Timeout | null = null;
+  private restoreTimers: Map<string, NodeJS.Timeout> = new Map(); // 세션별 복원 타이머
   private monitoringTimer: NodeJS.Timeout | null = null;
   private readonly DEFAULT_RESTORE_DELAY_MS = 3000;
   private readonly MONITORING_INTERVAL_MS = 1000;
@@ -101,7 +101,7 @@ export class AppVolumeController {
       return sessions
         .filter(s => s.state === 1) // ACTIVE 상태만
         .map(s => ({
-          id: s.name + '_' + s.appName, // 고유 ID 생성
+          id: JSON.stringify({ name: s.name, appName: s.appName }), // 고유 ID 생성 (JSON으로 안전하게)
           name: s.name,
           appName: s.appName,
           volume: s.volume,
@@ -115,6 +115,9 @@ export class AppVolumeController {
 
   /**
    * PID로 프로세스 경로 조회 (Windows 전용)
+   * 
+   * TODO: WMIC은 최신 Windows에서 deprecated 상태입니다.
+   * 향후 PowerShell(Get-Process) 또는 C# 브리지로 대체 예정입니다.
    */
   private async getProcessPathByPid(pid: number): Promise<string | null> {
     try {
@@ -217,17 +220,20 @@ export class AppVolumeController {
       actualSession.volume = normalizedVolume;
       console.log(`[AppVolumeController] 🔊 ${targetSession.name}: ${Math.round(normalizedVolume * 100)}%`);
       
-      // 기존 복원 타이머 취소
-      if (this.restoreTimer) {
-        clearTimeout(this.restoreTimer);
-        this.restoreTimer = null;
+      // 기존 복원 타이머 취소 (해당 세션의 타이머만)
+      const existingTimer = this.restoreTimers.get(sessionKey);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.restoreTimers.delete(sessionKey);
       }
       
-      // 자동 복원 타이머 설정
+      // 자동 복원 타이머 설정 (세션별로 관리)
       if (restoreDelayMs > 0) {
-        this.restoreTimer = setTimeout(() => {
+        const timer = setTimeout(() => {
           void this.restoreVolume(sessionKey, actualSession);
+          this.restoreTimers.delete(sessionKey);
         }, restoreDelayMs);
+        this.restoreTimers.set(sessionKey, timer);
       }
       
       return true;
@@ -248,13 +254,14 @@ export class AppVolumeController {
    * 저장된 원래 볼륨으로 복원
    */
   async restoreVolume(sessionKey?: string, session?: AudioSession): Promise<void> {
-    if (this.restoreTimer) {
-      clearTimeout(this.restoreTimer);
-      this.restoreTimer = null;
-    }
-    
     if (sessionKey && session) {
       // 특정 세션 복원
+      const existingTimer = this.restoreTimers.get(sessionKey);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.restoreTimers.delete(sessionKey);
+      }
+      
       const originalVolume = this.originalVolumes.get(sessionKey);
       if (originalVolume !== undefined) {
         try {
@@ -271,26 +278,34 @@ export class AppVolumeController {
     // 모든 세션 복원 (fallback)
     if (this.originalVolumes.size === 0) return;
     
+    // 모든 타이머 취소
+    this.restoreTimers.forEach(timer => clearTimeout(timer));
+    this.restoreTimers.clear();
+    
     if (!this.defaultDevice) return;
     
     const deviceSessions = this.defaultDevice.sessions;
     let restoredCount = 0;
     
     this.originalVolumes.forEach((volume, key) => {
-      // key는 "name_appName" 형식
-      const [name, appName] = key.split('_');
-      const session = deviceSessions.find(s => 
-        s.name === name && s.appName === appName
-      );
-      
-      if (session) {
-        try {
-          session.volume = volume;
-          restoredCount++;
-        } catch (err) {
-          // 세션이 이미 종료된 경우 무시
-          console.warn(`[AppVolumeController] Session ${key} no longer exists`);
+      // key는 JSON.stringify({ name, appName }) 형식
+      try {
+        const { name, appName } = JSON.parse(key);
+        const session = deviceSessions.find(s => 
+          s.name === name && s.appName === appName
+        );
+        
+        if (session) {
+          try {
+            session.volume = volume;
+            restoredCount++;
+          } catch (err) {
+            // 세션이 이미 종료된 경우 무시
+            console.warn(`[AppVolumeController] Session ${key} no longer exists`);
+          }
         }
+      } catch (err) {
+        console.warn(`[AppVolumeController] Failed to parse session key: ${key}`);
       }
     });
     

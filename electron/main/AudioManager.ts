@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import { onVoiceBridge } from "./onVoiceBridge";
 import { VolumeController } from "../audio/volumeController";
+import { AppVolumeController } from "../audio/appVolumeController";
 import { getVolumeLevel } from "../store";
 
 type TargetApp = "chrome" | "edge" | "discord";
@@ -23,6 +24,7 @@ class AudioManager {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isReconnecting = false;
   private volumeController: VolumeController | null = null;
+  private appVolumeController: AppVolumeController;
   private harmfulDetectionCount: number = 0;
   private reconnectAttempts: number = 0;
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
@@ -32,7 +34,9 @@ class AudioManager {
     this.wsUrl = process.env.SERVER_WS_URL || "ws://localhost:8000/ws/audio";
     console.log(`[AudioManager] WebSocket URL: ${this.wsUrl}`);
 
-    this.volumeController = new VolumeController();
+    // AppVolumeController를 생성하고 VolumeController에 주입
+    this.appVolumeController = new AppVolumeController();
+    this.volumeController = new VolumeController(this.appVolumeController);
     const savedLevel = getVolumeLevel();
 
     // 초기 볼륨 설정

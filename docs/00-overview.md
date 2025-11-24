@@ -44,7 +44,8 @@
 34. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ✅ 완료
 35. **[Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)** ✅ 완료
 36. **[로컬 Whisper 폴백 시스템](./36-local-whisper-fallback.md)** ✅ 완료
-37. **[Ubuntu 서버 FastAPI 배포](./37-ubuntu-fastapi-deployment.md)** 🔄 진행 중
+37. **[Ubuntu 서버 FastAPI 배포](./37-ubuntu-fastapi-deployment.md)** ✅ 문서화 완료
+38. **[코드 리팩토링 및 정리](./38-code-refactoring-cleanup.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -101,6 +102,9 @@
     ├─ 20-fastapi-setup
     ├─ 24-audio-stt-api
     └─ 35-deepgram-realtime-streaming
+38-code-refactoring-cleanup
+    ├─ 34-windows-ocr-optimization
+    └─ 26-app-volume-migration
 ```
 
 ## 작업 상태
@@ -141,6 +145,7 @@
 | Deepgram 실시간 스트리밍 | ✅ 완료      | 100%   | High     |
 | 로컬 Whisper 폴백 시스템 | ✅ 완료      | 100%   | High     |
 | Ubuntu 서버 FastAPI 배포 | ✅ 문서화 완료 | 100%   | Medium   |
+| 코드 리팩토링 및 정리 | ✅ 완료      | 100%   | Medium   |
 
 ## 최근 변경 사항 (2025-11-22)
 
@@ -169,3 +174,8 @@
   - 환경 변수 `MODEL_TYPE`으로 모델 선택 가능 (koelectra/kanana)
   - KoElectra: 경량 모델 (약 110M 파라미터), 빠른 추론
   - Kanana: 더 정확하지만 느림 (약 2.1B 파라미터)
+- **Task 38: 코드 리팩토링 및 정리 완료**
+  - Startup.cs: 불필요한 using 제거로 서버 의존성 완전 제거
+  - AppVolumeController.ts: WMIC 주석 추가, sessionKey 형식 개선, 복원 타이머 세션별 관리
+  - VolumeController.ts: AppVolumeController 주입 구조로 변경, 생성자 버그 수정, 볼륨 스케일링 정리
+  - 디바이스/세션 접근이 AppVolumeController로 중앙화되어 중복 제거 및 유지보수성 향상

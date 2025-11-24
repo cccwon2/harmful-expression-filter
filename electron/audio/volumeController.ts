@@ -6,40 +6,39 @@
  * 기본값: 1(10%)
  * 
  * 감시 대상 앱(Chrome, Edge, Discord)의 볼륨만 조절합니다.
+ * 
+ * AppVolumeController를 사용하여 디바이스/세션 관리를 중앙화합니다.
  */
 
-import soundMixer, { Device, DeviceType, AudioSession } from 'native-sound-mixer';
+import { AppVolumeController } from './appVolumeController';
 
 const MIN_VOLUME_LEVEL = 1;  // 10% (무소음 제외)
 const MAX_VOLUME_LEVEL = 9;  // 90%
 const DEFAULT_VOLUME_LEVEL = 1; // 10%
 
 export class VolumeController {
-  private defaultDevice: Device | null = null;
+  private appVolumeController: AppVolumeController;
   private currentVolumeLevel: number = DEFAULT_VOLUME_LEVEL; // 1 ~ 9 (1 = 10%, 9 = 90%)
   private targetAppName: string | null = null; // 대상 앱 이름 (예: "chrome", "edge", "discord")
   private targetAppSearchNames: string[] = []; // 검색할 앱 이름 목록 (Edge의 경우 ["edge", "msedge"] 등)
 
-  constructor(targetAppName?: string) {
-    this.targetAppName = targetAppName || null;
-    this.initializeDefaultDevice();
+  constructor(appVolumeController: AppVolumeController, targetAppName?: string) {
+    this.appVolumeController = appVolumeController;
+    if (targetAppName) {
+      this.setTargetApp(targetAppName);
+    }
   }
 
   /**
-   * 기본 출력 디바이스 초기화
+   * 볼륨 레벨(1~9)을 AppVolumeController의 스케일(0~10)로 변환
+   * 1 → 1, 9 → 9 (직접 매핑)
+   * 필요시 1~9를 0~10 범위로 선형 변환할 수도 있음
    */
-  private initializeDefaultDevice(): void {
-    try {
-      this.defaultDevice = soundMixer.getDefaultDevice(DeviceType.RENDER);
-
-      if (this.defaultDevice) {
-        console.log(`[VolumeController] ✅ Default audio device: ${this.defaultDevice.name}`);
-      } else {
-        console.error('[VolumeController] ❌ No default output device found');
-      }
-    } catch (err) {
-      console.error('[VolumeController] Failed to initialize default device:', err);
-    }
+  private level1to9To0to10(level: number): number {
+    const clamped = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
+    // 1~9를 0~10으로 선형 변환: 1→1.11..., 9→10
+    // 또는 단순히 1→1, 9→9로 매핑 (현재는 단순 매핑 사용)
+    return clamped; // 1~9를 그대로 1~9로 사용 (10은 별도 처리 필요시 확장)
   }
 
   /**
@@ -52,14 +51,6 @@ export class VolumeController {
   private volumeLevelToPercent(level: number): number {
     const clampedLevel = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
     return clampedLevel * 10; // 1~9 → 10%~90%
-  }
-
-  /**
-   * 볼륨 레벨을 0.0~1.0 범위로 변환
-   */
-  private volumeLevelToNormalized(level: number): number {
-    const percent = this.volumeLevelToPercent(level);
-    return percent / 100; // 0.1 ~ 0.9 (1~9 레벨을 10%~90%로 변환)
   }
 
   /**
@@ -90,73 +81,32 @@ export class VolumeController {
   }
 
   /**
-   * 특정 앱의 볼륨 설정 (0.0 ~ 1.0)
-   * 비동기로 처리하여 블로킹 방지
+   * 특정 앱의 볼륨 설정
+   * AppVolumeController를 통해 볼륨을 조절합니다.
    */
-  private async setAppVolume(volume: number): Promise<boolean> {
-    // setImmediate를 사용하여 이벤트 루프를 블로킹하지 않음
-    return new Promise((resolve) => {
-      setImmediate(() => {
-        try {
-          if (!this.defaultDevice) {
-            console.warn('[VolumeController] Default device not initialized');
-            resolve(false);
-            return;
-          }
+  private async setAppVolume(volumeLevel0to10: number): Promise<boolean> {
+    if (!this.targetAppName) {
+      console.warn('[VolumeController] Target app not set, cannot adjust volume');
+      return false;
+    }
 
-          if (!this.targetAppName) {
-            console.warn('[VolumeController] Target app not set, cannot adjust volume');
-            resolve(false);
-            return;
-          }
+    // 검색 이름 목록이 비어있으면 targetAppName을 사용
+    const searchNames = this.targetAppSearchNames.length > 0
+      ? this.targetAppSearchNames
+      : (this.targetAppName ? [this.targetAppName] : []);
 
-          const sessions = this.defaultDevice.sessions || [];
-          const activeSessions = sessions.filter(s => s.state === 1);
+    if (searchNames.length === 0) {
+      console.warn('[VolumeController] No search names available');
+      return false;
+    }
 
-          if (activeSessions.length === 0) {
-            console.warn('[VolumeController] No active sessions found');
-            resolve(false);
-            return;
-          }
-
-          // 대상 앱 이름으로 세션 찾기 (부분 매칭, 대소문자 무시)
-          const targetSessions = activeSessions.filter(session => {
-            const name = (session.name || '').toLowerCase();
-            const appName = (session.appName || '').toLowerCase();
-            
-            // 검색 이름 목록 중 하나라도 매칭되면 선택
-            return this.targetAppSearchNames.some(searchName => 
-              name.includes(searchName.toLowerCase()) || appName.includes(searchName.toLowerCase())
-            );
-          });
-
-          if (targetSessions.length === 0) {
-            console.warn(`[VolumeController] ⚠️ Target app "${this.targetAppName}" not found in active sessions`);
-            console.log(`[VolumeController] Available apps: ${activeSessions.map(s => s.name || s.appName).join(', ')}`);
-            resolve(false);
-            return;
-          }
-
-          // 대상 앱의 모든 세션 볼륨 조절
-          let successCount = 0;
-          targetSessions.forEach(session => {
-            try {
-              session.volume = volume;
-              successCount++;
-              console.log(`[VolumeController] 🔊 ${session.name || session.appName}: ${Math.round(volume * 100)}%`);
-            } catch (err) {
-              console.error(`[VolumeController] Failed to set volume for session ${session.name}:`, err);
-            }
-          });
-
-          console.log(`[VolumeController] 🔊 Volume adjusted to: ${Math.round(volume * 100)}% for ${this.targetAppName} (${successCount} sessions)`);
-          resolve(successCount > 0);
-        } catch (err) {
-          console.error('[VolumeController] Failed to set app volume:', err);
-          resolve(false);
-        }
-      });
-    });
+    // 첫 번째 검색 이름으로 볼륨 설정 (AppVolumeController가 내부적으로 매칭 처리)
+    // 복원 지연은 기본값 사용 (필요시 파라미터로 받을 수 있음)
+    return await this.appVolumeController.setAppVolume(
+      searchNames[0],
+      volumeLevel0to10,
+      3000 // 기본 복원 지연 시간 (ms)
+    );
   }
 
   /**
@@ -165,12 +115,12 @@ export class VolumeController {
   async setVolumeLevel(level: number): Promise<void> {
     // 레벨을 1~9 범위로 제한 (무소음 제외)
     const clampedLevel = Math.max(MIN_VOLUME_LEVEL, Math.min(MAX_VOLUME_LEVEL, Math.round(level)));
-    const targetVolume = this.volumeLevelToNormalized(clampedLevel); // 0.0 ~ 0.9
+    const targetVolume0to10 = this.level1to9To0to10(clampedLevel); // 1~9 → 0~10 스케일로 변환
 
     this.currentVolumeLevel = clampedLevel;
 
     try {
-      await this.setAppVolume(targetVolume);
+      await this.setAppVolume(targetVolume0to10);
       const percent = this.volumeLevelToPercent(clampedLevel);
       const appInfo = this.targetAppName ? ` for ${this.targetAppName}` : '';
       console.log(`[VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%)${appInfo}`);
@@ -181,7 +131,7 @@ export class VolumeController {
   }
 
   /**
-   * 현재 볼륨 레벨 반환 (0~9)
+   * 현재 볼륨 레벨 반환 (1~9)
    */
   getCurrentVolumeLevel(): number {
     return this.currentVolumeLevel;
