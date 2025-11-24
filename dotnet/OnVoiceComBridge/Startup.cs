@@ -34,12 +34,6 @@ namespace OnVoiceComBridge
         
         private static OcrEngine? _ocrEngine;
         
-        private static readonly HttpClient _httpClient = new HttpClient()
-        {
-            Timeout = TimeSpan.FromSeconds(2) // 2초 타임아웃 설정
-        };
-        private static string _serverUrl = LoadServerUrlFromEnv();
-
         static Startup()
         {
             // Windows SDK 런타임 DLL 로드를 위한 AssemblyResolve 이벤트 핸들러
@@ -197,14 +191,11 @@ namespace OnVoiceComBridge
                         
                         var texts = SplitTextToLines(recognizedText);
                         
-                        // ✅ 서버 분석 제거: Node.js에서 이미 로컬 분석을 수행하므로 중복 제거
-                        // 이렇게 하면 C#은 OCR만 수행하고 빠르게 반환하여 타임아웃 방지
-                        
                         return new { 
                             ok = true, 
                             texts = texts,
                             text = recognizedText,
-                            confidence = 0.0, // Node.js에서 분석하므로 여기서는 기본값만 반환
+                            confidence = 0.0, 
                             processing_time = new { ocr = ocrTime, analysis = 0.0, total = ocrTime }
                         };
                     }
@@ -217,14 +208,12 @@ namespace OnVoiceComBridge
                 case "ocrAndBlur":
                     try
                     {
-                        byte[] imageBytes = (byte[])input.imageData;
-                        var roi = input.roi;
-                        int roiX = Convert.ToInt32(roi.x);
-                        int roiY = Convert.ToInt32(roi.y);
-                        int roiWidth = Convert.ToInt32(roi.width);
-                        int roiHeight = Convert.ToInt32(roi.height);
+                        // Task 34: 서버 분석 로직 제거
+                        // Node.js에서 분석을 수행하므로 여기서는 OCR 결과만 반환하거나
+                        // 단순히 블러 처리만 수행하는 별도 명령으로 분리하는 것이 좋음.
+                        // 현재는 OCR 결과만 반환하도록 수정.
                         
-                        Console.WriteLine($"[OnVoiceComBridge] OCR + 블러 요청: ROI({roiX}, {roiY}, {roiWidth}x{roiHeight})");
+                        byte[] imageBytes = (byte[])input.imageData;
                         
                         SoftwareBitmap? softwareBitmap = await ConvertBytesToSoftwareBitmap(imageBytes);
                         if (softwareBitmap == null) return new { ok = false, error = "이미지 변환 실패" };
@@ -232,35 +221,42 @@ namespace OnVoiceComBridge
                         string recognizedText = await RecognizeTextFromSoftwareBitmap(softwareBitmap);
                         var texts = SplitTextToLines(recognizedText);
                         
-                        var analysisResult = await AnalyzeTextForHarmfulContent(recognizedText);
-                        
-                        byte[]? blurredImage = null;
-                        if (analysisResult.isHarmful)
-                        {
-                            Console.WriteLine($"[OnVoiceComBridge] 🚨 유해 표현 감지: {string.Join(", ", analysisResult.matchedKeywords)}");
-                            blurredImage = await BlurROI(imageBytes, roiX, roiY, roiWidth, roiHeight);
-                        }
+                        // 서버 분석 제거됨
                         
                         return new { 
                             ok = true, 
                             texts = texts,
                             text = recognizedText,
-                            is_harmful = analysisResult.isHarmful,
-                            harmful_words = analysisResult.matchedKeywords,
-                            confidence = analysisResult.confidence,
-                            blurredImage = blurredImage
+                            is_harmful = false, // Node.js에서 판단
+                            harmful_words = new string[0],
+                            confidence = 0.0,
+                            blurredImage = (byte[]?)null // 블러 처리는 Node.js 요청 시 수행하거나 별도 명령으로 이동
                         };
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"[OnVoiceComBridge] ❌ OCR + 블러 오류: {ex.Message}");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] ❌ OCR 오류: {ex.Message}");
                         return new { ok = false, error = ex.Message };
                     }
-
-                case "setServerUrl":
-                    _serverUrl = (string)input.url ?? "http://127.0.0.1:8000";
-                    Console.WriteLine($"[OnVoiceComBridge] 서버 URL 설정: {_serverUrl}");
-                    return new { ok = true, url = _serverUrl };
+                
+                // 블러 처리 전용 명령 추가 (필요 시 Node.js에서 호출)
+                case "blur":
+                    try 
+                    {
+                        byte[] imageBytes = (byte[])input.imageData;
+                        var roi = input.roi;
+                        int roiX = Convert.ToInt32(roi.x);
+                        int roiY = Convert.ToInt32(roi.y);
+                        int roiWidth = Convert.ToInt32(roi.width);
+                        int roiHeight = Convert.ToInt32(roi.height);
+                        
+                        byte[] blurredImage = await BlurROI(imageBytes, roiX, roiY, roiWidth, roiHeight);
+                        return new { ok = true, blurredImage };
+                    }
+                    catch (Exception ex)
+                    {
+                        return new { ok = false, error = ex.Message };
+                    }
 
                 default:
                     return new { ok = false, error = $"Unknown command: {command}" };
@@ -394,103 +390,6 @@ namespace OnVoiceComBridge
                 long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 cb(new { type = "audio", data = buffer, timestamp = timestamp }); 
              } catch { }
-        }
-
-        private static string LoadServerUrlFromEnv()
-        {
-            try
-            {
-                string? rootDir = FindRootDirectory();
-                if (rootDir == null) return "http://127.0.0.1:8000";
-
-                string envPath = Path.Combine(rootDir, ".env");
-                if (!File.Exists(envPath)) return "http://127.0.0.1:8000";
-
-                var envVars = ParseEnvFile(envPath);
-                if (envVars.TryGetValue("SERVER_URL", out string? serverUrl) && !string.IsNullOrWhiteSpace(serverUrl))
-                    return serverUrl.Trim();
-                return "http://127.0.0.1:8000";
-            }
-            catch { return "http://127.0.0.1:8000"; }
-        }
-
-        private static string? FindRootDirectory()
-        {
-            try
-            {
-                string? currentDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                if (currentDir == null) return null;
-
-                for (int i = 0; i < 5; i++)
-                {
-                    if (currentDir == null) break;
-                    if (File.Exists(Path.Combine(currentDir, ".env")) || File.Exists(Path.Combine(currentDir, "package.json")))
-                        return currentDir;
-                    var parent = Directory.GetParent(currentDir);
-                    if (parent == null) break;
-                    currentDir = parent.FullName;
-                }
-                return null;
-            }
-            catch { return null; }
-        }
-
-        private static Dictionary<string, string> ParseEnvFile(string filePath)
-        {
-            var envVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (!File.Exists(filePath)) return envVars;
-
-            try
-            {
-                var lines = File.ReadAllLines(filePath);
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-                    if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("#")) continue;
-                    var equalIndex = trimmedLine.IndexOf('=');
-                    if (equalIndex <= 0) continue;
-                    var key = trimmedLine.Substring(0, equalIndex).Trim();
-                    var value = trimmedLine.Substring(equalIndex + 1).Trim();
-                    if (value.Length >= 2 && ((value.StartsWith("\"") && value.EndsWith("\"")) || (value.StartsWith("'") && value.EndsWith("'"))))
-                        value = value.Substring(1, value.Length - 2);
-                    if (!string.IsNullOrWhiteSpace(key)) envVars[key] = value;
-                }
-            }
-            catch { }
-            return envVars;
-        }
-
-        private static async Task<(bool isHarmful, string[] matchedKeywords, double confidence)> AnalyzeTextForHarmfulContent(string text)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(text)) return (false, Array.Empty<string>(), 0.0);
-
-                var requestBody = new { text = text.Trim(), use_ai = false };
-                var json = JsonSerializer.Serialize(requestBody);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.PostAsync($"{_serverUrl}/analyze", content);
-                response.EnsureSuccessStatusCode();
-
-                var responseJson = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<JsonElement>(responseJson);
-
-                bool isHarmful = result.GetProperty("has_violation").GetBoolean();
-                double confidence = result.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : (isHarmful ? 1.0 : 0.0);
-                
-                var matchedKeywords = new List<string>();
-                if (result.TryGetProperty("matched_keywords", out var keywords))
-                {
-                    foreach (var keyword in keywords.EnumerateArray()) matchedKeywords.Add(keyword.GetString() ?? "");
-                }
-
-                return (isHarmful, matchedKeywords.ToArray(), confidence);
-            }
-            catch
-            {
-                return (false, Array.Empty<string>(), 0.0);
-            }
         }
 
         private static async Task<byte[]> BlurROI(byte[] imageBytes, int x, int y, int width, int height)

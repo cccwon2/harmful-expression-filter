@@ -4,7 +4,11 @@
  * native-sound-mixer를 사용하여 앱별로 독립적으로 볼륨을 조절합니다.
  */
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import soundMixer, { Device, DeviceType, AudioSession } from 'native-sound-mixer';
+
+const execAsync = promisify(exec);
 
 export interface AudioSessionInfo {
   id: string;
@@ -18,27 +22,67 @@ export class AppVolumeController {
   private originalVolumes: Map<string, number> = new Map();
   private defaultDevice: Device | null = null;
   private restoreTimer: NodeJS.Timeout | null = null;
+  private monitoringTimer: NodeJS.Timeout | null = null;
   private readonly DEFAULT_RESTORE_DELAY_MS = 3000;
+  private readonly MONITORING_INTERVAL_MS = 1000;
   
   constructor() {
     this.initializeDefaultDevice();
+    this.startSessionMonitoring();
   }
   
   /**
    * 기본 출력 디바이스 초기화
    */
   private initializeDefaultDevice(): void {
+    this.refreshDevice();
+  }
+
+  /**
+   * 오디오 세션 모니터링 시작
+   * 주기적으로 디바이스 정보를 갱신하여 캐싱
+   */
+  private startSessionMonitoring(): void {
+    if (this.monitoringTimer) {
+      clearInterval(this.monitoringTimer);
+    }
+
+    // 초기 실행
+    this.refreshDevice();
+
+    this.monitoringTimer = setInterval(() => {
+      this.refreshDevice();
+    }, this.MONITORING_INTERVAL_MS);
+    
+    console.log(`[AppVolumeController] 🔄 Started background session monitoring (${this.MONITORING_INTERVAL_MS}ms)`);
+  }
+
+  /**
+   * 오디오 세션 모니터링 중지
+   */
+  stopSessionMonitoring(): void {
+    if (this.monitoringTimer) {
+      clearInterval(this.monitoringTimer);
+      this.monitoringTimer = null;
+      console.log('[AppVolumeController] ⏹️ Stopped background session monitoring');
+    }
+  }
+
+  /**
+   * 디바이스 정보 갱신 (내부용)
+   */
+  private refreshDevice(): void {
     try {
-      this.defaultDevice = soundMixer.getDefaultDevice(DeviceType.RENDER);
-      
-      if (this.defaultDevice) {
-        console.log(`[AppVolumeController] ✅ Default audio device: ${this.defaultDevice.name}`);
-        console.log(`[AppVolumeController] Initial sessions count: ${this.defaultDevice.sessions?.length || 0}`);
+      const device = soundMixer.getDefaultDevice(DeviceType.RENDER);
+      if (device) {
+        this.defaultDevice = device;
+        // 로그가 너무 많아질 수 있으므로 디버그 레벨로 조정하거나 변경시에만 로그를 찍는 것이 좋음
+        // 현재는 간단히 유지
       } else {
-        console.error('[AppVolumeController] ❌ No default output device found');
+        // console.warn('[AppVolumeController] ⚠️ No default output device found during refresh');
       }
     } catch (err) {
-      console.error('[AppVolumeController] Failed to initialize default device:', err);
+      console.error('[AppVolumeController] Failed to refresh default device:', err);
     }
   }
   
@@ -47,7 +91,7 @@ export class AppVolumeController {
    */
   getAudioSessions(): AudioSessionInfo[] {
     if (!this.defaultDevice) {
-      console.warn('[AppVolumeController] Default device not initialized');
+      // console.warn('[AppVolumeController] Default device not initialized');
       return [];
     }
     
@@ -68,10 +112,53 @@ export class AppVolumeController {
       return [];
     }
   }
+
+  /**
+   * PID로 프로세스 경로 조회 (Windows 전용)
+   */
+  private async getProcessPathByPid(pid: number): Promise<string | null> {
+    try {
+      // wmic process where processid=<pid> get ExecutablePath
+      const { stdout } = await execAsync(`wmic process where processid=${pid} get ExecutablePath`);
+      
+      const lines = stdout.trim().split('\n');
+      if (lines.length < 2) return null;
+      
+      const path = lines[1].trim();
+      return path || null;
+    } catch (err) {
+      console.error(`[AppVolumeController] Failed to resolve PID ${pid} to path:`, err);
+      return null;
+    }
+  }
   
   /**
-   * 특정 앱의 볼륨 조절
-   * @param appName - 앱 이름 (예: "chrome", "discord", "chrome.exe")
+   * 특정 PID 앱의 볼륨 조절
+   * @param pid - 프로세스 ID
+   * @param volumeLevel - 0~10 (0 = 음소거, 10 = 100%)
+   * @param restoreDelayMs - 복원 대기 시간 (밀리초)
+   */
+  async setVolumeByPid(
+    pid: number, 
+    volumeLevel: number, 
+    restoreDelayMs: number = this.DEFAULT_RESTORE_DELAY_MS
+  ): Promise<boolean> {
+    const processPath = await this.getProcessPathByPid(pid);
+    
+    if (!processPath) {
+      console.warn(`[AppVolumeController] ⚠️ Could not resolve PID ${pid} to executable path`);
+      return false;
+    }
+    
+    console.log(`[AppVolumeController] 🎯 PID ${pid} resolved to: ${processPath}`);
+    
+    // 경로로 볼륨 조절
+    return this.setAppVolume(processPath, volumeLevel, restoreDelayMs);
+  }
+  
+  /**
+   * 특정 앱의 볼륨 조절 (내부적으로 사용하거나 이름으로 직접 제어할 때 사용)
+   * @param appName - 앱 이름 (예: "chrome", "discord", "chrome.exe", 또는 전체 경로)
    * @param volumeLevel - 0~10 (0 = 음소거, 10 = 100%)
    * @param restoreDelayMs - 복원 대기 시간 (밀리초)
    */
@@ -88,10 +175,16 @@ export class AppVolumeController {
     const sessions = this.getAudioSessions();
     
     // 앱 이름으로 세션 찾기 (부분 매칭, 대소문자 무시)
-    const targetSession = sessions.find(s => 
-      s.name.toLowerCase().includes(appName.toLowerCase()) ||
-      s.appName.toLowerCase().includes(appName.toLowerCase())
-    );
+    const targetSession = sessions.find(s => {
+      const sAppName = s.appName.toLowerCase();
+      const sName = s.name.toLowerCase();
+      const target = appName.toLowerCase();
+      
+      return sAppName === target || 
+             sName === target || 
+             sAppName.includes(target) ||
+             (target.includes('\\') && sAppName.endsWith(target.split('\\').pop()!));
+    });
     
     if (!targetSession) {
       console.warn(`[AppVolumeController] ⚠️ App not found in active sessions: ${appName}`);
@@ -152,110 +245,6 @@ export class AppVolumeController {
   }
   
   /**
-   * 모든 활성 앱 음소거 (폴백 방식)
-   * @param restoreDelayMs - 복원 대기 시간 (밀리초), 0이면 자동 복원 안함
-   */
-  async muteAllApps(restoreDelayMs: number = this.DEFAULT_RESTORE_DELAY_MS): Promise<void> {
-    if (!this.defaultDevice) {
-      console.warn('[AppVolumeController] Default device not initialized');
-      return;
-    }
-    
-    // 디바이스 세션 새로고침 (최신 세션 목록 가져오기)
-    try {
-      // defaultDevice.sessions는 실시간으로 업데이트되므로 재조회
-      this.defaultDevice = soundMixer.getDefaultDevice(DeviceType.RENDER);
-      if (!this.defaultDevice) {
-        console.error('[AppVolumeController] Failed to refresh default device');
-        return;
-      }
-    } catch (err) {
-      console.error('[AppVolumeController] Failed to refresh device:', err);
-    }
-    
-    const sessions = this.getAudioSessions();
-    
-    if (sessions.length === 0) {
-      console.warn('[AppVolumeController] No active audio sessions to mute');
-      console.log('[AppVolumeController] Available sessions:', this.defaultDevice.sessions.map(s => `${s.name} (${s.appName}, state: ${s.state})`).join(', '));
-      return;
-    }
-    
-    console.log(`[AppVolumeController] 🔍 Found ${sessions.length} active audio sessions:`);
-    sessions.forEach(s => {
-      console.log(`   - ${s.name} (${s.appName}): ${Math.round(s.volume * 100)}%`);
-    });
-    
-    // 기존 복원 타이머 취소 (새로운 mute 요청 시)
-    if (this.restoreTimer) {
-      clearTimeout(this.restoreTimer);
-      this.restoreTimer = null;
-    }
-    
-    const deviceSessions = this.defaultDevice.sessions;
-    let mutedCount = 0;
-    let failedCount = 0;
-    
-    sessions.forEach(sessionInfo => {
-      const session = deviceSessions.find(s => 
-        s.name === sessionInfo.name && s.appName === sessionInfo.appName
-      );
-      
-      if (!session) {
-        console.warn(`[AppVolumeController] ⚠️ Session object not found for ${sessionInfo.name}`);
-        failedCount++;
-        return;
-      }
-      
-      const sessionKey = sessionInfo.id;
-      const currentVolume = session.volume;
-      
-      // 이미 음소거된 상태면 스킵 (중복 mute 방지)
-      if (currentVolume === 0) {
-        console.log(`[AppVolumeController] ⏭️  ${sessionInfo.name} is already muted, skipping`);
-        mutedCount++;
-        // 원래 볼륨이 저장되지 않았으면 현재 볼륨(0)을 저장하지 않음
-        // (이미 mute된 경우 원래 볼륨 정보가 없을 수 있음)
-        return;
-      }
-      
-      // 원래 볼륨 저장 (복원용) - mute 전에만 저장
-      if (!this.originalVolumes.has(sessionKey)) {
-        this.originalVolumes.set(sessionKey, currentVolume);
-        console.log(`[AppVolumeController] 💾 Saved original volume for ${sessionInfo.name}: ${Math.round(currentVolume * 100)}%`);
-      }
-      
-      try {
-        // 볼륨을 0으로 설정
-        session.volume = 0;
-        
-        // 설정 후 확인
-        const newVolume = session.volume;
-        if (newVolume === 0) {
-          console.log(`[AppVolumeController] ✅ Muted ${sessionInfo.name}: ${Math.round(currentVolume * 100)}% → 0%`);
-          mutedCount++;
-        } else {
-          console.warn(`[AppVolumeController] ⚠️ Volume setting may have failed for ${sessionInfo.name}: current volume is ${Math.round(newVolume * 100)}%`);
-          failedCount++;
-        }
-      } catch (err) {
-        console.error(`[AppVolumeController] ❌ Failed to mute ${sessionInfo.name}:`, err);
-        failedCount++;
-      }
-    });
-    
-    console.log(`[AppVolumeController] 🔇 Muted ${mutedCount} apps (${failedCount} failed)`);
-    
-    // 자동 복원 타이머 설정
-    if (restoreDelayMs > 0) {
-      this.restoreTimer = setTimeout(() => {
-        void this.restoreVolume();
-        console.log(`[AppVolumeController] ✅ Auto-restored volumes after ${restoreDelayMs}ms`);
-      }, restoreDelayMs);
-    }
-  }
-  
-  /**
    * 저장된 원래 볼륨으로 복원
    */
   async restoreVolume(sessionKey?: string, session?: AudioSession): Promise<void> {
@@ -279,16 +268,10 @@ export class AppVolumeController {
       return;
     }
     
-    // 모든 세션 복원
-    if (this.originalVolumes.size === 0) {
-      console.log('[AppVolumeController] No volumes to restore');
-      return;
-    }
+    // 모든 세션 복원 (fallback)
+    if (this.originalVolumes.size === 0) return;
     
-    if (!this.defaultDevice) {
-      console.warn('[AppVolumeController] Default device not initialized');
-      return;
-    }
+    if (!this.defaultDevice) return;
     
     const deviceSessions = this.defaultDevice.sessions;
     let restoredCount = 0;
