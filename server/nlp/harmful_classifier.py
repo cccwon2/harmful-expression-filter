@@ -150,19 +150,40 @@ class HarmfulTextClassifier:
         if is_koelectra:
             # KoElectra는 이미 sequence classification으로 학습된 모델
             logger.info("Loading KoElectra model (no LoRA needed)")
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                self.base_model_name,
-                **load_kwargs
-            )
+            # safetensors 사용하여 torch 버전 제한 우회 (지원하지 않으면 자동으로 fallback)
+            try:
+                load_kwargs["use_safetensors"] = True
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.base_model_name,
+                    **load_kwargs
+                )
+            except Exception as e:
+                # safetensors가 지원되지 않는 경우 일반 형식으로 시도
+                logger.warning(f"Failed to load with safetensors, trying without: {e}")
+                load_kwargs.pop("use_safetensors", None)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.base_model_name,
+                    **load_kwargs
+                )
             logger.info("✅ KoElectra model ready")
         else:
             # Kanana 모델 로드
             load_kwargs["num_labels"] = num_labels
-            
-            self.base_model = AutoModelForSequenceClassification.from_pretrained(
-                self.base_model_name,
-                **load_kwargs
-            )
+            # safetensors 사용하여 torch 버전 제한 우회 (지원하지 않으면 자동으로 fallback)
+            try:
+                load_kwargs["use_safetensors"] = True
+                self.base_model = AutoModelForSequenceClassification.from_pretrained(
+                    self.base_model_name,
+                    **load_kwargs
+                )
+            except Exception as e:
+                # safetensors가 지원되지 않는 경우 일반 형식으로 시도
+                logger.warning(f"Failed to load with safetensors, trying without: {e}")
+                load_kwargs.pop("use_safetensors", None)
+                self.base_model = AutoModelForSequenceClassification.from_pretrained(
+                    self.base_model_name,
+                    **load_kwargs
+                )
 
             # Base 모델만 사용할지 확인 (model_path가 None이거나 빈 문자열이거나 존재하지 않으면 base만 사용)
             use_base_only = not self.model_path or self.model_path.strip() == "" or not os.path.exists(self.model_path)

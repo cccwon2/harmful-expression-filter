@@ -16,10 +16,10 @@ peft
 accelerate
 bitsandbytes  # 8-bit 양자화를 위한 패키지 (성능 개선)
 
-# PyTorch (3.12 호환되는 최신 버전을 받기 위해 버전 제거)
-torch
-torchaudio
-torchvision
+# PyTorch (torch 2.6+ required for safetensors support, versions must match)
+torch>=2.6.0
+torchaudio>=2.6.0
+torchvision>=0.21.0
 
 # Test
 pytest
