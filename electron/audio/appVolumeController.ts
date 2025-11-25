@@ -23,8 +23,8 @@ export class AppVolumeController {
   private defaultDevice: Device | null = null;
   private restoreTimers: Map<string, NodeJS.Timeout> = new Map(); // 세션별 복원 타이머
   private monitoringTimer: NodeJS.Timeout | null = null;
-  private readonly DEFAULT_RESTORE_DELAY_MS = 3000;
-  private readonly MONITORING_INTERVAL_MS = 1000;
+  private readonly DEFAULT_RESTORE_DELAY_MS = 5000; // 5초 유해 표현 감지 후 볼륨을 원래 값으로 돌리는 데 걸리는 시간
+  private readonly MONITORING_INTERVAL_MS = 1000; // 1초 기본 출력 디바이스와 오디오 세션 목록을 더 자주 갱신
   
   constructor() {
     this.initializeDefaultDevice();

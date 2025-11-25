@@ -18,7 +18,7 @@ import AudioManager from "./main/AudioManager";
 // 🔥 중요: onVoiceBridge를 최상단에서 정적 import 하여 중복 로드 방지
 import { onVoiceBridge } from "./main/onVoiceBridge";
 
-const CAPTURE_INTERVAL_MS = 1000; // 1초 간격
+const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
