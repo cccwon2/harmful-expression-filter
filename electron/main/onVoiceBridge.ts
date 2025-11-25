@@ -201,11 +201,14 @@ function callBridge(payload: any): Promise<any> {
 async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean; confidence: number }> {
   // 빈 텍스트 처리
   if (!text || !text.trim()) {
+    console.log(`[OnVoiceBridge] 빈 텍스트로 인해 분석을 건너뜁니다.`);
     return { isHarmful: false, confidence: 0.0 };
   }
 
   try {
     const serverUrl = getServerUrl();
+    console.log(`[OnVoiceBridge] 서버 분석 요청: ${serverUrl}/analyze (텍스트: "${text.substring(0, 30)}${text.length > 30 ? "..." : ""}")`);
+    
     const response = await axios.post<{
       has_violation: boolean;
       ai_analysis: {
@@ -222,18 +225,30 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
     );
 
     // 서버 응답 파싱
+    console.log(`[OnVoiceBridge] 서버 응답 수신:`, {
+      has_violation: response.data.has_violation,
+      ai_analysis: response.data.ai_analysis ? {
+        is_harmful: response.data.ai_analysis.is_harmful,
+        confidence: response.data.ai_analysis.confidence,
+      } : null,
+    });
+    
     if (response.data.ai_analysis) {
-      return {
+      const result = {
         isHarmful: response.data.ai_analysis.is_harmful,
         confidence: response.data.ai_analysis.confidence,
       };
+      console.log(`[OnVoiceBridge] ✅ AI 분석 결과: isHarmful=${result.isHarmful}, confidence=${result.confidence}`);
+      return result;
     }
 
     // AI 분석이 없는 경우 has_violation 사용
-    return {
+    const result = {
       isHarmful: response.data.has_violation,
       confidence: response.data.has_violation ? 1.0 : 0.0,
     };
+    console.log(`[OnVoiceBridge] ⚠️ AI 분석 없음, has_violation 사용: isHarmful=${result.isHarmful}`);
+    return result;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
@@ -318,17 +333,23 @@ export const onVoiceBridge: OnVoiceBridge = {
       }
 
       const extractedText = result.text || "";
+      
+      // OCR 텍스트 추출 로그
+      console.log(`[OnVoiceBridge] 📝 OCR 텍스트 추출 완료: "${extractedText.substring(0, 50)}${extractedText.length > 50 ? "..." : ""}" (길이: ${extractedText.length})`);
 
       // 3. 서버의 KoElectra/Kanana 모델을 사용한 유해성 분석
       let analysisResult = { isHarmful: false, confidence: 0.0 };
       
       if (extractedText.trim().length > 0) {
+        console.log(`[OnVoiceBridge] 🔍 서버에 유해성 분석 요청 중...`);
         analysisResult = await analyzeTextWithServer(extractedText);
         
         console.log(
-          `[OnVoiceBridge] OCR 결과: "${extractedText.substring(0, 30)}${extractedText.length > 30 ? "..." : ""}" | ` +
+          `[OnVoiceBridge] 📊 분석 결과: "${extractedText.substring(0, 30)}${extractedText.length > 30 ? "..." : ""}" | ` +
           `유해성: ${analysisResult.isHarmful ? "⚠️ 유해" : "✅ 정상"} (신뢰도: ${(analysisResult.confidence * 100).toFixed(1)}%)`
         );
+      } else {
+        console.log(`[OnVoiceBridge] ⚠️ 추출된 텍스트가 비어있어 분석을 건너뜁니다.`);
       }
 
       return {
