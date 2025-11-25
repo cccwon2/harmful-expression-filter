@@ -1,0 +1,21 @@
+# === FastAPI / 서버 ===
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.10.4
+python-multipart>=0.0.6
+
+# === WebSocket ===
+websockets>=12.0,<13.0
+
+# === Env ===
+python-dotenv>=1.0.0
+
+# === Hugging Face / 훈련 스택 ===
+transformers>=4.38.0
+peft>=0.7.0
+accelerate>=0.28.0
+bitsandbytes>=0.46.1   # CUDA 13 드라이버 호환 릴리스 기준
+
+# === Test ===
+pytest
+httpx
