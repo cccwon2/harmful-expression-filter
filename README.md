@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~39**까지 진행 중입니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~40**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -30,6 +30,7 @@
 - **Task 37**: Ubuntu 서버 FastAPI 배포 가이드 (systemd, Nginx, SSL, 프로덕션 환경 구성)
 - **Task 38**: 코드 리팩토링 및 정리 (서버 의존성 완전 제거, AppVolumeController 중앙화, PID 기반 볼륨 제어 추가)
 - **Task 39**: C# 기반 PID 볼륨 제어 통합 (native-sound-mixer 완전 제거, C# Bridge로 통합)
+- **Task 40**: C++ Core Audio 구현 상세 (Application Loopback 내부 구현 원리 문서화)
 
 ### 주요 기술 스택
 
@@ -47,6 +48,8 @@
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
     - **8-bit 양자화 지원**: GPU 사용 시 `bitsandbytes` 설치 후 메모리 사용량 감소 및 추론 속도 2-4배 향상 가능 (CPU에서는 동작하지 않음)
 - **오디오 캡처**: [OnVoice COM Bridge](https://github.com/cccwon2/onvoice-com-bridge) (Windows WASAPI 기반 프로세스별 오디오 캡처)
+  - C++ Native 구현: `AUDIOCLIENT_ACTIVATION_PARAMS`를 사용한 PID 기반 Application Loopback
+  - Windows 10 SDK (10.0.20348.0) 이상 필요
 - **볼륨 제어**: C# Bridge (NAudio.Wasapi) - Windows Core Audio API 직접 사용
   - PID 기반 앱별 볼륨 조절
   - 오디오 세션 목록 조회 (C# Bridge 통합)
@@ -346,7 +349,7 @@ harmful-expression-filter/
 ├── docs/                    # 작업/문서 모음
 │   ├── PROJECT_SPEC.md      # 마스터 플랜 (전체 프로젝트 명세서)
 │   ├── INTERFACES.md        # 핵심 인터페이스 및 연결부 코드
-│   └── ...                  # 각 작업 문서 (00~37)
+│   └── ...                  # 각 작업 문서 (00~40)
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 │   ├── main/                # 메인 프로세스 핵심 모듈
 │   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)
