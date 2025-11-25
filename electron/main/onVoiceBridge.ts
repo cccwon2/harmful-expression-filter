@@ -4,6 +4,7 @@
 import path from "node:path";
 import { app } from "electron";
 import { EventEmitter } from "events";
+import axios, { AxiosError } from "axios";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const edge = require("electron-edge-js");
@@ -13,6 +14,10 @@ type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 
 // 타임아웃: 5초
 const BRIDGE_TIMEOUT_MS = 5000;
+
+// 서버 설정
+const SERVER_URL = process.env.SERVER_URL || "http://127.0.0.1:8000";
+const SERVER_REQUEST_TIMEOUT = 5000;
 
 // 🔇 키워드 리스트 주석처리 (kanana-lora-v1 모델만 사용)
 // const HARMFUL_KEYWORDS = [
@@ -122,18 +127,62 @@ function callBridge(payload: any): Promise<any> {
   });
 }
 
-// 🔇 로컬 키워드 분석 함수 주석처리 (kanana-lora-v1 모델만 사용)
-export function analyzeTextLocally(text: string): { isHarmful: boolean; matched: string[] } {
-  // 키워드 기반 분석 비활성화 - 서버의 AI 모델만 사용
-  return { isHarmful: false, matched: [] };
-  
-  // if (!text || !text.trim()) return { isHarmful: false, matched: [] };
-  // const matched: string[] = [];
-  // const cleanText = text.replace(/\s+/g, " ");
-  // for (const keyword of HARMFUL_KEYWORDS) {
-  //   if (cleanText.includes(keyword)) matched.push(keyword);
-  // }
-  // return { isHarmful: matched.length > 0, matched };
+/**
+ * 서버의 KoElectra/Kanana 모델을 사용하여 텍스트 유해성 분석
+ * 
+ * @param text 분석할 텍스트
+ * @returns 분석 결과 (isHarmful, confidence)
+ */
+async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean; confidence: number }> {
+  // 빈 텍스트 처리
+  if (!text || !text.trim()) {
+    return { isHarmful: false, confidence: 0.0 };
+  }
+
+  try {
+    const response = await axios.post<{
+      has_violation: boolean;
+      ai_analysis: {
+        is_harmful: boolean;
+        confidence: number;
+      } | null;
+    }>(
+      `${SERVER_URL}/analyze`,
+      { text: text.trim() },
+      {
+        timeout: SERVER_REQUEST_TIMEOUT,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    // 서버 응답 파싱
+    if (response.data.ai_analysis) {
+      return {
+        isHarmful: response.data.ai_analysis.is_harmful,
+        confidence: response.data.ai_analysis.confidence,
+      };
+    }
+
+    // AI 분석이 없는 경우 has_violation 사용
+    return {
+      isHarmful: response.data.has_violation,
+      confidence: response.data.has_violation ? 1.0 : 0.0,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error(`[OnVoiceBridge] 서버 분석 요청 실패:`, {
+        message: axiosError.message,
+        code: axiosError.code,
+        status: axiosError.response?.status,
+      });
+    } else {
+      console.error(`[OnVoiceBridge] 서버 분석 요청 실패 (알 수 없는 오류):`, error);
+    }
+
+    // 서버 오류 시 안전하게 false 반환
+    return { isHarmful: false, confidence: 0.0 };
+  }
 }
 
 export const onVoiceBridge: OnVoiceBridge = {
@@ -204,24 +253,24 @@ export const onVoiceBridge: OnVoiceBridge = {
 
       const extractedText = result.text || "";
 
-      // 🔇 로컬 키워드 분석 주석처리 (kanana-lora-v1 모델만 사용)
-      // 3. Node.js 로컬 분석
-      // const analysis = analyzeTextLocally(extractedText);
-      // 로컬 분석 비활성화 - 서버의 AI 모델을 통해 분석해야 함
-      const analysis = { isHarmful: false, matched: [] };
-
+      // 3. 서버의 KoElectra/Kanana 모델을 사용한 유해성 분석
+      let analysisResult = { isHarmful: false, confidence: 0.0 };
+      
       if (extractedText.trim().length > 0) {
+        analysisResult = await analyzeTextWithServer(extractedText);
+        
         console.log(
-          `[OnVoiceBridge] 결과: "${extractedText.substring(0, 20)}..." (로컬 분석 비활성화 - 서버 AI 모델 사용 필요)`
+          `[OnVoiceBridge] OCR 결과: "${extractedText.substring(0, 30)}${extractedText.length > 30 ? "..." : ""}" | ` +
+          `유해성: ${analysisResult.isHarmful ? "⚠️ 유해" : "✅ 정상"} (신뢰도: ${(analysisResult.confidence * 100).toFixed(1)}%)`
         );
       }
 
       return {
         ok: true,
         text: extractedText,
-        isHarmful: false, // 🔇 로컬 분석 비활성화 - 서버에서 AI 모델로 분석 필요
-        matchedKeywords: [], // 🔇 로컬 분석 비활성화
-        confidence: result.confidence || 0,
+        isHarmful: analysisResult.isHarmful,
+        matchedKeywords: [], // 서버 모델은 키워드 리스트를 반환하지 않음
+        confidence: analysisResult.confidence,
         blurredImage: undefined,
       };
     } catch (error: any) {
