@@ -1,3 +1,15 @@
+요청하신 대로 \*\*기존의 견고한 로직(경로 검증, 양자화, KoElectra 지원)\*\*에 \*\*새로 주신 코드의 핵심 기능(Threshold 기반 예측 로직)\*\*을 통합했습니다.
+
+이 코드를 `server/nlp/harmful_classifier.py` 파일에 덮어쓰시면 됩니다.
+
+### 📝 주요 변경 사항
+
+1.  **`__init__`에 `threshold` 파라미터 추가**: 기본값을 `0.22`로 설정했습니다.
+2.  **`predict` 메서드 로직 교체**: 단순 `argmax`(가장 높은 확률 선택) 대신, **유해 확률(Label 1)이 Threshold를 넘는지** 확인하는 로직으로 변경했습니다.
+
+### 💻 전체 통합 코드 (`server/nlp/harmful_classifier.py`)
+
+```python
 from __future__ import annotations
 
 import logging
@@ -28,11 +40,13 @@ class HarmfulTextClassifier:
         *,
         num_labels: int = 2,
         max_length: int = 128,
+        threshold: float = 0.22,  # 🔥 [NEW] 임계값 추가
         torch_module: Optional[Any] = None,
         use_quantization: bool = True,
     ) -> None:
         self.base_model_name = base_model_name
         self.max_length = max_length
+        self.threshold = threshold
 
         # 1) Torch 준비
         if torch_module is None:
@@ -80,7 +94,7 @@ class HarmfulTextClassifier:
         self.use_lora = False
         self.model_path: Optional[Path] = None
 
-        # 5) LoRA 경로 계산 및 검증 (핵심 수정)
+        # 5) LoRA 경로 계산 및 검증
         project_root = Path(__file__).resolve().parent.parent  # .../server
         
         if not self.is_koelectra:
@@ -101,7 +115,6 @@ class HarmfulTextClassifier:
                     candidate = (project_root / candidate).resolve()
                 
                 # [중요] 실제 adapter_config.json 파일 존재 여부 확인
-                # 이 파일이 없으면 무조건 Base 모델로 폴백하여 크래시 방지
                 config_file = candidate / "adapter_config.json"
                 if candidate.exists() and config_file.exists():
                     self.model_path = candidate
@@ -171,23 +184,38 @@ class HarmfulTextClassifier:
 
         self.model.eval()
 
+    # ----------------------------------------------------------
+    # 🔥 predict(): threshold 기반 예측 로직 적용
+    # ----------------------------------------------------------
     def predict(self, text: str) -> ClassificationResult:
         if not text or not text.strip():
-            return ClassificationResult(False, 0.0, "")
+            return ClassificationResult(is_harmful=False, confidence=0.0, text="")
 
         inputs = self.tokenizer(
-            text, return_tensors="pt", truncation=True, padding=True, max_length=self.max_length
+            text, 
+            return_tensors="pt", 
+            truncation=True, 
+            padding=True, 
+            max_length=self.max_length
         ).to(self.device)
 
         with self._torch.no_grad():
             outputs = self.model(**inputs)
 
-        probs = self._torch.nn.functional.softmax(outputs.logits, dim=-1)
-        predicted_index = int(self._torch.argmax(probs, dim=-1).item())
-        
-        # [0: 정상, 1: 유해]
+        logits = outputs.logits  # shape: [1, 2]
+        probs = self._torch.nn.functional.softmax(logits, dim=-1)[0]
+
+        # 🔥 id2label 기반으로 label=1 (유해) 확률 추출
+        # KoElectra와 Kanana 모두 일반적으로 0:정상, 1:유해로 학습됨
+        idx_for_harm = 1
+        prob_harm = float(probs[idx_for_harm].item())
+
+        # 🔥 threshold 적용
+        is_harmful = prob_harm >= self.threshold
+
         return ClassificationResult(
-            is_harmful=(predicted_index == 1),
-            confidence=float(probs[0][predicted_index].item()),
+            is_harmful=is_harmful,
+            confidence=prob_harm,
             text=text,
         )
+```
