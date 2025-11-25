@@ -31,11 +31,6 @@ class HarmfulTextClassifier:
         torch_module: Optional[Any] = None,
         use_quantization: bool = True,
     ) -> None:
-        """
-        - KoElectra: base_model_name 에 'koelectra' 포함되면 LoRA 없이 일반 분류 모델로 사용
-        - Kanana + LoRA:
-            - 우선순위: KANANA_LORA_DIR(.env) > model_path 인자 > 기본값(project_root/models/kanana-lora-v1)
-        """
         self.base_model_name = base_model_name
         self.max_length = max_length
 
@@ -58,151 +53,121 @@ class HarmfulTextClassifier:
 
         logger.info("🚀 Device selected: %s", self.device)
 
-        # 3) 양자화 플래그 정리 (CUDA 에서만 의미 있음)
+        # 3) 양자화 설정
         self.use_quantization = bool(use_quantization and self.device == "cuda")
         if self.device != "cuda" and use_quantization:
-            logger.warning("⚠️ CPU/MPS 환경에서는 8-bit 양자화를 사용할 수 없습니다. 양자화 비활성화.")
+            logger.warning("⚠️ CPU/MPS에서는 8-bit 양자화 불가. 비활성화.")
             self.use_quantization = False
 
-        # 4) transformers / peft 가져오기
+        # 4) 라이브러리 임포트
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
         except ImportError as exc:
-            raise TransformersNotAvailableError(
-                "transformers 패키지가 설치되지 않았습니다. `pip install transformers`"
-            ) from exc
+            raise TransformersNotAvailableError("transformers 패키지 필요") from exc
 
         try:
             from peft import PeftModel
             self._peft_available = True
         except ImportError:
-            PeftModel = None  # type: ignore[assignment]
+            PeftModel = None
             self._peft_available = False
 
         self._AutoModelForSequenceClassification = AutoModelForSequenceClassification
         self._AutoTokenizer = AutoTokenizer
         self._PeftModel = PeftModel
 
-        # 5) 모델 타입 플래그
         self.is_koelectra = "koelectra" in self.base_model_name.lower()
         self.use_lora = False
         self.model_path: Optional[Path] = None
 
-        # 6) 프로젝트 루트 및 LoRA 경로 계산 (Robust Logic)
-        #    /opt/.../server/nlp/harmful_classifier.py -> project_root = /opt/.../server
-        project_root = Path(__file__).resolve().parent.parent
+        # 5) LoRA 경로 계산 및 검증 (핵심 수정)
+        project_root = Path(__file__).resolve().parent.parent  # .../server
         
         if not self.is_koelectra:
-            # (1) 경로 후보 선정
+            # 우선순위: 환경변수 > 인자 > 기본값
             env_path = os.getenv("KANANA_LORA_DIR", "").strip()
+            
             candidate: Optional[Path] = None
-
             if env_path:
                 candidate = Path(env_path)
-                logger.info("Setting LoRA path from ENV: %s", candidate)
             elif model_path and model_path.strip():
                 candidate = Path(model_path)
-                logger.info("Setting LoRA path from ARG: %s", candidate)
             else:
                 candidate = project_root / "models" / "kanana-lora-v1"
-                logger.info("Setting LoRA path from DEFAULT: %s", candidate)
 
-            # (2) 절대 경로 변환
+            # 절대 경로 변환
             if candidate:
                 if not candidate.is_absolute():
                     candidate = (project_root / candidate).resolve()
                 
-                # (3) 파일 존재 여부 '엄격' 검사 (adapter_config.json)
-                adapter_config = candidate / "adapter_config.json"
-                if candidate.exists() and adapter_config.exists():
+                # [중요] 실제 adapter_config.json 파일 존재 여부 확인
+                # 이 파일이 없으면 무조건 Base 모델로 폴백하여 크래시 방지
+                config_file = candidate / "adapter_config.json"
+                if candidate.exists() and config_file.exists():
                     self.model_path = candidate
-                    logger.info("✅ Valid LoRA adapter found at: %s", self.model_path)
+                    logger.info("✅ Valid LoRA adapter found: %s", self.model_path)
                 else:
-                    logger.warning(
-                        "⚠️ LoRA path defined (%s) but 'adapter_config.json' not found inside.", candidate
-                    )
-                    logger.warning("➡️ Falling back to Base Model ONLY (No LoRA).")
+                    logger.warning("⚠️ LoRA 경로(%s)에 'adapter_config.json'이 없습니다.", candidate)
+                    logger.warning("➡️ LoRA 로딩을 건너뛰고 Base Model만 사용합니다.")
                     self.model_path = None
 
-        # 7) 토크나이저는 항상 base 모델 기준으로만 로드
-        logger.info("Loading Tokenizer from base model: %s", self.base_model_name)
+        # 6) 토크나이저 로드
         self.tokenizer = self._AutoTokenizer.from_pretrained(self.base_model_name)
         if self.tokenizer.pad_token is None and getattr(self.tokenizer, "eos_token", None) is not None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # 8) 모델 로드 옵션 구성
-        load_kwargs: dict[str, Any] = {}
-
+        # 7) 모델 로드 옵션
+        load_kwargs: dict[str, Any] = {"device_map": self.device}
         if self.device == "cuda":
             if self.use_quantization:
                 try:
                     from transformers import BitsAndBytesConfig
-
                     load_kwargs["quantization_config"] = BitsAndBytesConfig(
-                        load_in_8bit=True,
-                        llm_int8_threshold=6.0,
+                        load_in_8bit=True, llm_int8_threshold=6.0
                     )
                     load_kwargs["device_map"] = "auto"
-                    logger.info("✅ 8-bit Quantization Enabled (CUDA)")
                 except Exception:
-                    logger.warning("⚠️ bitsandbytes 설정 실패. fp16으로 폴백합니다.")
                     load_kwargs["dtype"] = self._torch.float16
-                    load_kwargs["device_map"] = self.device
             else:
                 load_kwargs["dtype"] = self._torch.float16
-                load_kwargs["device_map"] = self.device
         else:
-            load_kwargs["device_map"] = self.device
             load_kwargs["dtype"] = self._torch.float32
 
         load_kwargs["use_safetensors"] = True
 
-        # 9) Base 모델 로드
+        # 8) Base 모델 로드
         logger.info("Loading Base Model: %s", self.base_model_name)
-
-        # 공통 로드 함수
-        def load_base_model():
+        
+        def load_base():
             try:
                 return self._AutoModelForSequenceClassification.from_pretrained(
-                    self.base_model_name,
-                    num_labels=num_labels,
-                    **load_kwargs,
+                    self.base_model_name, num_labels=num_labels, **load_kwargs
                 )
             except Exception:
-                # safetensors 이슈 등 대비 재시도
                 if "use_safetensors" in load_kwargs:
                     load_kwargs.pop("use_safetensors")
                 return self._AutoModelForSequenceClassification.from_pretrained(
-                    self.base_model_name,
-                    num_labels=num_labels,
-                    **load_kwargs,
+                    self.base_model_name, num_labels=num_labels, **load_kwargs
                 )
 
         if self.is_koelectra:
-            self.model = load_base_model()
+            self.model = load_base()
         else:
-            # Kanana
-            self.base_model = load_base_model()
+            self.base_model = load_base()
             self.model = self.base_model
 
-            # 10) LoRA 어댑터 로드 (유효성 검사를 통과한 경우에만 시도)
-            if self.model_path is not None:
-                if not self._peft_available:
-                    logger.error("❌ 'peft' not installed. Using Base Model only.")
-                else:
-                    try:
-                        logger.info("🔗 Loading LoRA adapter...")
-                        self.model = self._PeftModel.from_pretrained(
-                            self.base_model,
-                            str(self.model_path),
-                        )
-                        self.use_lora = True
-                        logger.info("✅ LoRA Adapter loaded successfully!")
-                    except Exception as exc:
-                        logger.error(
-                            "❌ Error loading LoRA adapter: %s. Continuing with Base Model.", exc
-                        )
-                        self.model = self.base_model
+            # 9) LoRA 어댑터 로드 (검증된 경로일 때만 실행)
+            if self.model_path is not None and self._peft_available:
+                try:
+                    logger.info("🔗 Loading LoRA adapter...")
+                    self.model = self._PeftModel.from_pretrained(
+                        self.base_model, str(self.model_path)
+                    )
+                    self.use_lora = True
+                    logger.info("✅ LoRA Adapter loaded successfully!")
+                except Exception as e:
+                    logger.error("❌ LoRA 로드 실패 (%s). Base 모델로 진행합니다.", e)
+                    self.model = self.base_model
 
         self.model.eval()
 
@@ -211,21 +176,16 @@ class HarmfulTextClassifier:
             return ClassificationResult(False, 0.0, "")
 
         inputs = self.tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            padding=True,
-            max_length=self.max_length,
+            text, return_tensors="pt", truncation=True, padding=True, max_length=self.max_length
         ).to(self.device)
 
         with self._torch.no_grad():
             outputs = self.model(**inputs)
 
         probs = self._torch.nn.functional.softmax(outputs.logits, dim=-1)
-
-        harmful_prob = float(probs[0][1].item())
         predicted_index = int(self._torch.argmax(probs, dim=-1).item())
-
+        
+        # [0: 정상, 1: 유해]
         return ClassificationResult(
             is_harmful=(predicted_index == 1),
             confidence=float(probs[0][predicted_index].item()),
