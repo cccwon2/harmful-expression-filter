@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~38**까지 진행 중입니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~39**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -29,6 +29,7 @@
 - **Task 36**: 로컬 Whisper 폴백 시스템 (⚠️ 제거됨 - 서버 STT만 사용, 자동 재연결)
 - **Task 37**: Ubuntu 서버 FastAPI 배포 가이드 (systemd, Nginx, SSL, 프로덕션 환경 구성)
 - **Task 38**: 코드 리팩토링 및 정리 (서버 의존성 완전 제거, AppVolumeController 중앙화, PID 기반 볼륨 제어 추가)
+- **Task 39**: C# 기반 PID 볼륨 제어 통합 (native-sound-mixer 완전 제거, C# Bridge로 통합)
 
 ### 주요 기술 스택
 
@@ -46,6 +47,9 @@
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
     - **8-bit 양자화 지원**: GPU 사용 시 `bitsandbytes` 설치 후 메모리 사용량 감소 및 추론 속도 2-4배 향상 가능 (CPU에서는 동작하지 않음)
 - **오디오 캡처**: [OnVoice COM Bridge](https://github.com/cccwon2/onvoice-com-bridge) (Windows WASAPI 기반 프로세스별 오디오 캡처)
+- **볼륨 제어**: C# Bridge (NAudio.Wasapi) - Windows Core Audio API 직접 사용
+  - PID 기반 앱별 볼륨 조절
+  - 오디오 세션 목록 조회 (C# Bridge 통합)
 - **백엔드**: FastAPI (Python 3.12, venv312 환경)
 
 ## ⚙️ 환경 변수 설정
@@ -394,7 +398,7 @@ harmful-expression-filter/
 - `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
 - `electron/audio/volumeController.ts` – 볼륨 레벨(1~9) 및 타깃 앱 관리 (AppVolumeController 파사드)
-- `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어 (native-sound-mixer, PID 지원)
+- `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어 (C# Bridge 기반, PID 지원)
 - `electron/tray.ts` – 시스템 트레이 (오디오 모니터링 상태 표시, AudioManager 통합)
 - `electron/windows/createOverlayWindow.ts` – 오버레이 창 생성
 - `electron/state/editMode.ts` – Edit Mode 상태 관리

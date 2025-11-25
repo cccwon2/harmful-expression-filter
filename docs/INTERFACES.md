@@ -480,15 +480,16 @@ export function getStoreSnapshot(): StoreData;
 앱별로 독립적으로 볼륨을 조절하는 모듈입니다. Task 26에서 도입되었습니다.
 
 **주요 기능**:
-- 실행 중인 오디오 세션 조회
-- 특정 앱 볼륨 조절
-- 모든 앱 음소거 (폴백 방식)
-- 모든 앱 음소거 (폴백 방식)
+- 실행 중인 오디오 세션 조회 (C# Bridge 기반)
+- 특정 앱 볼륨 조절 (PID 기반)
+- 앱 이름 기반 볼륨 조절 (내부적으로 PID 조회 후 처리)
 - 자동 복원 (5초 후)
 
 **관련 파일**:
 - `electron/audio/volumeController.ts` - 볼륨 레벨(1~9) 및 타깃 앱 관리 (AppVolumeController 파사드)
-- `electron/audio/appVolumeController.ts` - 앱별 볼륨 제어 (native-sound-mixer, PID 지원)
+- `electron/audio/appVolumeController.ts` - 앱별 볼륨 제어 (C# Bridge 기반, PID 지원)
+- `electron/main/onVoiceBridge.ts` - C# Bridge 통신 (setVolumeByPid, listAudioSessions)
+- `dotnet/OnVoiceComBridge/Startup.cs` - C# 볼륨 제어 구현 (NAudio.Wasapi)
 
 ---
 

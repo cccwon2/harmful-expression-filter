@@ -46,6 +46,7 @@
 36. **[로컬 Whisper 폴백 시스템](./36-local-whisper-fallback.md)** ✅ 완료
 37. **[Ubuntu 서버 FastAPI 배포](./37-ubuntu-fastapi-deployment.md)** ✅ 문서화 완료
 38. **[코드 리팩토링 및 정리](./38-code-refactoring-cleanup.md)** ✅ 완료
+39. **[C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -105,6 +106,10 @@
 38-code-refactoring-cleanup
     ├─ 34-windows-ocr-optimization
     └─ 26-app-volume-migration
+39-csharp-volume-control
+    ├─ 26-app-volume-migration
+    ├─ 29-onvoice-com-bridge-integration
+    └─ 38-code-refactoring-cleanup
 ```
 
 ## 작업 상태
@@ -146,6 +151,7 @@
 | 로컬 Whisper 폴백 시스템 | ✅ 완료      | 100%   | High     |
 | Ubuntu 서버 FastAPI 배포 | ✅ 문서화 완료 | 100%   | Medium   |
 | 코드 리팩토링 및 정리 | ✅ 완료      | 100%   | Medium   |
+| C# 기반 PID 볼륨 제어 통합 | ✅ 완료      | 100%   | High     |
 
 ## 최근 변경 사항 (2025-11-25)
 
@@ -179,3 +185,9 @@
   - AppVolumeController.ts: WMIC 주석 추가, sessionKey 형식 개선, 복원 타이머 세션별 관리
   - VolumeController.ts: AppVolumeController 주입 구조로 변경, PID 기반 볼륨 제어 추가
   - 디바이스/세션 접근이 AppVolumeController로 중앙화되어 중복 제거 및 유지보수성 향상
+- **Task 39: C# 기반 PID 볼륨 제어 통합 완료**
+  - native-sound-mixer 완전 제거: 모든 볼륨 제어 기능을 C# Bridge로 마이그레이션
+  - C# Bridge에 `listSessions` 커맨드 추가: 오디오 세션 목록 조회 기능 통합
+  - AppVolumeController 리팩토링: C# Bridge 기반으로 전환, 세션 캐싱 및 주기적 갱신
+  - 아키텍처 통일: 모든 Windows API 호출이 C# Bridge로 통합되어 유지보수성 향상
+  - 빌드/호환성 개선: 네이티브 모듈 빌드 문제 해결, 의존성 단순화
