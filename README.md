@@ -102,7 +102,9 @@ USE_QUANTIZATION=false
 
 ## 🚀 빠른 시작
 
-### Python 의존성 (requirements.txt)
+### Python 의존성
+
+#### CPU 환경 (`requirements.txt`)
 
 `server/requirements.txt`는 CPU 환경에 최적화되어 있습니다:
 
@@ -113,6 +115,16 @@ USE_QUANTIZATION=false
 - **PyTorch**: CPU 버전 권장 (`torch`, `torchaudio`)
   - `torchvision`: KoElectra와 무관하므로 제거됨
 - **CPU 추론 가속 (선택)**: `optimum`, `onnxruntime` (추천)
+
+#### GPU 환경 (`requirements-gpu.txt`)
+
+`server/requirements-gpu.txt`는 GPU 환경(Ubuntu 24 서버 권장)에 최적화되어 있습니다:
+
+- **FastAPI & Web**: FastAPI, uvicorn, pydantic, websockets
+- **AI Models**: transformers, peft, accelerate, bitsandbytes
+  - `bitsandbytes>=0.46.1`: CUDA 13 드라이버 호환 릴리스 기준
+  - `peft>=0.7.0`: LoRA 어댑터 사용 시 필요
+- **PyTorch**: CUDA 버전 별도 설치 필요 (아래 GPU 사용 섹션 참조)
 
 ### CPU 사용 (기본)
 
@@ -152,7 +164,7 @@ uvicorn main:app --reload
 #### 1. NVIDIA GPU 확인
 
 ```bash
-# GPU 확인 (Windows)
+# GPU 확인 (Windows/Linux 공통)
 nvidia-smi
 ```
 
@@ -164,7 +176,7 @@ nvidia-smi
 2. 환경 선택 (OS, Python, CUDA 버전)
 3. 생성된 명령어 실행
 
-**방법 2: 직접 설치 (CUDA 12.1 예시)**
+**방법 2: 직접 설치 (CUDA 12.1 예시 - Windows/Linux 공통)**
 
 ```bash
 # venv312 활성화 후
@@ -178,16 +190,42 @@ pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
+**방법 4: CUDA 13 드라이버 사용 시 (Ubuntu 24 서버 권장)**
+
+```bash
+# venv312 활성화 후
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+```
+
 #### 3. 나머지 패키지 설치
+
+**Windows / Linux (CPU 또는 GPU 기본 설치)**
 
 ```bash
 # PyTorch 설치 후 나머지 패키지 설치
 pip install -r requirements.txt
 ```
 
+**Ubuntu 24 서버 (GPU 전용 - requirements-gpu.txt 사용)**
+
+```bash
+# venv312 활성화 후
+cd server
+
+# 1. CUDA 13 드라이버용 PyTorch 설치
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+
+# 2. GPU 전용 requirements 파일로 나머지 패키지 설치
+pip install -r requirements-gpu.txt
+```
+
 **참고:**
 
-- GPU 사용 시 `bitsandbytes`를 별도로 설치하면 8-bit 양자화 사용 가능 (CPU에서는 동작하지 않음)
+- `requirements-gpu.txt`는 GPU 환경에 최적화된 패키지 목록입니다:
+  - `bitsandbytes>=0.46.1`: CUDA 13 드라이버 호환 릴리스 기준
+  - `peft>=0.7.0`: LoRA 어댑터 사용 시 필요
+  - `transformers>=4.38.0`: Hugging Face 모델 지원
+- GPU 사용 시 `bitsandbytes`를 설치하면 8-bit 양자화 사용 가능 (CPU에서는 동작하지 않음)
 - `peft`는 LoRA 어댑터 사용 시 필요 (Base 모델만 사용하면 불필요)
 
 #### 4. GPU 인식 확인
@@ -206,6 +244,70 @@ pip install -r requirements.txt
 - CUDA Toolkit을 별도로 설치할 필요는 없습니다 (PyTorch가 자체 CUDA 런타임 포함)
 - NVIDIA 드라이버는 최신 버전으로 업데이트 권장
 - GPU가 없으면 자동으로 CPU로 동작합니다
+- **Ubuntu 24 서버**: CUDA 13 드라이버 사용 시 `cu130` 인덱스 사용 권장
+
+### Ubuntu 24 서버 GPU 설정 (프로덕션 환경)
+
+Ubuntu 24 서버에서 GPU를 사용하는 경우 다음 단계를 따르세요:
+
+#### 1. CUDA 관련 확인 및 설치
+
+```bash
+# NVIDIA GPU 확인
+nvidia-smi
+
+# CUDA 드라이버 버전 확인 (CUDA 13 이상 권장)
+nvidia-smi | grep "CUDA Version"
+```
+
+#### 2. Python 가상환경 설정
+
+```bash
+cd /opt/harmful-expression-filter/server
+
+# Python 3.12 가상환경 생성 (없는 경우)
+python3.12 -m venv venv312
+
+# 가상환경 활성화
+source venv312/bin/activate
+
+# pip 업그레이드
+pip install --upgrade pip setuptools wheel
+```
+
+#### 3. CUDA 13 드라이버용 PyTorch 설치
+
+```bash
+# venv312 활성화 후
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+```
+
+#### 4. GPU 전용 패키지 설치
+
+```bash
+# requirements-gpu.txt 사용 (bitsandbytes, peft 포함)
+pip install -r requirements-gpu.txt
+```
+
+#### 5. GPU 인식 확인
+
+```bash
+# Python에서 GPU 확인
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}')"
+```
+
+서버 실행 시 로그에서 다음 메시지 확인:
+
+```
+🚀 Device selected: cuda
+✅ 8-bit 양자화 활성화 (성능 개선: 메모리 사용량 감소, 추론 속도 향상)
+```
+
+**참고:**
+
+- `requirements-gpu.txt`는 CUDA 13 드라이버 호환을 기준으로 작성되었습니다
+- CUDA 12.x 드라이버 사용 시 `cu121` 또는 `cu124` 인덱스 사용
+- 자세한 배포 가이드는 [docs/37-ubuntu-fastapi-deployment.md](./docs/37-ubuntu-fastapi-deployment.md) 참조
 
 ### Electron 앱 (터미널 2)
 
