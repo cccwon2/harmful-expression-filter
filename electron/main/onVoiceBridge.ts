@@ -5,9 +5,58 @@ import path from "node:path";
 import { app } from "electron";
 import { EventEmitter } from "events";
 import axios, { AxiosError } from "axios";
+import * as dotenv from "dotenv";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const edge = require("electron-edge-js");
+
+// .env 파일 로드 (이 모듈이 import될 때 실행)
+// 여러 경로를 시도하여 .env 파일 찾기
+let envLoaded = false;
+function ensureEnvLoaded() {
+  if (envLoaded) return;
+  
+  try {
+    // 시도할 경로 목록
+    const possiblePaths: string[] = [];
+    
+    // 1. 개발 모드: 프로젝트 루트 (__dirname 기준)
+    possiblePaths.push(path.join(__dirname, "../../.env"));
+    possiblePaths.push(path.join(__dirname, "../../../.env"));
+    
+    // 2. 프로덕션 모드: app.getAppPath() (app이 초기화된 경우)
+    if (app && app.isPackaged) {
+      try {
+        possiblePaths.push(path.join(app.getAppPath(), ".env"));
+      } catch (e) {
+        // app이 아직 초기화되지 않았을 수 있음
+      }
+    }
+    
+    // 3. 현재 작업 디렉토리
+    possiblePaths.push(path.join(process.cwd(), ".env"));
+    
+    let loaded = false;
+    for (const envPath of possiblePaths) {
+      const envResult = dotenv.config({ path: envPath });
+      if (!envResult.error && envResult.parsed) {
+        console.log(`[OnVoiceBridge] ✅ .env 파일 로드 성공: ${envPath}`);
+        console.log(`[OnVoiceBridge] .env 파일 내용:`, Object.keys(envResult.parsed));
+        loaded = true;
+        break;
+      }
+    }
+    
+    if (!loaded) {
+      console.warn(`[OnVoiceBridge] ⚠️ .env 파일을 찾을 수 없습니다. 시도한 경로:`, possiblePaths);
+    }
+    
+    envLoaded = true;
+  } catch (error) {
+    console.warn(`[OnVoiceBridge] .env 파일 로드 중 오류:`, error);
+    envLoaded = true; // 오류가 발생해도 다시 시도하지 않도록
+  }
+}
 
 type EdgeCallback = (error: Error | null, result?: any) => void;
 type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
@@ -19,7 +68,19 @@ const BRIDGE_TIMEOUT_MS = 5000;
 // ⚠️ 중요: .env 파일이 로드되기 전에 이 모듈이 import될 수 있으므로,
 // SERVER_URL은 함수 내부에서 지연 평가(lazy evaluation)하도록 변경
 function getServerUrl(): string {
-  return process.env.SERVER_URL || "http://127.0.0.1:8000";
+  // .env 파일이 아직 로드되지 않았다면 로드 시도
+  if (!envLoaded) {
+    ensureEnvLoaded();
+  }
+  
+  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:8000";
+  
+  // 디버깅: 환경 변수 상태 확인 (한 번만 출력)
+  if (!process.env.SERVER_URL) {
+    console.warn(`[OnVoiceBridge] ⚠️ SERVER_URL 환경 변수가 설정되지 않았습니다. 기본값 사용: ${serverUrl}`);
+  }
+  
+  return serverUrl;
 }
 const SERVER_REQUEST_TIMEOUT = 5000;
 
@@ -145,12 +206,6 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
 
   try {
     const serverUrl = getServerUrl();
-    // 디버깅: 서버 URL 확인
-    if (!process.env.SERVER_URL) {
-      console.warn(`[OnVoiceBridge] ⚠️ SERVER_URL 환경 변수가 설정되지 않았습니다. 기본값 사용: ${serverUrl}`);
-    } else {
-      console.log(`[OnVoiceBridge] 서버 URL: ${serverUrl}`);
-    }
     const response = await axios.post<{
       has_violation: boolean;
       ai_analysis: {
