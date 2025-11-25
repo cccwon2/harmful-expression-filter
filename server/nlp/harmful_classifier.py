@@ -1,15 +1,3 @@
-요청하신 대로 \*\*기존의 견고한 로직(경로 검증, 양자화, KoElectra 지원)\*\*에 \*\*새로 주신 코드의 핵심 기능(Threshold 기반 예측 로직)\*\*을 통합했습니다.
-
-이 코드를 `server/nlp/harmful_classifier.py` 파일에 덮어쓰시면 됩니다.
-
-### 📝 주요 변경 사항
-
-1.  **`__init__`에 `threshold` 파라미터 추가**: 기본값을 `0.22`로 설정했습니다.
-2.  **`predict` 메서드 로직 교체**: 단순 `argmax`(가장 높은 확률 선택) 대신, **유해 확률(Label 1)이 Threshold를 넘는지** 확인하는 로직으로 변경했습니다.
-
-### 💻 전체 통합 코드 (`server/nlp/harmful_classifier.py`)
-
-```python
 from __future__ import annotations
 
 import logging
