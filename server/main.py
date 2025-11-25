@@ -43,28 +43,9 @@ if not DEEPGRAM_API_KEY:
     LOGGER.error("❌ DEEPGRAM_API_KEY가 설정되지 않았습니다! .env 파일을 확인하세요.")
 
 # ============== 전역 변수 ==============
-BAD_WORDS: List[str] = []
+# 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
 classifier: Optional[HarmfulTextClassifier] = None
 inference_executor: Optional[ThreadPoolExecutor] = None
-
-
-# ============== 유틸리티 함수 ==============
-def load_keywords() -> None:
-    """키워드 파일 로드"""
-    global BAD_WORDS
-    keywords_path = os.path.join(os.path.dirname(__file__), "data", "bad_words.json")
-    default_keywords = ["새끼", "시발", "씨발", "병신", "존나", "미친", "니미", "좆"]
-
-    if os.path.exists(keywords_path):
-        try:
-            with open(keywords_path, "r", encoding="utf-8") as file:
-                data = json.load(file)
-                BAD_WORDS = data.get("keywords", default_keywords)
-                LOGGER.info("[Keywords] ✅ %d개 키워드 로드 완료", len(BAD_WORDS))
-        except Exception:
-            BAD_WORDS = default_keywords
-    else:
-        BAD_WORDS = default_keywords
 
 
 # ============== Deepgram WebSocket 핸들러 클래스 ==============
@@ -73,10 +54,10 @@ class DeepgramWebSocketManager:
     FastAPI WebSocket(Electron)과 Deepgram STT WebSocket(v1 / nova-2, ko)을 중계하는 클래스
     Task 35: 실시간 스트리밍 및 중간 결과 처리 지원
     """
-    def __init__(self, websocket: WebSocket, api_key: str, keywords: List[str], classifier_instance: Optional[HarmfulTextClassifier]):
+    def __init__(self, websocket: WebSocket, api_key: str, classifier_instance: Optional[HarmfulTextClassifier]):
         self.websocket = websocket
         self.api_key = api_key
-        self.keywords = keywords
+        # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
         self.classifier = classifier_instance
         self.dg_ws = None
         self.receive_task: Optional[asyncio.Task] = None
@@ -447,7 +428,8 @@ async def audio_stream(websocket: WebSocket):
         await websocket.close(code=1008, reason="API Key missing")
         return
 
-    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, BAD_WORDS, classifier)
+    # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
+    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, classifier)
     success = await dg_manager.start()
 
     if not success:
@@ -506,7 +488,8 @@ async def health_check():
 
 @app.get("/keywords")
 async def get_keywords():
-    return {"keywords": BAD_WORDS}
+    # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
+    return {"keywords": []}
 
 
 class AnalyzeRequest(BaseModel):
