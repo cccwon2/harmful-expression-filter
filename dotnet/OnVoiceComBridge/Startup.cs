@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Drawing; 
 using System.Drawing.Imaging;
 using System.IO;
+using System.Diagnostics;
 
 // Windows API (WinRT)
 using Windows.Graphics.Imaging;
@@ -259,6 +260,9 @@ namespace OnVoiceComBridge
                 case "setVolume":
                     return SetApplicationVolume(input);
 
+                case "listSessions":
+                    return ListAudioSessions();
+
                 default:
                     return new { ok = false, error = $"Unknown command: {command}" };
             }
@@ -489,6 +493,81 @@ namespace OnVoiceComBridge
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[OnVoiceComBridge] ❌ 볼륨 조절 오류: {ex.Message}");
+                return new { ok = false, error = ex.Message };
+            }
+        }
+
+        private static object ListAudioSessions()
+        {
+            try
+            {
+                var deviceEnumerator = new MMDeviceEnumerator();
+                var device = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                var sessions = device.AudioSessionManager.Sessions;
+                var list = new List<object>();
+
+                for (int i = 0; i < sessions.Count; i++)
+                {
+                    var session = sessions[i];
+                    uint sessionPid = session.GetProcessID;
+                    string appName = string.Empty;
+                    string executablePath = string.Empty;
+                    string displayName = session.DisplayName ?? string.Empty;
+
+                    if (sessionPid > 0)
+                    {
+                        try
+                        {
+                            using var process = Process.GetProcessById((int)sessionPid);
+                            appName = $"{process.ProcessName}.exe";
+                            try
+                            {
+                                executablePath = process.MainModule?.FileName ?? string.Empty;
+                            }
+                            catch { }
+
+                            if (string.IsNullOrWhiteSpace(displayName))
+                            {
+                                displayName = process.MainWindowTitle;
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(displayName))
+                    {
+                        displayName = appName;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(displayName))
+                    {
+                        displayName = session.GetSessionInstanceIdentifier ?? $"PID {sessionPid}";
+                    }
+
+                    float volume = 0f;
+                    try
+                    {
+                        volume = session.SimpleAudioVolume?.Volume ?? 0f;
+                    }
+                    catch { }
+
+                    list.Add(new
+                    {
+                        id = session.GetSessionIdentifier,
+                        pid = (int)sessionPid,
+                        name = displayName ?? string.Empty,
+                        appName = appName ?? string.Empty,
+                        volume,
+                        state = (int)session.State,
+                        executablePath = executablePath
+                    });
+                }
+
+                return new { ok = true, sessions = list };
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] ❌ 세션 나열 오류: {ex.Message}");
                 return new { ok = false, error = ex.Message };
             }
         }

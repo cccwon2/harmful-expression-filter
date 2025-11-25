@@ -24,6 +24,35 @@
           }
         }
       },
+      "NAudio.Core/2.2.1": {
+        "type": "package",
+        "compile": {
+          "lib/netstandard2.0/NAudio.Core.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/NAudio.Core.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "NAudio.Wasapi/2.2.1": {
+        "type": "package",
+        "dependencies": {
+          "NAudio.Core": "2.2.1"
+        },
+        "compile": {
+          "lib/netstandard2.0/NAudio.Wasapi.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/NAudio.Wasapi.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "System.Drawing.Common/7.0.0": {
         "type": "package",
         "dependencies": {
@@ -127,6 +156,35 @@
         },
         "build": {
           "buildTransitive/net6.0/_._": {}
+        }
+      },
+      "NAudio.Core/2.2.1": {
+        "type": "package",
+        "compile": {
+          "lib/netstandard2.0/NAudio.Core.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/NAudio.Core.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "NAudio.Wasapi/2.2.1": {
+        "type": "package",
+        "dependencies": {
+          "NAudio.Core": "2.2.1"
+        },
+        "compile": {
+          "lib/netstandard2.0/NAudio.Wasapi.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/NAudio.Wasapi.dll": {
+            "related": ".xml"
+          }
         }
       },
       "System.Drawing.Common/7.0.0": {
@@ -236,6 +294,37 @@
         "runtimes/win/lib/net7.0/Microsoft.Win32.SystemEvents.dll",
         "runtimes/win/lib/net7.0/Microsoft.Win32.SystemEvents.xml",
         "useSharedDesignerContext.txt"
+      ]
+    },
+    "NAudio.Core/2.2.1": {
+      "sha512": "GgkdP6K/7FqXFo7uHvoqGZTJvW4z8g2IffhOO4JHaLzKCdDOUEzVKtveoZkCuUX8eV2HAINqi7VFqlFndrnz/g==",
+      "type": "package",
+      "path": "naudio.core/2.2.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/NAudio.Core.dll",
+        "lib/netstandard2.0/NAudio.Core.xml",
+        "naudio-icon.png",
+        "naudio.core.2.2.1.nupkg.sha512",
+        "naudio.core.nuspec"
+      ]
+    },
+    "NAudio.Wasapi/2.2.1": {
+      "sha512": "lFfXoqacZZe0WqNChJgGYI+XV/n/61LzPHT3C1CJp4khoxeo2sziyX5wzNYWeCMNbsWxFvT3b3iXeY1UYjBhZw==",
+      "type": "package",
+      "path": "naudio.wasapi/2.2.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/NAudio.Wasapi.dll",
+        "lib/netstandard2.0/NAudio.Wasapi.xml",
+        "lib/uap10.0.18362/NAudio.Wasapi.dll",
+        "lib/uap10.0.18362/NAudio.Wasapi.pri",
+        "lib/uap10.0.18362/NAudio.Wasapi.xml",
+        "naudio-icon.png",
+        "naudio.wasapi.2.2.1.nupkg.sha512",
+        "naudio.wasapi.nuspec"
       ]
     },
     "System.Drawing.Common/7.0.0": {
@@ -384,24 +473,25 @@
   },
   "projectFileDependencyGroups": {
     "net6.0-windows10.0.19041": [
+      "NAudio.Wasapi >= 2.2.1",
       "System.Drawing.Common >= 7.0.0",
       "System.Text.Json >= 6.0.0"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\Won Kim\\.nuget\\packages\\": {}
+    "C:\\Users\\김원\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
+      "projectUniqueName": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
       "projectName": "OnVoiceComBridge",
-      "projectPath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
-      "packagesPath": "C:\\Users\\Won Kim\\.nuget\\packages\\",
-      "outputPath": "C:\\github\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\obj\\",
+      "projectPath": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\OnVoiceComBridge.csproj",
+      "packagesPath": "C:\\Users\\김원\\.nuget\\packages\\",
+      "outputPath": "C:\\Dev\\harmful-expression-filter\\dotnet\\OnVoiceComBridge\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\Won Kim\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "C:\\Users\\김원\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net6.0-windows10.0.19041.0"
@@ -419,18 +509,16 @@
         "warnAsError": [
           "NU1605"
         ]
-      },
-      "restoreAuditProperties": {
-        "enableAudit": "true",
-        "auditLevel": "low",
-        "auditMode": "direct"
-      },
-      "SdkAnalysisLevel": "10.0.100"
+      }
     },
     "frameworks": {
       "net6.0-windows10.0.19041": {
         "targetAlias": "net6.0-windows10.0.19041.0",
         "dependencies": {
+          "NAudio.Wasapi": {
+            "target": "Package",
+            "version": "[2.2.1, )"
+          },
           "System.Drawing.Common": {
             "target": "Package",
             "version": "[7.0.0, )"
@@ -454,18 +542,18 @@
         "downloadDependencies": [
           {
             "name": "Microsoft.Windows.SDK.NET.Ref",
-            "version": "[10.0.19041.55, 10.0.19041.55]"
+            "version": "[10.0.19041.52, 10.0.19041.52]"
           }
         ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           },
-          "Microsoft.Windows.SDK.NET.Ref.Windows": {
+          "Microsoft.Windows.SDK.NET.Ref": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.100\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\6.0.428\\RuntimeIdentifierGraph.json"
       }
     },
     "runtimes": {
@@ -473,18 +561,5 @@
         "#import": []
       }
     }
-  },
-  "logs": [
-    {
-      "code": "NU1903",
-      "level": "Warning",
-      "warningLevel": 1,
-      "message": "'System.Text.Json' 6.0.0 패키지에 알려진 높음 심각도 취약성인 https://github.com/advisories/GHSA-8g4q-xg66-9fp4이(가) 있습니다.",
-      "libraryId": "System.Text.Json",
-      "targetGraphs": [
-        "net6.0-windows10.0.19041",
-        "net6.0-windows10.0.19041/win-x64"
-      ]
-    }
-  ]
+  }
 }

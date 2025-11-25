@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { ROI, SelectionState, OverlayMode, OverlayState } from "./roiTypes";
+import { ROI, SelectionState, OverlayMode } from "./roiTypes";
 
 export const OverlayApp: React.FC = () => {
   // --- State Definitions ---
@@ -207,7 +207,7 @@ export const OverlayApp: React.FC = () => {
           window.api?.roi?.sendCancelSelection();
           return;
         }
-        window.api?.overlay?.stopMonitoring?.().catch(console.error);
+        Promise.resolve(window.api?.overlay?.stopMonitoring?.()).catch(console.error);
         if (blindTimerRef.current) clearTimeout(blindTimerRef.current);
         setIsMonitoring(false);
         setHarmful(false);

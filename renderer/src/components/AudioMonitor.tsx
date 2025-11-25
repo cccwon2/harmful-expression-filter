@@ -5,7 +5,7 @@
  * OnVoice COM 브리지를 통한 프로세스별 오디오 캡처도 지원합니다.
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface AudioStatus {
   isMonitoring: boolean;

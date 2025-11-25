@@ -37,3 +37,5 @@ C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-win
 C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\win-x64\OnVoiceComBridge.pdb
 C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\win-x64\OnVoiceComBridge.genruntimeconfig.cache
 C:\github\harmful-expression-filter\dotnet\OnVoiceComBridge\obj\Debug\net6.0-windows10.0.19041.0\win-x64\ref\OnVoiceComBridge.dll
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net6.0-windows10.0.19041.0\win-x64\NAudio.Core.dll
+C:\Dev\harmful-expression-filter\dotnet\OnVoiceComBridge\bin\Debug\net6.0-windows10.0.19041.0\win-x64\NAudio.Wasapi.dll

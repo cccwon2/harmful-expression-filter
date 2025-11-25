@@ -114,6 +114,16 @@ export interface OCRResult {
   error?: string;
 }
 
+export interface BridgeAudioSession {
+  id: string;
+  pid: number;
+  name: string;
+  appName: string;
+  volume: number;
+  state: number;
+  executablePath?: string;
+}
+
 export interface OnVoiceBridge {
   events: EventEmitter;
   init(onAudioData: (pcm: Buffer, timestamp?: number) => void): Promise<void>;
@@ -286,6 +296,18 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
     console.error(`[OnVoiceBridge] 볼륨 조절 실패 (PID: ${pid})`, error);
     return false;
   }
+}
+
+export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
+  try {
+    const result = await callBridge({ command: 'listSessions' });
+    if (result && Array.isArray(result.sessions)) {
+      return result.sessions as BridgeAudioSession[];
+    }
+  } catch (error) {
+    console.error("[OnVoiceBridge] 오디오 세션 조회 실패", error);
+  }
+  return [];
 }
 
 export const onVoiceBridge: OnVoiceBridge = {
