@@ -16,7 +16,11 @@ type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 const BRIDGE_TIMEOUT_MS = 5000;
 
 // 서버 설정
-const SERVER_URL = process.env.SERVER_URL || "http://127.0.0.1:8000";
+// ⚠️ 중요: .env 파일이 로드되기 전에 이 모듈이 import될 수 있으므로,
+// SERVER_URL은 함수 내부에서 지연 평가(lazy evaluation)하도록 변경
+function getServerUrl(): string {
+  return process.env.SERVER_URL || "http://127.0.0.1:8000";
+}
 const SERVER_REQUEST_TIMEOUT = 5000;
 
 // 🔇 키워드 리스트 주석처리 (kanana-lora-v1 모델만 사용)
@@ -140,6 +144,13 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
   }
 
   try {
+    const serverUrl = getServerUrl();
+    // 디버깅: 서버 URL 확인
+    if (!process.env.SERVER_URL) {
+      console.warn(`[OnVoiceBridge] ⚠️ SERVER_URL 환경 변수가 설정되지 않았습니다. 기본값 사용: ${serverUrl}`);
+    } else {
+      console.log(`[OnVoiceBridge] 서버 URL: ${serverUrl}`);
+    }
     const response = await axios.post<{
       has_violation: boolean;
       ai_analysis: {
@@ -147,7 +158,7 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
         confidence: number;
       } | null;
     }>(
-      `${SERVER_URL}/analyze`,
+      `${serverUrl}/analyze`,
       { text: text.trim() },
       {
         timeout: SERVER_REQUEST_TIMEOUT,
