@@ -511,29 +511,58 @@ class AnalyzeRequest(BaseModel):
 
 @app.post("/analyze")
 async def analyze_text(request: AnalyzeRequest):
+    # 요청 로그
+    text_preview = request.text[:50] + "..." if len(request.text) > 50 else request.text
+    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"", len(request.text), text_preview)
+    
     is_harmful_ai = False
     ai_confidence = 0.0
     
-    if classifier and inference_executor:
+    if not classifier:
+        LOGGER.warning("[Analyze] ⚠️ Classifier가 초기화되지 않았습니다. 분석을 건너뜁니다.")
+    elif not inference_executor:
+        LOGGER.warning("[Analyze] ⚠️ Inference executor가 초기화되지 않았습니다. 분석을 건너뜁니다.")
+    else:
         try:
+            LOGGER.info("[Analyze] 🔍 AI 모델 분석 시작...")
+            start_time = time.time()
+            
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 inference_executor,
                 classifier.predict,
                 request.text
             )
+            
+            elapsed_time = time.time() - start_time
             is_harmful_ai = result.is_harmful
             ai_confidence = result.confidence
+            
+            LOGGER.info(
+                "[Analyze] ✅ 분석 완료 (%.3f초): is_harmful=%s, confidence=%.4f (%.1f%%)",
+                elapsed_time,
+                is_harmful_ai,
+                ai_confidence,
+                ai_confidence * 100
+            )
         except Exception as e:
-            LOGGER.error("AI Analysis failed: %s", e)
+            LOGGER.error("[Analyze] ❌ AI 분석 실패: %s", e, exc_info=True)
 
-    return {
+    response = {
         "has_violation": is_harmful_ai,
         "ai_analysis": {
             "is_harmful": is_harmful_ai,
             "confidence": ai_confidence
         } if classifier else None
     }
+    
+    LOGGER.info(
+        "[Analyze] 📤 응답 반환: has_violation=%s, ai_analysis=%s",
+        response["has_violation"],
+        "있음" if response["ai_analysis"] else "없음"
+    )
+    
+    return response
 
 
 if __name__ == "__main__":
