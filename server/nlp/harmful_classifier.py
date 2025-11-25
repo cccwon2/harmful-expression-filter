@@ -206,4 +206,3 @@ class HarmfulTextClassifier:
             confidence=prob_harm,
             text=text,
         )
-```
