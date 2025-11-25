@@ -15,6 +15,9 @@ using Windows.Storage.Streams;
 using Windows.Media.Ocr; 
 using Windows.Globalization;
 
+// NAudio for volume control
+using NAudio.CoreAudioApi;
+
 namespace OnVoiceComBridge
 {
     [SupportedOSPlatform("windows10.0.19041.0")]
@@ -253,6 +256,9 @@ namespace OnVoiceComBridge
                         return new { ok = false, error = ex.Message };
                     }
 
+                case "setVolume":
+                    return SetApplicationVolume(input);
+
                 default:
                     return new { ok = false, error = $"Unknown command: {command}" };
             }
@@ -444,6 +450,47 @@ namespace OnVoiceComBridge
                 }
             }
             return result;
+        }
+
+        private static object SetApplicationVolume(dynamic input)
+        {
+            try
+            {
+                int targetPid = (int)input.pid;
+                float volume = (float)input.volume; // 0.0 ~ 1.0
+                
+                var deviceEnumerator = new MMDeviceEnumerator();
+                var device = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                
+                var sessions = device.AudioSessionManager.Sessions;
+                bool found = false;
+                
+                for (int i = 0; i < sessions.Count; i++)
+                {
+                    var session = sessions[i];
+                    uint sessionPid = session.GetProcessID;
+                    if ((int)sessionPid == targetPid)
+                    {
+                        session.SimpleAudioVolume.Volume = volume;
+                        found = true;
+                        Console.WriteLine($"[OnVoiceComBridge] ✅ 볼륨 조절 성공: PID={targetPid}, Volume={volume:F2}");
+                        // 첫 번째 일치하는 세션만 조절 (일반적으로 하나의 프로세스는 하나의 세션을 가짐)
+                        break;
+                    }
+                }
+                
+                if (!found)
+                {
+                    Console.WriteLine($"[OnVoiceComBridge] ⚠️ PID {targetPid}에 해당하는 오디오 세션을 찾을 수 없습니다.");
+                }
+                
+                return new { ok = found, pid = targetPid, volume = volume };
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] ❌ 볼륨 조절 오류: {ex.Message}");
+                return new { ok = false, error = ex.Message };
+            }
         }
     }
 

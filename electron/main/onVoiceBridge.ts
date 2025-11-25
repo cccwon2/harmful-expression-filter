@@ -266,6 +266,28 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
   }
 }
 
+/**
+ * 특정 PID의 애플리케이션 볼륨 조절 (C# Bridge)
+ * @param pid 프로세스 ID
+ * @param volume 0.0 ~ 1.0 사이의 실수
+ * @returns 성공 여부
+ */
+export async function setVolumeByPid(pid: number, volume: number): Promise<boolean> {
+  const payload = {
+    command: 'setVolume',
+    pid: pid,
+    volume: volume
+  };
+  
+  try {
+    const result = await callBridge(payload);
+    return result && result.ok === true;
+  } catch (error) {
+    console.error(`[OnVoiceBridge] 볼륨 조절 실패 (PID: ${pid})`, error);
+    return false;
+  }
+}
+
 export const onVoiceBridge: OnVoiceBridge = {
   events,
 

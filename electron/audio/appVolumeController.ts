@@ -1,12 +1,18 @@
 /**
  * T26: 앱별 볼륨 제어 모듈
  * 
- * native-sound-mixer를 사용하여 앱별로 독립적으로 볼륨을 조절합니다.
+ * C# Bridge (OnVoiceComBridge)를 사용하여 앱별로 독립적으로 볼륨을 조절합니다.
+ * Task 39: native-sound-mixer에서 C# Bridge로 마이그레이션
+ * 
+ * ⚠️ 주의: getAudioSessions()와 setAppVolume()은 아직 native-sound-mixer를 사용합니다.
+ * 향후 C# Bridge로 마이그레이션 예정입니다.
  */
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+// TODO: Task 39 후속 작업 - getAudioSessions와 setAppVolume을 C# Bridge로 마이그레이션
 import soundMixer, { Device, DeviceType, AudioSession } from 'native-sound-mixer';
+import { setVolumeByPid as setVolumeByPidBridge } from '../main/onVoiceBridge';
 
 const execAsync = promisify(exec);
 
@@ -138,7 +144,7 @@ export class AppVolumeController {
   }
   
   /**
-   * 특정 PID 앱의 볼륨 조절
+   * 특정 PID 앱의 볼륨 조절 (C# Bridge 사용)
    * @param pid - 프로세스 ID
    * @param volumeLevel - 0~10 (0 = 음소거, 10 = 100%)
    * @param restoreDelayMs - 복원 대기 시간 (밀리초)
@@ -148,17 +154,61 @@ export class AppVolumeController {
     volumeLevel: number, 
     restoreDelayMs: number = this.DEFAULT_RESTORE_DELAY_MS
   ): Promise<boolean> {
-    const processPath = await this.getProcessPathByPid(pid);
+    // level (0~10) -> volume (0.0 ~ 1.0)
+    const normalizedVolume = Math.max(0, Math.min(1, volumeLevel / 10));
     
-    if (!processPath) {
-      console.warn(`[AppVolumeController] ⚠️ Could not resolve PID ${pid} to executable path`);
-      return false;
+    console.log(`[AppVolumeController] 🎯 PID ${pid} 볼륨 조절: ${volumeLevel}/10 → ${normalizedVolume.toFixed(2)}`);
+    
+    const success = await setVolumeByPidBridge(pid, normalizedVolume);
+    
+    if (success) {
+      // 원래 볼륨 저장 및 복원 타이머 설정
+      // PID를 키로 사용하여 원래 볼륨 저장
+      const pidKey = `pid:${pid}`;
+      
+      // 현재 볼륨을 가져오기 위해 세션 정보 확인 (선택적)
+      // C# Bridge에서 현재 볼륨을 반환하지 않으므로, 원래 볼륨은 나중에 복원 시 기본값(1.0)으로 설정
+      if (!this.originalVolumes.has(pidKey)) {
+        // 기본값으로 1.0 (100%) 저장 (실제로는 C# Bridge에서 현재 볼륨을 가져올 수 없음)
+        this.originalVolumes.set(pidKey, 1.0);
+        console.log(`[AppVolumeController] 💾 Saved original volume for PID ${pid}: 100% (기본값)`);
+      }
+      
+      // 기존 복원 타이머 취소
+      const existingTimer = this.restoreTimers.get(pidKey);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.restoreTimers.delete(pidKey);
+      }
+      
+      // 자동 복원 타이머 설정
+      if (restoreDelayMs > 0) {
+        const timer = setTimeout(() => {
+          void this.restoreVolumeByPid(pid);
+          this.restoreTimers.delete(pidKey);
+        }, restoreDelayMs);
+        this.restoreTimers.set(pidKey, timer);
+      }
     }
     
-    console.log(`[AppVolumeController] 🎯 PID ${pid} resolved to: ${processPath}`);
+    return success;
+  }
+  
+  /**
+   * PID로 볼륨 복원
+   */
+  private async restoreVolumeByPid(pid: number): Promise<void> {
+    const pidKey = `pid:${pid}`;
+    const originalVolume = this.originalVolumes.get(pidKey);
     
-    // 경로로 볼륨 조절
-    return this.setAppVolume(processPath, volumeLevel, restoreDelayMs);
+    if (originalVolume !== undefined) {
+      // 원래 볼륨으로 복원 (0.0~1.0 스케일)
+      const success = await setVolumeByPidBridge(pid, originalVolume);
+      if (success) {
+        this.originalVolumes.delete(pidKey);
+        console.log(`[AppVolumeController] ✅ Restored volume for PID ${pid}: ${Math.round(originalVolume * 100)}%`);
+      }
+    }
   }
   
   /**
