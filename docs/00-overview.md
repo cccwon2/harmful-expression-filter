@@ -147,7 +147,7 @@
 | Ubuntu 서버 FastAPI 배포 | ✅ 문서화 완료 | 100%   | Medium   |
 | 코드 리팩토링 및 정리 | ✅ 완료      | 100%   | Medium   |
 
-## 최근 변경 사항 (2025-11-22)
+## 최근 변경 사항 (2025-11-25)
 
 - **Windows SDK OCR 적용**: PaddleOCR 제거, Windows.Media.Ocr API 사용
   - Electron에서 C# COM Bridge를 통해 직접 처리
@@ -177,5 +177,5 @@
 - **Task 38: 코드 리팩토링 및 정리 완료**
   - Startup.cs: 불필요한 using 제거로 서버 의존성 완전 제거
   - AppVolumeController.ts: WMIC 주석 추가, sessionKey 형식 개선, 복원 타이머 세션별 관리
-  - VolumeController.ts: AppVolumeController 주입 구조로 변경, 생성자 버그 수정, 볼륨 스케일링 정리
+  - VolumeController.ts: AppVolumeController 주입 구조로 변경, PID 기반 볼륨 제어 추가
   - 디바이스/세션 접근이 AppVolumeController로 중앙화되어 중복 제거 및 유지보수성 향상

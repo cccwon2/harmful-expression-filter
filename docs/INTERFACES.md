@@ -483,7 +483,12 @@ export function getStoreSnapshot(): StoreData;
 - 실행 중인 오디오 세션 조회
 - 특정 앱 볼륨 조절
 - 모든 앱 음소거 (폴백 방식)
-- 자동 복원 (3초 후)
+- 모든 앱 음소거 (폴백 방식)
+- 자동 복원 (5초 후)
+
+**관련 파일**:
+- `electron/audio/volumeController.ts` - 볼륨 레벨(1~9) 및 타깃 앱 관리 (AppVolumeController 파사드)
+- `electron/audio/appVolumeController.ts` - 앱별 볼륨 제어 (native-sound-mixer, PID 지원)
 
 ---
 

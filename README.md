@@ -28,7 +28,7 @@
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
 - **Task 36**: 로컬 Whisper 폴백 시스템 (⚠️ 제거됨 - 서버 STT만 사용, 자동 재연결)
 - **Task 37**: Ubuntu 서버 FastAPI 배포 가이드 (systemd, Nginx, SSL, 프로덕션 환경 구성)
-- **Task 38**: 코드 리팩토링 및 정리 (서버 의존성 완전 제거, AppVolumeController 중앙화, 버그 수정)
+- **Task 38**: 코드 리팩토링 및 정리 (서버 의존성 완전 제거, AppVolumeController 중앙화, PID 기반 볼륨 제어 추가)
 
 ### 주요 기술 스택
 
@@ -393,7 +393,8 @@ harmful-expression-filter/
 - `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합, 폴백 로직 포함)
 - `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
-- `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어
+- `electron/audio/volumeController.ts` – 볼륨 레벨(1~9) 및 타깃 앱 관리 (AppVolumeController 파사드)
+- `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어 (native-sound-mixer, PID 지원)
 - `electron/tray.ts` – 시스템 트레이 (오디오 모니터링 상태 표시, AudioManager 통합)
 - `electron/windows/createOverlayWindow.ts` – 오버레이 창 생성
 - `electron/state/editMode.ts` – Edit Mode 상태 관리
