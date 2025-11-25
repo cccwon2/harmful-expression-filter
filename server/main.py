@@ -355,6 +355,8 @@ async def lifespan(app: FastAPI):
             else:
                 target_base_model = base_model_env
             LOGGER.info("[Init] 🚀 KoElectra 모델 선택됨")
+            # KoElectra는 LoRA를 사용하지 않으므로 model_path는 빈 문자열
+            target_model_path = ""
         else:
             # Kanana (Default)
             if not base_model_env or "koelectra" in base_model_env.lower():
@@ -362,17 +364,28 @@ async def lifespan(app: FastAPI):
             else:
                 target_base_model = base_model_env
             
-            # LoRA 경로 확인 (절대 경로 변환)
-            if model_path_env:
+            # 🔹 LoRA 경로 처리: MODEL_PATH가 명시적으로 설정된 경우에만 절대 경로로 변환
+            # MODEL_PATH가 비어있으면 빈 문자열을 전달하여 HarmfulTextClassifier 내부 로직 사용
+            # (KANANA_LORA_DIR 환경 변수 또는 기본값 models/kanana-lora-v1 사용)
+            if model_path_env and model_path_env.strip():
                 base_dir = os.path.dirname(os.path.abspath(__file__))
                 full_model_path = os.path.join(base_dir, model_path_env)
                 
-                if os.path.exists(full_model_path):
+                # 잘못된 경로(nlp 폴더 등) 체크
+                if os.path.basename(full_model_path) == "nlp":
+                    LOGGER.warning(f"[Init] ⚠️ 잘못된 경로 감지 (nlp 폴더). MODEL_PATH를 무시하고 내부 로직 사용")
+                    target_model_path = ""
+                elif os.path.exists(full_model_path):
                     target_model_path = full_model_path
                     LOGGER.info(f"[Init] 📂 LoRA 어댑터 경로 확인됨: {target_model_path}")
                 else:
                     LOGGER.warning(f"[Init] ⚠️ 설정된 LoRA 경로를 찾을 수 없음: {full_model_path}")
+                    LOGGER.info("[Init] 💡 MODEL_PATH를 무시하고 내부 로직 사용 (KANANA_LORA_DIR 또는 기본값)")
                     target_model_path = ""
+            else:
+                # MODEL_PATH가 비어있으면 빈 문자열 전달 → HarmfulTextClassifier 내부 로직 사용
+                target_model_path = ""
+                LOGGER.info("[Init] 💡 MODEL_PATH가 설정되지 않음. HarmfulTextClassifier 내부 로직 사용")
             
             LOGGER.info("[Init] 🚀 Kanana 모델 선택됨")
 
