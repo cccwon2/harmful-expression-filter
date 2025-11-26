@@ -224,25 +224,40 @@ try {
   
   // Visual Studio 버전 감지 (경로에 포함된 버전 번호 확인)
   // VS 2017 = 15, VS 2019 = 16, VS 2022 = 17, VS 2025 = 18
+  // 주의: "18"이 "16"을 포함하지 않도록 더 정확한 패턴 매칭 필요
   let platformToolset = 'v143'; // 기본값: VS 2022 이상
   let vsVersion = 'Visual Studio 2022 이상';
   
-  if (msbuildDir.includes('18') || msbuildDir.includes('2025')) {
+  // 정규식으로 정확한 버전 번호 매칭 (\\18\\ 또는 \\2025\\ 형태)
+  const vs18Pattern = /[\\/]18[\\/]/;
+  const vs17Pattern = /[\\/]17[\\/]/;
+  const vs16Pattern = /[\\/]16[\\/]/;
+  const vs15Pattern = /[\\/]15[\\/]/;
+  
+  if (vs18Pattern.test(msbuildDir) || msbuildDir.includes('2025')) {
     // Visual Studio 2025 (버전 18)
     platformToolset = 'v143'; // VS 2025는 일반적으로 v143을 사용
     vsVersion = 'Visual Studio 2025';
-  } else if (msbuildDir.includes('17') || msbuildDir.includes('2022')) {
+  } else if (vs17Pattern.test(msbuildDir) || msbuildDir.includes('2022')) {
     // Visual Studio 2022 (버전 17)
     platformToolset = 'v143';
     vsVersion = 'Visual Studio 2022';
-  } else if (msbuildDir.includes('16') || msbuildDir.includes('2019')) {
+  } else if (vs16Pattern.test(msbuildDir) || msbuildDir.includes('2019')) {
     // Visual Studio 2019 (버전 16)
     platformToolset = 'v142';
     vsVersion = 'Visual Studio 2019';
-  } else if (msbuildDir.includes('15') || msbuildDir.includes('2017')) {
+  } else if (vs15Pattern.test(msbuildDir) || msbuildDir.includes('2017')) {
     // Visual Studio 2017 (버전 15)
     platformToolset = 'v141';
     vsVersion = 'Visual Studio 2017';
+  }
+  
+  // 디버깅: 감지된 정보 출력
+  if (process.env.DEBUG_NATIVE_BUILD) {
+    console.log(`[Build Native] MSBuild 디렉토리: ${msbuildDir}`);
+    console.log(`[Build Native] VS 18 패턴 매칭: ${vs18Pattern.test(msbuildDir)}`);
+    console.log(`[Build Native] VS 17 패턴 매칭: ${vs17Pattern.test(msbuildDir)}`);
+    console.log(`[Build Native] VS 16 패턴 매칭: ${vs16Pattern.test(msbuildDir)}`);
   }
   
   console.log(`[Build Native] 플랫폼 도구 집합: ${platformToolset} (${vsVersion})`);
