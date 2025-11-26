@@ -18,6 +18,13 @@ import AudioManager from "./main/AudioManager";
 // 🔥 중요: onVoiceBridge를 최상단에서 정적 import 하여 중복 로드 방지
 import { onVoiceBridge } from "./main/onVoiceBridge";
 
+// 🧩 패키지 환경에서 NODE_ENV 보정
+// electron-builder로 생성된 exe는 NODE_ENV가 비어 있는 경우가 많아서
+// dev URL(http://localhost:5173)을 보려고 하다가 오버레이가 안 뜨는 문제가 생길 수 있음
+if (app.isPackaged && process.env.NODE_ENV !== "production") {
+  process.env.NODE_ENV = "production";
+}
+
 const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
