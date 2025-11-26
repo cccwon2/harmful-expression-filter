@@ -657,6 +657,32 @@ msbuild OnVoiceAudioBridge.sln /p:Configuration=Release /p:Platform=x64
 2. "C++ 빌드 도구" 워크로드 선택
 3. 설치 후 재시도
 
+#### 플랫폼 도구 집합 오류 (v145를 찾을 수 없음)
+
+**증상**: `error MSB8020: v145에 대한 빌드 도구(플랫폼 도구 집합 = 'v145')를 찾을 수 없습니다`
+
+**원인**: 프로젝트가 Visual Studio 2019의 플랫폼 도구 집합(`v145`)을 요구하지만, Visual Studio 2022를 사용 중인 경우
+
+**해결 방법**:
+
+1. **자동 해결 (권장)**: 빌드 스크립트가 자동으로 Visual Studio 버전에 맞는 플랫폼 도구 집합을 사용합니다.
+   ```bash
+   npm run build:native
+   ```
+   - Visual Studio 2022를 사용 중이면 `v143` 자동 사용
+   - Visual Studio 2019를 사용 중이면 `v142` 자동 사용
+
+2. **수동 해결**: Visual Studio에서 프로젝트 업그레이드
+   - Visual Studio에서 `OnVoiceAudioBridge.slnx` 또는 `OnVoiceAudioBridge.sln` 열기
+   - 프로젝트를 마우스 오른쪽 클릭 > **속성** > **일반** > **플랫폼 도구 집합**
+   - `v143` (Visual Studio 2022) 또는 `v142` (Visual Studio 2019)로 변경
+   - 저장 후 다시 빌드
+
+3. **대안**: Visual Studio Installer에서 이전 버전 도구 집합 설치
+   - Visual Studio Installer 실행
+   - **수정** > **개별 구성 요소** 탭
+   - "MSVC v143 - VS 2022 C++ x64/x86 빌드 도구" 또는 "MSVC v142 - VS 2019 C++ x64/x86 빌드 도구" 설치
+
 #### electron-builder 오류
 ```bash
 # 캐시 정리

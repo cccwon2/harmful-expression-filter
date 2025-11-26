@@ -214,8 +214,16 @@ console.log(`[Build Native] 빌드 시작...`);
 try {
   // MSBuild 실행 (.slnx 파일도 지원)
   // .slnx 파일은 Visual Studio 2022 이상의 MSBuild에서 지원
+  // 플랫폼 도구 집합을 명시적으로 지정 (VS 2022 = v143, VS 2019 = v142, VS 2017 = v141)
+  // VS 2022를 사용 중이면 v143을 사용, 없으면 자동으로 감지
+  const msbuildDir = path.dirname(msbuildPath);
+  const isVS2022 = msbuildDir.includes('2022');
+  const platformToolset = isVS2022 ? 'v143' : 'v142'; // VS 2022 = v143, VS 2019 = v142
+  
+  console.log(`[Build Native] 플랫폼 도구 집합: ${platformToolset} (${isVS2022 ? 'Visual Studio 2022' : 'Visual Studio 2019'})`);
+  
   execSync(
-    `"${msbuildPath}" "${solutionFile}" /p:Configuration=Release /p:Platform=x64 /t:Build /v:minimal`,
+    `"${msbuildPath}" "${solutionFile}" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=${platformToolset} /t:Build /v:minimal`,
     { 
       cwd: projectDir,
       stdio: 'inherit'
@@ -230,6 +238,11 @@ try {
     console.error("           .slnx 파일은 Visual Studio 2022 이상이 필요할 수 있습니다.");
     console.error("           또는 Visual Studio에서 직접 빌드한 후 npm run copy:native를 실행하세요.");
   }
+  console.error("");
+  console.error("           플랫폼 도구 집합 오류가 발생한 경우:");
+  console.error("           1. Visual Studio에서 프로젝트를 열고 '프로젝트 > 속성 > 일반 > 플랫폼 도구 집합'을 확인하세요.");
+  console.error("           2. Visual Studio 2022를 사용 중이라면 'v143'으로 변경하세요.");
+  console.error("           3. 또는 Visual Studio Installer에서 'C++ v143 빌드 도구'를 설치하세요.");
   process.exit(1);
 }
 
