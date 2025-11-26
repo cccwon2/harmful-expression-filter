@@ -96,14 +96,20 @@ function findProjectPath() {
   if (process.env.DEBUG_NATIVE_BUILD) {
     console.log(`[Build Native] 프로젝트 루트: ${projectRoot}`);
     console.log(`[Build Native] 확인할 경로들:`);
-    possiblePaths.forEach((p, i) => {
-      console.log(`  ${i + 1}. ${p}`);
-    });
   }
 
   for (const projectPath of possiblePaths) {
     const solutionFile = path.join(projectPath, "OnVoiceAudioBridge.sln");
-    if (fs.existsSync(solutionFile)) {
+    const dirExists = fs.existsSync(projectPath);
+    const solutionExists = fs.existsSync(solutionFile);
+    
+    if (process.env.DEBUG_NATIVE_BUILD) {
+      console.log(`  - ${projectPath}`);
+      console.log(`    디렉토리 존재: ${dirExists ? '✅' : '❌'}`);
+      console.log(`    솔루션 파일 존재: ${solutionExists ? '✅' : '❌'} (${solutionFile})`);
+    }
+    
+    if (solutionExists) {
       if (process.env.DEBUG_NATIVE_BUILD) {
         console.log(`[Build Native] ✅ 프로젝트 찾음: ${projectPath}`);
       }
@@ -123,9 +129,20 @@ if (!projectDir) {
   console.error(`           프로젝트 루트: ${projectRoot}`);
   console.error("");
   console.error("           다음 경로를 확인했습니다:");
-  console.error(`           - ${path.join(projectRoot, "..", "onvoice-com-bridge", "phase3-com-dll", "OnVoiceAudioBridge")}`);
-  console.error(`           - ${path.join(projectRoot, "native", "OnVoiceAudioBridge", "phase3-com-dll", "OnVoiceAudioBridge")}`);
-  console.error(`           - ${path.join(projectRoot, "native", "OnVoiceAudioBridge")}`);
+  
+  const checkedPaths = [
+    path.join(projectRoot, "..", "onvoice-com-bridge", "phase3-com-dll", "OnVoiceAudioBridge"),
+    path.join(projectRoot, "native", "OnVoiceAudioBridge", "phase3-com-dll", "OnVoiceAudioBridge"),
+    path.join(projectRoot, "native", "OnVoiceAudioBridge"),
+  ];
+  
+  checkedPaths.forEach((p) => {
+    const dirExists = fs.existsSync(p);
+    const solutionExists = fs.existsSync(path.join(p, "OnVoiceAudioBridge.sln"));
+    const status = dirExists ? (solutionExists ? "✅" : "⚠️ (디렉토리 존재, 솔루션 파일 없음)") : "❌";
+    console.error(`           ${status} ${p}`);
+  });
+  
   console.error("");
   console.error("           해결 방법:");
   console.error("           1. 상대 경로로 프로젝트 배치: ../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge");
@@ -134,6 +151,7 @@ if (!projectDir) {
   console.error("           3. Git 서브모듈 추가: git submodule add https://github.com/cccwon2/onvoice-com-bridge.git native/OnVoiceAudioBridge");
   console.error("");
   console.error("           디버깅 모드로 실행: set DEBUG_NATIVE_BUILD=1 && npm run build:native");
+  console.error("           (각 경로의 디렉토리 및 솔루션 파일 존재 여부를 자세히 확인할 수 있습니다)");
   process.exit(1);
 }
 
