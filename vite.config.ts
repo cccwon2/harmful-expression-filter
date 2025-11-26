@@ -4,7 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  base: './', // file:// 프로토콜에서 리소스를 찾기 위해 상대 경로 사용
   root: 'renderer',
   build: {
     // 📦 Electron 패키징 시 main 번들과 같은 트리(dist-electron)에 렌더러 파일을 배치

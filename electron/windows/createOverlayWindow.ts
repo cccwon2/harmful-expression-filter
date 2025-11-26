@@ -334,12 +334,29 @@ export function createOverlayWindow(): BrowserWindow {
 
   // 개발 모드와 프로덕션 모드 분기
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    // 🟢 개발 모드: Vite 개발 서버 사용
     overlayWindow.loadURL('http://localhost:5173/overlay.html');
+    console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
   } else {
+    // 🔴 배포 모드: file:// 프로토콜로 로컬 파일 로드
     // 패키지 환경에서 __dirname 은 dist-electron/windows 이므로
     // Vite build 결과(dist-electron/renderer)를 그대로 바라본다
     const overlayPath = path.join(__dirname, '../renderer/overlay.html');
-    overlayWindow.loadFile(overlayPath);
+    console.log('[Overlay] Production mode - loading overlay from:', overlayPath);
+    console.log('[Overlay] __dirname:', __dirname);
+    
+    // 파일 존재 여부 확인을 위한 추가 로깅
+    const fs = require('fs');
+    if (fs.existsSync(overlayPath)) {
+      console.log('[Overlay] ✓ overlay.html file found at:', overlayPath);
+    } else {
+      console.error('[Overlay] ✗ overlay.html file NOT found at:', overlayPath);
+      console.error('[Overlay] This will cause the overlay window to fail loading!');
+    }
+    
+    overlayWindow.loadFile(overlayPath).catch((err) => {
+      console.error('[Overlay] Failed to load overlay.html:', err);
+    });
   }
 
   return overlayWindow;
