@@ -48,8 +48,10 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 ### 빌드 프로세스
 
 1. **C# DLL 빌드**: `.NET 6` 프로젝트를 빌드하여 DLL 생성
-2. **C++ COM DLL 빌드** (선택): C++ COM DLL을 빌드하거나 기존 DLL 사용
-3. **DLL 복사**: 빌드된 DLL들을 적절한 위치로 복사
+2. **C++ COM DLL 빌드** (선택): C++ COM DLL을 **Release 모드**로 빌드하거나 기존 Release DLL 사용
+   - ⚠️ **중요**: 배포 시에는 반드시 **Release 빌드**를 사용해야 합니다
+   - Debug 빌드는 Debug Runtime 라이브러리에 의존하여 일반 사용자 PC에서 실행되지 않습니다
+3. **DLL 복사**: 빌드된 DLL들을 적절한 위치로 복사 (Release 우선)
 4. **TypeScript 컴파일**: 메인 프로세스 TypeScript 코드 컴파일
 5. **렌더러 빌드**: Vite를 사용하여 React 앱 빌드
 6. **패키징**: electron-builder로 설치 패키지 생성
@@ -542,6 +544,7 @@ if (process.env.NODE_ENV === 'production') {
 - [ ] `dist/` 폴더에 인스톨러가 생성되었는지 확인
 - [ ] `win-unpacked/OnVoice.exe`가 실행되는지 확인
 - [ ] C# DLL이 `resources/dotnet/`에 포함되었는지 확인
+- [ ] **C++ COM DLL이 Release 빌드인지 확인** (Debug 빌드는 배포 불가)
 - [ ] 앱이 정상적으로 시작되는지 확인
 - [ ] 시스템 트레이 아이콘이 표시되는지 확인
 - [ ] 오디오 캡처 기능이 작동하는지 확인
@@ -553,6 +556,73 @@ if (process.env.NODE_ENV === 'production') {
 - [ ] 제거(Uninstall)가 정상적으로 작동하는지 확인
 - [ ] C++ COM DLL이 정상적으로 등록되었는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
 - [ ] COM 객체를 통한 오디오 캡처가 정상 작동하는지 확인
+
+## ⚠️ 중요: Debug vs Release 빌드
+
+### 배포 시 반드시 Release 빌드 사용
+
+C++ COM DLL의 Debug와 Release 빌드는 성능, 배포, 동작 방식에서 **매우 큰 차이**가 있습니다. 특히 현재 개발 중인 `OnVoiceComBridge`와 같은 실시간 오디오 캡처 모듈에서는 이 차이가 시스템 안정성과 성능에 직접적인 영향을 미칩니다.
+
+#### 1. 🚀 성능 및 최적화 (가장 중요)
+
+- **Debug**: 컴파일러 최적화가 꺼져 있습니다. 변수가 메모리에 항상 상주하며, 코드가 작성된 그대로 기계어로 번역됩니다. 오디오 버퍼 처리 루프(Pump)에서 불필요한 연산이 포함되어 **오디오 캡처 레이턴시나 CPU 사용량**이 늘어날 수 있습니다.
+- **Release**: 코드 최적화(`O2` 옵션 등)가 적용됩니다. 함수 인라인화, 루프 최적화, 불필요한 코드 제거 등이 수행되어 **속도가 훨씬 빠르고 파일 크기가 작습니다.**
+  - Task 40의 `IAudioCaptureClient::GetBuffer` 루프와 같은 고빈도 작업에서는 Release 빌드가 필수적입니다.
+
+#### 2. 📦 런타임 라이브러리 (배포 시 사고 원인 1순위)
+
+가장 흔하게 겪는 **"내 컴퓨터에선 되는데 다른 컴퓨터에선 안 돼요"**의 원인입니다.
+
+- **Debug**: **Debug Runtime (`MSVCPxxD.dll`, `VCRUNTIME140D.dll`)**에 의존합니다.
+  - 파일명 끝에 `D`가 붙습니다.
+  - 이 파일들은 Visual Studio가 설치된 개발자 PC에만 있고, **일반 사용자 PC에는 없습니다.**
+  - 따라서 Debug 버전 DLL을 다른 PC로 가져가면 "DLL을 찾을 수 없다"는 오류가 발생합니다.
+- **Release**: **Standard Runtime (`MSVCPxx.dll`, `VCRUNTIME140.dll`)**에 의존합니다.
+  - 일반적인 "Visual C++ 재배포 가능 패키지(VC++ Redistributable)"만 설치되어 있으면 어디서든 실행됩니다.
+
+#### 3. 🛡️ 메모리 검사 및 디버깅 정보
+
+- **Debug**:
+  - **디버그 심볼(.pdb)** 정보를 포함하여 용량이 큽니다.
+  - **메모리 릭 탐지**, 경계 검사(Boundary Check), 초기화되지 않은 변수 체크 등을 위한 추가 코드가 삽입됩니다.
+  - `assert()` 매크로가 작동하여 개발자가 의도한 조건이 맞는지 검사합니다.
+- **Release**:
+  - 디버그 정보가 제거되어 용량이 작습니다.
+  - 메모리 보호 코드가 제거되어 속도가 빠르지만, 잘못된 메모리 접근 시 바로 크래시(Crash)가 날 수 있습니다.
+  - `assert()` 코드는 아예 컴파일에서 제외됩니다.
+
+#### 4. 🧩 힙(Heap) 메모리 관리 (COM의 경우)
+
+COM 프로그래밍에서는 Debug/Release 혼용 시 메모리 할당 문제가 발생할 수 있습니다.
+
+- **원칙**: COM은 인터페이스 기반이라 메모리 할당/해제 주체가 명확해야 합니다.
+- **위험**: 만약 Node.js(Release 빌드)가 C++ DLL(Debug 빌드)에 `std::string` 같은 C++ 객체를 직접 넘기고 해제하려 하면, **서로 다른 힙 관리자(Debug Heap vs Release Heap)를 사용**하게 되어 즉시 프로그램이 터집니다.
+- **현재 프로젝트**: `OnVoiceComBridge`는 COM 인터페이스와 `SAFEARRAY` 등을 사용하여 데이터를 주고받으므로(마샬링) 이 위험은 적지만, 여전히 런타임 의존성 문제는 남습니다.
+
+### 💡 결론 및 권장 사항
+
+1. **개발 중 (Local Development)**:
+   - **Debug 빌드**를 사용하세요. 브레이크포인트를 걸고 변수 값을 확인하거나, `assert`로 로직 오류를 잡는 데 유리합니다.
+
+2. **배포 및 최종 테스트 (Production)**:
+   - **무조건 Release 빌드**여야 합니다.
+   - 사용자 PC에는 Debug 런타임 라이브러리가 없기 때문에 Debug 빌드는 실행조차 안 될 확률이 99%입니다.
+   - `npm run build:native` 스크립트가 C++ 프로젝트를 빌드할 때 `/p:Configuration=Release` 옵션을 사용하는지 확인하세요.
+
+**요약**: 개발할 때는 Debug로 하시고, **"이제 됐다, 서버에 올리거나 배포하자" 할 때는 반드시 Release 모드로 다시 빌드**해서 DLL을 교체해야 합니다.
+
+### 빌드 타입 확인
+
+```bash
+# Release 빌드로 빌드
+npm run build:native
+
+# DLL 복사 (Release 우선)
+npm run copy:native
+
+# 복사된 DLL이 Release인지 확인 (경고 메시지 확인)
+# "✅ Release 빌드 확인됨 (배포 준비 완료)" 메시지가 나와야 합니다
+```
 
 ## 문제 해결
 
@@ -623,6 +693,26 @@ regsvr32.exe /u "C:\path\to\OnVoiceAudioBridge.dll"
 2. 설치 후 COM 등록이 실행되었는지 확인
 3. 관리자 권한으로 설치했는지 확인
 4. 앱 시작 시 자동 등록 스크립트가 실행되었는지 확인
+
+#### Debug Runtime 라이브러리 오류 (일반 사용자 PC에서 실행 실패)
+
+**증상**: "DLL을 찾을 수 없습니다" 또는 "MSVCP140D.dll을 찾을 수 없습니다" 오류
+
+**원인**: Debug 빌드 DLL을 배포했을 때 발생합니다. Debug Runtime 라이브러리는 Visual Studio가 설치된 개발자 PC에만 있습니다.
+
+**해결 방법**:
+```bash
+# 1. Release 빌드로 다시 빌드
+npm run build:native
+
+# 2. Release DLL 복사
+npm run copy:native
+
+# 3. "✅ Release 빌드 확인됨" 메시지 확인
+# 4. Visual Studio가 설치되지 않은 깨끗한 PC에서 테스트
+```
+
+**예방**: 배포 전에 항상 Release 빌드를 사용하고, `npm run copy:native` 실행 시 경고 메시지를 확인하세요.
 
 #### electron-edge-js 오류
 ```bash
