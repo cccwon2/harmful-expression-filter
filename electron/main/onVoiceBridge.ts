@@ -283,6 +283,7 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
  * @returns 성공 여부
  */
 export async function setVolumeByPid(pid: number, volume: number): Promise<boolean> {
+  const startTime = Date.now();
   const payload = {
     command: 'setVolume',
     pid: pid,
@@ -290,22 +291,44 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
   };
   
   try {
+    const bridgeCallStartTime = Date.now();
     const result = await callBridge(payload);
-    return result && result.ok === true;
+    const bridgeCallElapsed = Date.now() - bridgeCallStartTime;
+    const totalElapsed = Date.now() - startTime;
+    
+    if (result && result.ok === true) {
+      console.log(`[OnVoiceBridge] ⏱️ setVolumeByPid 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms)`);
+      return true;
+    } else {
+      console.warn(`[OnVoiceBridge] ⚠️ setVolumeByPid 실패 (${totalElapsed}ms)`);
+      return false;
+    }
   } catch (error) {
-    console.error(`[OnVoiceBridge] 볼륨 조절 실패 (PID: ${pid})`, error);
+    const totalElapsed = Date.now() - startTime;
+    console.error(`[OnVoiceBridge] 볼륨 조절 실패 (PID: ${pid}, ${totalElapsed}ms)`, error);
     return false;
   }
 }
 
 export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
+  const startTime = Date.now();
   try {
+    const bridgeCallStartTime = Date.now();
     const result = await callBridge({ command: 'listSessions' });
+    const bridgeCallElapsed = Date.now() - bridgeCallStartTime;
+    
     if (result && Array.isArray(result.sessions)) {
+      const totalElapsed = Date.now() - startTime;
+      console.log(`[OnVoiceBridge] ⏱️ listAudioSessions 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms, 세션 수: ${result.sessions.length})`);
       return result.sessions as BridgeAudioSession[];
     }
+    const totalElapsed = Date.now() - startTime;
+    console.warn(`[OnVoiceBridge] ⚠️ listAudioSessions 결과 형식 오류 (${totalElapsed}ms)`);
+    return [];
   } catch (error) {
-    console.error("[OnVoiceBridge] 오디오 세션 조회 실패", error);
+    const totalElapsed = Date.now() - startTime;
+    console.error(`[OnVoiceBridge] 오디오 세션 조회 실패 (${totalElapsed}ms)`, error);
+    return [];
   }
   return [];
 }

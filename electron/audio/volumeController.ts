@@ -107,6 +107,7 @@ export class VolumeController {
     level: number,
     options?: { restoreDelayMs?: number },
   ): Promise<void> {
+    const startTime = Date.now();
     const clampedLevel = this.clampLevel(level);
     this.currentVolumeLevel = clampedLevel;
 
@@ -122,25 +123,29 @@ export class VolumeController {
     const restoreDelay = options?.restoreDelayMs;
 
     try {
+      const appVolumeStartTime = Date.now();
       const ok = await this.appVolumeController.setAppVolume(
         this.targetAppIdentifier,
         controllerLevel,
         restoreDelay,
       );
+      const appVolumeElapsed = Date.now() - appVolumeStartTime;
 
       const percent = this.volumeLevelToPercent(clampedLevel);
+      const totalElapsed = Date.now() - startTime;
 
       if (ok) {
         console.log(
-          `[VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%) for ${this.targetAppIdentifier}`,
+          `[VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%) for ${this.targetAppIdentifier} (AppVolumeController: ${appVolumeElapsed}ms, 총: ${totalElapsed}ms)`,
         );
       } else {
         console.warn(
-          `[VolumeController] ⚠️ Failed to set volume for ${this.targetAppIdentifier}`,
+          `[VolumeController] ⚠️ Failed to set volume for ${this.targetAppIdentifier} (${totalElapsed}ms)`,
         );
       }
     } catch (err) {
-      console.error('[VolumeController] Failed to set volume level:', err);
+      const totalElapsed = Date.now() - startTime;
+      console.error(`[VolumeController] Failed to set volume level (${totalElapsed}ms):`, err);
       throw err;
     }
   }

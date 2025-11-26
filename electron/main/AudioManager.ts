@@ -413,6 +413,8 @@ class AudioManager {
       return;
     }
 
+    const volumeControlStartTime = Date.now();
+
     try {
       this.harmfulDetectionCount++;
 
@@ -432,8 +434,12 @@ class AudioManager {
       console.log(`[AudioManager] 🔊 유해 표현 감지! 볼륨 조절: ${savedVolumeLevel} (${savedVolumeLevel * 10}%)`);
 
       await this.volumeController.setVolumeLevel(savedVolumeLevel);
+      
+      const volumeControlElapsed = Date.now() - volumeControlStartTime;
+      console.log(`[AudioManager] ⏱️ 볼륨 조절 완료 (총 소요 시간: ${volumeControlElapsed}ms)`);
     } catch (error) {
-      console.error("[AudioManager] 유해 표현 처리 중 오류:", error);
+      const volumeControlElapsed = Date.now() - volumeControlStartTime;
+      console.error(`[AudioManager] 유해 표현 처리 중 오류 (${volumeControlElapsed}ms):`, error);
     }
   }
 }

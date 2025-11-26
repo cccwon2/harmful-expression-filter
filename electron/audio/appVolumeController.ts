@@ -123,11 +123,14 @@ export class AppVolumeController {
     restoreDelayMs: number = this.DEFAULT_RESTORE_DELAY_MS,
     options?: { originalVolume?: number }
   ): Promise<boolean> {
+    const startTime = Date.now();
     const normalizedVolume = Math.max(0, Math.min(1, volumeLevel / 10));
     
     console.log(`[AppVolumeController] 🎯 PID ${pid} 볼륨 조절: ${volumeLevel}/10 → ${normalizedVolume.toFixed(2)}`);
     
+    const bridgeStartTime = Date.now();
     const success = await setVolumeByPidBridge(pid, normalizedVolume);
+    const bridgeElapsed = Date.now() - bridgeStartTime;
     
     if (success) {
       const pidKey = this.getPidKey(pid);
@@ -139,6 +142,9 @@ export class AppVolumeController {
       
       this.scheduleRestore(pidKey, pid, restoreDelayMs);
     }
+    
+    const totalElapsed = Date.now() - startTime;
+    console.log(`[AppVolumeController] ⏱️ setVolumeByPid 완료 (C# Bridge: ${bridgeElapsed}ms, 총: ${totalElapsed}ms)`);
     
     return success;
   }
@@ -190,30 +196,44 @@ export class AppVolumeController {
     volumeLevel: number, 
     restoreDelayMs: number = this.DEFAULT_RESTORE_DELAY_MS
   ): Promise<boolean> {
+    const startTime = Date.now();
+    
+    const fetchSessionsStartTime = Date.now();
     const sessions = await this.fetchSessionsFromBridge();
+    const fetchSessionsElapsed = Date.now() - fetchSessionsStartTime;
+    
+    const findSessionStartTime = Date.now();
     const targetSession = this.findSessionByName(sessions, appName);
+    const findSessionElapsed = Date.now() - findSessionStartTime;
     
     if (!targetSession) {
-      console.warn(`[AppVolumeController] ⚠️ App not found in active sessions: ${appName}`);
+      const totalElapsed = Date.now() - startTime;
+      console.warn(`[AppVolumeController] ⚠️ App not found in active sessions: ${appName} (세션 조회: ${fetchSessionsElapsed}ms, 앱 찾기: ${findSessionElapsed}ms, 총: ${totalElapsed}ms)`);
       console.log(`[AppVolumeController] Available apps: ${sessions.map(s => s.name).join(', ')}`);
       return false;
     }
 
     if (!targetSession.pid || targetSession.pid <= 0) {
-      console.warn(`[AppVolumeController] ⚠️ Session PID unavailable for ${targetSession.name}`);
+      const totalElapsed = Date.now() - startTime;
+      console.warn(`[AppVolumeController] ⚠️ Session PID unavailable for ${targetSession.name} (${totalElapsed}ms)`);
       return false;
     }
 
+    const setVolumeStartTime = Date.now();
     const success = await this.setVolumeByPid(
       targetSession.pid,
       volumeLevel,
       restoreDelayMs,
       { originalVolume: targetSession.volume },
     );
+    const setVolumeElapsed = Date.now() - setVolumeStartTime;
+    const totalElapsed = Date.now() - startTime;
 
     if (success) {
       const normalizedVolume = Math.max(0, Math.min(1, volumeLevel / 10));
-      console.log(`[AppVolumeController] 🔊 ${targetSession.name}: ${Math.round(normalizedVolume * 100)}% (PID ${targetSession.pid})`);
+      console.log(`[AppVolumeController] 🔊 ${targetSession.name}: ${Math.round(normalizedVolume * 100)}% (PID ${targetSession.pid}) - 세션 조회: ${fetchSessionsElapsed}ms, 앱 찾기: ${findSessionElapsed}ms, 볼륨 조절: ${setVolumeElapsed}ms, 총: ${totalElapsed}ms`);
+    } else {
+      console.warn(`[AppVolumeController] ⚠️ 볼륨 조절 실패 (${totalElapsed}ms)`);
     }
 
     return success;
