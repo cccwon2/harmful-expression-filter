@@ -49,6 +49,7 @@
 39. **[C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)** ✅ 완료
 40. **[C++ Core Audio 구현 상세](./40-cpp-core-audio-implementation.md)** ✅ 완료
 41. **[파인튜닝된 KoElectra 분류기 연동](./41-koelectra-classifier-integration.md)** ✅ 완료
+42. **[Electron 앱 배포](./42-electron-app-deployment.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -117,6 +118,10 @@
 41-koelectra-classifier-integration
     ├─ 21-text-analysis-api
     └─ 35-deepgram-realtime-streaming
+42-electron-app-deployment
+    ├─ 01-electron-setup
+    ├─ 30-electron-edge-js-migration
+    └─ 39-csharp-volume-control
 ```
 
 ## 작업 상태
@@ -161,6 +166,7 @@
 | C# 기반 PID 볼륨 제어 통합 | ✅ 완료      | 100%   | High     |
 | C++ Core Audio 구현 상세 | ✅ 완료      | 100%   | Low      |
 | 파인튜닝된 KoElectra 분류기 연동 | ✅ 완료      | 100%   | High     |
+| Electron 앱 배포 | ✅ 완료      | 100%   | Medium   |
 
 ## 최근 변경 사항 (2025-11-26)
 
