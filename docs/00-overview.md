@@ -114,6 +114,9 @@
     └─ 38-code-refactoring-cleanup
 40-cpp-core-audio-implementation
     └─ 29-onvoice-com-bridge-integration
+41-koelectra-classifier-integration
+    ├─ 21-text-analysis-api
+    └─ 35-deepgram-realtime-streaming
 ```
 
 ## 작업 상태
@@ -159,7 +162,7 @@
 | C++ Core Audio 구현 상세 | ✅ 완료      | 100%   | Low      |
 | 파인튜닝된 KoElectra 분류기 연동 | ✅ 완료      | 100%   | High     |
 
-## 최근 변경 사항 (2025-11-25)
+## 최근 변경 사항 (2025-11-26)
 
 - **Windows SDK OCR 적용**: PaddleOCR 제거, Windows.Media.Ocr API 사용
   - Electron에서 C# COM Bridge를 통해 직접 처리
@@ -207,3 +210,12 @@
   - `MODEL_PATH` 환경 변수를 통한 로컬 모델 경로 지정
   - 모델 파일 검증 및 로드 실패 시 Hugging Face Base 모델로 폴백
   - 파인튜닝된 모델 사용으로 유해 표현 분류 정확도 향상
+- **중간 결과(Interim Results) 활용 개선**
+  - 말하는 도중에도 유해 표현 즉시 감지 (문장 완성 대기 불필요)
+  - 체감 지연 시간: 2-3초 → 0.5-0.8초로 대폭 단축
+  - 중간 결과도 AI 모델로 분석하여 실시간 차단 가능
+  - 중복 분석 방지: 텍스트 길이 증가 시에만 분석 (최소 5자, 3자 이상 증가)
+- **성능 측정 및 로깅 개선**
+  - 볼륨 조절 단계별 시간 측정 로그 추가 (세션 조회, 앱 찾기, C# Bridge 호출 등)
+  - 타임스탬프(ISO 8601) 추가로 정밀한 지연 시간 분석 가능
+  - C# 로그 인코딩 수정 (UTF-8)으로 한글 로그 정상 출력

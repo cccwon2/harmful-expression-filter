@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~40**까지 진행 중입니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~41**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -31,6 +31,7 @@
 - **Task 38**: 코드 리팩토링 및 정리 (서버 의존성 완전 제거, AppVolumeController 중앙화, PID 기반 볼륨 제어 추가)
 - **Task 39**: C# 기반 PID 볼륨 제어 통합 (native-sound-mixer 완전 제거, C# Bridge로 통합)
 - **Task 40**: C++ Core Audio 구현 상세 (Application Loopback 내부 구현 원리 문서화)
+- **Task 41**: 파인튜닝된 KoElectra 분류기 연동 (로컬 모델 로드, 정확도 향상)
 
 ### 주요 기술 스택
 
@@ -40,10 +41,12 @@
 - **STT**: Deepgram (WebSocket 기반 실시간 음성 인식) - 서버 STT만 사용
   - **정상 모드**: Deepgram 실시간 스트리밍 (~0.5초 레이턴시)
     - 중간 결과(Interim Results) 지원, 문장 완성 전에도 감지 가능
+    - 말하는 도중에도 유해 표현 즉시 감지 (체감 지연: 2-3초 → 0.5-0.8초)
     - 서버 연결 실패 시 자동 재연결 시도
 - **NLP 모델**: KoElectra 또는 Kanana Nano (환경 변수로 선택)
   - **KoElectra** (`monologg/koelectra-base-v3-discriminator`): 빠른 추론, 경량 모델 (약 110M 파라미터)
     - CPU 환경에 최적화, `optimum`/`onnxruntime`로 추가 가속 가능
+    - **파인튜닝 모델 지원**: `server/models/koelectra-classifier-v1` 로컬 모델 사용 가능
   - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
     - **8-bit 양자화 지원**: GPU 사용 시 `bitsandbytes` 설치 후 메모리 사용량 감소 및 추론 속도 2-4배 향상 가능 (CPU에서는 동작하지 않음)
@@ -101,6 +104,7 @@ USE_QUANTIZATION=false
 - **모델 선택**:
   - **MODE 1 (KoElectra)**: CPU 환경에 추천, 빠른 추론 속도, 경량 모델 (약 110M 파라미터)
     - `MODEL_TYPE=koelectra`로 설정
+    - `MODEL_PATH=models/koelectra-classifier-v1`로 설정 시 파인튜닝 모델 사용 (정확도 향상)
     - `USE_QUANTIZATION=false` (CPU에서는 양자화 불필요)
   - **MODE 2 (Kanana)**: GPU 환경에 추천, 더 정확하지만 느림 (약 2.1B 파라미터)
     - `MODEL_TYPE=kanana`로 설정

@@ -197,13 +197,19 @@ class DeepgramWebSocketManager:
 
         # 중복 필터
         if transcript == self.last_transcript and is_final == self.last_is_final: return
-        if not is_final and len(transcript) <= len(self.last_transcript): return
+        
+        # 중간 결과(is_final=False)의 경우, 텍스트가 충분히 길어졌을 때만 분석
+        # (너무 짧은 단어 단위로 분석하는 것을 방지)
+        if not is_final:
+            # 이전 텍스트보다 최소 3자 이상 길어졌을 때만 분석
+            if len(transcript) <= len(self.last_transcript) + 2:
+                return
+            # 최소 5자 이상일 때만 분석 (너무 짧은 텍스트는 무시)
+            if len(transcript) < 5:
+                return
 
         self.last_transcript = transcript
         self.last_is_final = is_final
-
-        # 중간 결과는 클라이언트로 전송 안 함 (Task 35)
-        if not is_final: return
         
         # ✅ STT 지연 시간 측정 개선
         result_time = time.time()
@@ -211,18 +217,24 @@ class DeepgramWebSocketManager:
         
         if self.last_audio_time > 0:
             stt_latency = result_time - self.last_audio_time
-            self.last_audio_time = 0.0
+            if is_final:
+                self.last_audio_time = 0.0
         elif len(self.audio_chunk_times) > 0:
             oldest_chunk_time = self.audio_chunk_times[0]
             stt_latency = result_time - oldest_chunk_time
-            self.audio_chunk_times = []
+            if is_final:
+                self.audio_chunk_times = []
         
-        if stt_latency > 0:
-            print(f"[STT] [확정] {transcript} (서버 측정 STT 지연: {stt_latency:.3f}초)", flush=True)
+        # 로그 출력 (중간 결과와 최종 결과 구분)
+        if is_final:
+            if stt_latency > 0:
+                print(f"[STT] [확정] {transcript} (서버 측정 STT 지연: {stt_latency:.3f}초)", flush=True)
+            else:
+                print(f"[STT] [확정] {transcript}", flush=True)
         else:
-            print(f"[STT] [확정] {transcript}", flush=True)
+            print(f"[STT] [중간] {transcript}", flush=True)
         
-        # 1. STT 결과를 즉시 클라이언트로 전송
+        # 1. STT 결과를 즉시 클라이언트로 전송 (중간 결과도 전송)
         initial_response = {
             "status": "ok",
             "text": transcript,
@@ -236,20 +248,21 @@ class DeepgramWebSocketManager:
         }
         self.result_queue.put_nowait(initial_response)
         
-        # 2. AI 판별 (백그라운드)
+        # 2. AI 판별 (백그라운드) - 중간 결과도 분석
         if self.classifier:
             global inference_executor
             if inference_executor:
-                print(f"[AI] AI 판별 시작: '{transcript[:50]}...'", flush=True)
-                asyncio.create_task(self._check_harmful_async(transcript, confidence))
+                result_type = "중간" if not is_final else "확정"
+                print(f"[AI] AI 판별 시작 ({result_type}): '{transcript[:50]}...'", flush=True)
+                asyncio.create_task(self._check_harmful_async(transcript, confidence, is_final))
             else:
                 print(f"[AI] ⚠️ Executor가 없어 AI 판별을 건너뜁니다.", flush=True)
-                self._send_no_ai_complete(transcript, confidence)
+                self._send_no_ai_complete(transcript, confidence, is_final)
         else:
             print(f"[AI] ⚠️ Classifier가 없어 AI 판별을 건너뜁니다.", flush=True)
-            self._send_no_ai_complete(transcript, confidence)
+            self._send_no_ai_complete(transcript, confidence, is_final)
     
-    def _send_no_ai_complete(self, transcript, confidence):
+    def _send_no_ai_complete(self, transcript, confidence, is_final: bool = True):
         response = {
             "status": "ok",
             "text": transcript,
@@ -257,13 +270,13 @@ class DeepgramWebSocketManager:
             "confidence": confidence,
             "matched_keywords": [],
             "ai_detection": None,
-            "is_final": True,
+            "is_final": is_final,
             "timestamp": time.time(),
             "ai_checked": True,
         }
         self.result_queue.put_nowait(response)
 
-    async def _check_harmful_async(self, transcript: str, stt_confidence: float):
+    async def _check_harmful_async(self, transcript: str, stt_confidence: float, is_final: bool = True):
         """백그라운드에서 유해 표현 판별 수행"""
         try:
             start_time = time.time()
@@ -299,7 +312,7 @@ class DeepgramWebSocketManager:
                     "model": model_name,
                     "inference_time": inference_time
                 },
-                "is_final": True,
+                "is_final": is_final,
                 "timestamp": time.time(),
                 "ai_checked": True,
             }

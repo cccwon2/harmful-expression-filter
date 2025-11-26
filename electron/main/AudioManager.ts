@@ -29,6 +29,7 @@ class AudioManager {
   private reconnectAttempts: number = 0;
   private readonly MAX_RECONNECT_ATTEMPTS = 3;
   private audioTimestamps: number[] = []; // 오디오 캡처 타임스탬프 (최근 10개만 유지)
+  private lastProcessedText: string = ""; // 중간 결과 중복 방지용
 
   private constructor() {
     this.wsUrl = process.env.SERVER_WS_URL || "ws://localhost:8000/ws/audio";
@@ -200,6 +201,18 @@ class AudioManager {
               if (!aiChecked) {
                 // AI 판별 전 초기 STT 결과는 무시 (중복 방지)
                 return;
+              }
+              
+              // 중간 결과(is_final=false)도 처리하되, 중복 방지
+              const isFinal = parsed.is_final !== false; // 기본값은 true (하위 호환성)
+              if (!isFinal && text === this.lastProcessedText) {
+                // 중간 결과에서 같은 텍스트가 반복되면 무시
+                return;
+              }
+              if (!isFinal) {
+                this.lastProcessedText = text; // 중간 결과 텍스트 저장
+              } else {
+                this.lastProcessedText = ""; // 최종 결과면 초기화
               }
               
               // 전체 파이프라인 시간 측정 (오디오 캡처부터 결과 수신까지)
