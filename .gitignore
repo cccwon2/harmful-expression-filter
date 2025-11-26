@@ -63,7 +63,11 @@ server/models/kakaocorp/
 !server/models/kanana-lora-v1/*.json
 !server/models/kanana-lora-v1/*.bin
 !server/models/kanana-lora-v1/*.safetensors
-
+# (koelectra-classifier-v1 폴더 안의 파일들은 Git에 포함시킴)
+!server/models/koelectra-classifier-v1/
+!server/models/koelectra-classifier-v1/*.json
+!server/models/koelectra-classifier-v1/*.bin
+!server/models/koelectra-classifier-v1/*.safetensors
 # ==========================================
 
 # .NET / C# Build Folders
