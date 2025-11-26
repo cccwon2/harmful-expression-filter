@@ -26,6 +26,12 @@ function errorWithTimestamp(message: string, ...args: any[]): void {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
+// ⚠️ 중요: electron-edge-js가 .NET Framework 대신 .NET 6 CoreCLR을 사용하도록 강제
+// 패키지된 exe에서는 npm 스크립트의 EDGE_USE_CORECLR 환경변수가 적용되지 않기 때문에
+// 여기서 직접 설정해 준다.
+if (!process.env.EDGE_USE_CORECLR) {
+  process.env.EDGE_USE_CORECLR = "1";
+}
 const edge = require("electron-edge-js");
 
 // .env 파일 로드 (이 모듈이 import될 때 실행)
