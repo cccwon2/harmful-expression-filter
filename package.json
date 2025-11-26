@@ -70,7 +70,7 @@
     },
     "extraResources": [
       {
-        "from": "dotnet/OnVoiceComBridge/bin/Debug/net6.0",
+        "from": "dist-electron/dotnet",
         "to": "dotnet",
         "filter": [
           "**/*.dll",
