@@ -329,26 +329,18 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
 }
 
 export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
-  const startTime = Date.now();
   try {
-    const bridgeCallStartTime = Date.now();
     const result = await callBridge({ command: 'listSessions' });
-    const bridgeCallElapsed = Date.now() - bridgeCallStartTime;
     
     if (result && Array.isArray(result.sessions)) {
-      const totalElapsed = Date.now() - startTime;
-      logWithTimestamp(`[OnVoiceBridge] ⏱️ listAudioSessions 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms, 세션 수: ${result.sessions.length})`);
       return result.sessions as BridgeAudioSession[];
     }
-    const totalElapsed = Date.now() - startTime;
-    warnWithTimestamp(`[OnVoiceBridge] ⚠️ listAudioSessions 결과 형식 오류 (${totalElapsed}ms)`);
     return [];
   } catch (error) {
-    const totalElapsed = Date.now() - startTime;
-    errorWithTimestamp(`[OnVoiceBridge] 오디오 세션 조회 실패 (${totalElapsed}ms)`, error);
+    // 오류 발생 시에만 로그 출력
+    errorWithTimestamp(`[OnVoiceBridge] 오디오 세션 조회 실패`, error);
     return [];
   }
-  return [];
 }
 
 export const onVoiceBridge: OnVoiceBridge = {
