@@ -214,13 +214,38 @@ console.log(`[Build Native] 빌드 시작...`);
 try {
   // MSBuild 실행 (.slnx 파일도 지원)
   // .slnx 파일은 Visual Studio 2022 이상의 MSBuild에서 지원
-  // 플랫폼 도구 집합을 명시적으로 지정 (VS 2022 = v143, VS 2019 = v142, VS 2017 = v141)
-  // VS 2022를 사용 중이면 v143을 사용, 없으면 자동으로 감지
+  // 플랫폼 도구 집합을 명시적으로 지정
+  // Visual Studio 버전별 플랫폼 도구 집합:
+  // - VS 2017 = v141
+  // - VS 2019 = v142
+  // - VS 2022 = v143
+  // - VS 2025 = v143 또는 v144 (일반적으로 v143 호환)
   const msbuildDir = path.dirname(msbuildPath);
-  const isVS2022 = msbuildDir.includes('2022');
-  const platformToolset = isVS2022 ? 'v143' : 'v142'; // VS 2022 = v143, VS 2019 = v142
   
-  console.log(`[Build Native] 플랫폼 도구 집합: ${platformToolset} (${isVS2022 ? 'Visual Studio 2022' : 'Visual Studio 2019'})`);
+  // Visual Studio 버전 감지 (경로에 포함된 버전 번호 확인)
+  // VS 2017 = 15, VS 2019 = 16, VS 2022 = 17, VS 2025 = 18
+  let platformToolset = 'v143'; // 기본값: VS 2022 이상
+  let vsVersion = 'Visual Studio 2022 이상';
+  
+  if (msbuildDir.includes('18') || msbuildDir.includes('2025')) {
+    // Visual Studio 2025 (버전 18)
+    platformToolset = 'v143'; // VS 2025는 일반적으로 v143을 사용
+    vsVersion = 'Visual Studio 2025';
+  } else if (msbuildDir.includes('17') || msbuildDir.includes('2022')) {
+    // Visual Studio 2022 (버전 17)
+    platformToolset = 'v143';
+    vsVersion = 'Visual Studio 2022';
+  } else if (msbuildDir.includes('16') || msbuildDir.includes('2019')) {
+    // Visual Studio 2019 (버전 16)
+    platformToolset = 'v142';
+    vsVersion = 'Visual Studio 2019';
+  } else if (msbuildDir.includes('15') || msbuildDir.includes('2017')) {
+    // Visual Studio 2017 (버전 15)
+    platformToolset = 'v141';
+    vsVersion = 'Visual Studio 2017';
+  }
+  
+  console.log(`[Build Native] 플랫폼 도구 집합: ${platformToolset} (${vsVersion})`);
   
   execSync(
     `"${msbuildPath}" "${solutionFile}" /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=${platformToolset} /t:Build /v:minimal`,
@@ -241,8 +266,9 @@ try {
   console.error("");
   console.error("           플랫폼 도구 집합 오류가 발생한 경우:");
   console.error("           1. Visual Studio에서 프로젝트를 열고 '프로젝트 > 속성 > 일반 > 플랫폼 도구 집합'을 확인하세요.");
-  console.error("           2. Visual Studio 2022를 사용 중이라면 'v143'으로 변경하세요.");
+  console.error("           2. Visual Studio 2022 이상을 사용 중이라면 'v143'으로 변경하세요.");
   console.error("           3. 또는 Visual Studio Installer에서 'C++ v143 빌드 도구'를 설치하세요.");
+  console.error("           4. 프로젝트 파일(.vcxproj)에서 PlatformToolset을 직접 수정할 수도 있습니다.");
   process.exit(1);
 }
 
