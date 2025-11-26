@@ -19,7 +19,7 @@
     "build:electron": "electron-builder",
     "build": "npm run build:all && npm run build:renderer && npm run build:electron",
     "build:win": "npm run build",
-    "postinstall": "electron-rebuild -f || echo 'Rebuild skipped'"
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
     "electron",
