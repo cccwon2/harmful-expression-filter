@@ -1,16 +1,12 @@
-import { ipcMain } from 'electron';
-import axios, { AxiosError } from 'axios';
-import FormData from 'form-data';
-import { SERVER_CHANNELS } from './channels';
+import { ipcMain } from "electron";
+import axios, { AxiosError } from "axios";
+import { SERVER_CHANNELS } from "./channels";
 
 // SERVER_URL은 main.ts에서 dotenv로 로드된 환경 변수 사용
-// 기본값: http://127.0.0.1:8000
-// ❗ 중요: .env는 app.whenReady() 이후에 로드되므로,
-// 모듈 로드 시점에 SERVER_URL을 상수로 굳혀두면 .env 값이 반영되지 않는다.
 const REQUEST_TIMEOUT = 5000;
 
 function getServerUrl(): string {
-  return process.env.SERVER_URL || 'http://127.0.0.1:8000';
+  return process.env.SERVER_URL || "http://127.0.0.1:8000";
 }
 
 interface HealthResponse {
@@ -61,50 +57,49 @@ function handleServerError(error: unknown, context: string): ErrorResponse {
   console.error(`[${context}] 알 수 없는 오류:`, error);
   return {
     error: true,
-    message: error instanceof Error ? error.message : 'Unknown error',
+    message: error instanceof Error ? error.message : "Unknown error",
   };
 }
 
 export function registerServerHandlers(): void {
-  console.log('[IPC] 서버 IPC 핸들러 등록 중...');
+  console.log("[IPC] 서버 IPC 핸들러 등록 중...");
 
   const resolvedServerUrl = getServerUrl();
-  console.log('[ServerHandlers] SERVER_URL:', resolvedServerUrl);
-  console.log('[ServerHandlers] process.env.SERVER_URL:', process.env.SERVER_URL || '(설정 안 됨)');
-  console.log('[ServerHandlers] NODE_ENV:', process.env.NODE_ENV || '(설정 안 됨)');
+  console.log("[ServerHandlers] SERVER_URL:", resolvedServerUrl);
+  console.log("[ServerHandlers] process.env.SERVER_URL:", process.env.SERVER_URL || "(설정 안 됨)");
+  console.log("[ServerHandlers] NODE_ENV:", process.env.NODE_ENV || "(설정 안 됨)");
 
-  ipcMain.handle(
-    SERVER_CHANNELS.HEALTH_CHECK,
-    async (): Promise<HealthResponse | ErrorResponse> => {
-      try {
-        const serverUrl = getServerUrl();
-        const url = `${serverUrl}/health`;
-        console.log('[IPC] 헬스 체크 요청:', url);
-        console.log('[IPC] 현재 SERVER_URL:', serverUrl);
-        const response = await axios.get<HealthResponse>(url, {
-          timeout: REQUEST_TIMEOUT,
+  ipcMain.handle(SERVER_CHANNELS.HEALTH_CHECK, async (): Promise<HealthResponse | ErrorResponse> => {
+    // ✅ 수정됨: 변수 선언을 try 블록 밖으로 이동하여 catch 블록에서도 접근 가능하게 함
+    const serverUrl = getServerUrl();
+
+    try {
+      const url = `${serverUrl}/health`;
+      console.log("[IPC] 헬스 체크 요청:", url);
+      console.log("[IPC] 현재 SERVER_URL:", serverUrl);
+      const response = await axios.get<HealthResponse>(url, {
+        timeout: REQUEST_TIMEOUT,
+      });
+      console.log("[IPC] 서버 헬스 체크 성공:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("[IPC] 헬스 체크 실패:", error);
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        console.error("[IPC] 에러 상세:", {
+          message: axiosError.message,
+          code: axiosError.code,
+          status: axiosError.response?.status,
+          url: axiosError.config?.url,
+          serverUrl: serverUrl, // ✅ 이제 여기서 접근 가능합니다.
         });
-        console.log('[IPC] 서버 헬스 체크 성공:', response.data);
-        return response.data;
-      } catch (error) {
-        console.error('[IPC] 헬스 체크 실패:', error);
-        if (axios.isAxiosError(error)) {
-          const axiosError = error as AxiosError;
-          console.error('[IPC] 에러 상세:', {
-            message: axiosError.message,
-            code: axiosError.code,
-            status: axiosError.response?.status,
-            url: axiosError.config?.url,
-            serverUrl: serverUrl,
-          });
-          if (axiosError.code === 'ECONNREFUSED') {
-            console.error('[IPC] ⚠️ 서버 연결 거부 - 서버가 실행 중인지 확인하세요');
-          }
+        if (axiosError.code === "ECONNREFUSED") {
+          console.error("[IPC] ⚠️ 서버 연결 거부 - 서버가 실행 중인지 확인하세요");
         }
-        return handleServerError(error, 'Health Check');
       }
-    },
-  );
+      return handleServerError(error, "Health Check");
+    }
+  });
 
   ipcMain.handle(
     SERVER_CHANNELS.ANALYZE_TEXT,
@@ -115,7 +110,7 @@ export function registerServerHandlers(): void {
             has_violation: false,
             confidence: 0.0,
             matched_keywords: [],
-            method: 'empty_text',
+            method: "empty_text",
             processing_time: 0,
           };
         }
@@ -126,11 +121,11 @@ export function registerServerHandlers(): void {
           { text, use_ai: false },
           {
             timeout: REQUEST_TIMEOUT,
-            headers: { 'Content-Type': 'application/json' },
-          },
+            headers: { "Content-Type": "application/json" },
+          }
         );
 
-        console.log('[IPC] 텍스트 분석 완료:', {
+        console.log("[IPC] 텍스트 분석 완료:", {
           violation: response.data.has_violation,
           matched: response.data.matched_keywords,
           time: `${response.data.processing_time.toFixed(2)}ms`,
@@ -138,48 +133,43 @@ export function registerServerHandlers(): void {
 
         return response.data;
       } catch (error) {
-        return handleServerError(error, 'Analyze Text');
+        return handleServerError(error, "Analyze Text");
       }
-    },
+    }
   );
 
-  ipcMain.handle(
-    SERVER_CHANNELS.GET_KEYWORDS,
-    async (): Promise<KeywordsResponse | ErrorResponse> => {
-      try {
-        const serverUrl = getServerUrl();
-        const response = await axios.get<KeywordsResponse>(`${serverUrl}/keywords`, {
-          timeout: REQUEST_TIMEOUT,
-        });
-        console.log(`[IPC] 키워드 ${response.data.total}개 로드 완료`);
-        return response.data;
-      } catch (error) {
-        return handleServerError(error, 'Get Keywords');
-      }
-    },
-  );
+  ipcMain.handle(SERVER_CHANNELS.GET_KEYWORDS, async (): Promise<KeywordsResponse | ErrorResponse> => {
+    try {
+      const serverUrl = getServerUrl();
+      const response = await axios.get<KeywordsResponse>(`${serverUrl}/keywords`, {
+        timeout: REQUEST_TIMEOUT,
+      });
+      console.log(`[IPC] 키워드 ${response.data.total}개 로드 완료`);
+      return response.data;
+    } catch (error) {
+      return handleServerError(error, "Get Keywords");
+    }
+  });
 
   // OCR 전용 핸들러 (Windows OCR 사용)
   ipcMain.handle(
     SERVER_CHANNELS.OCR_IMAGE,
     async (_event, imageBuffer: Buffer): Promise<{ success: boolean; data?: any; error?: string }> => {
       try {
-        const { onVoiceBridge } = await import('../main/onVoiceBridge');
-        
-        console.log('[IPC] Windows OCR 요청:', imageBuffer.length, 'bytes');
+        const { onVoiceBridge } = await import("../main/onVoiceBridge");
+
+        console.log("[IPC] Windows OCR 요청:", imageBuffer.length, "bytes");
         const result = await onVoiceBridge.performOCR(imageBuffer);
 
         if (!result.ok) {
           return {
             success: false,
-            error: result.error || 'OCR 처리 실패',
+            error: result.error || "OCR 처리 실패",
           };
         }
 
         // 서버 응답 형식으로 변환
-        const texts = result.text 
-          ? result.text.split(/\r?\n/).filter(line => line.trim().length > 0)
-          : [];
+        const texts = result.text ? result.text.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
 
         return {
           success: true,
@@ -190,38 +180,40 @@ export function registerServerHandlers(): void {
           },
         };
       } catch (error: any) {
-        console.error('[IPC] Windows OCR 요청 실패:', error.message);
+        console.error("[IPC] Windows OCR 요청 실패:", error.message);
         return {
           success: false,
           error: error.message,
         };
       }
-    },
+    }
   );
 
   // OCR + 유해성 분석 통합 핸들러 (Windows OCR 사용)
   ipcMain.handle(
     SERVER_CHANNELS.OCR_AND_ANALYZE,
-    async (_event, imageBuffer: Buffer, roi?: { x: number; y: number; width: number; height: number }): Promise<{ success: boolean; data?: any; error?: string }> => {
+    async (
+      _event,
+      imageBuffer: Buffer,
+      roi?: { x: number; y: number; width: number; height: number }
+    ): Promise<{ success: boolean; data?: any; error?: string }> => {
       try {
-        const { onVoiceBridge } = await import('../main/onVoiceBridge');
-        
-        console.log('[IPC] Windows OCR + 분석 요청:', imageBuffer.length, 'bytes');
-        const result = roi 
+        const { onVoiceBridge } = await import("../main/onVoiceBridge");
+
+        console.log("[IPC] Windows OCR + 분석 요청:", imageBuffer.length, "bytes");
+        const result = roi
           ? await onVoiceBridge.performOCRAndAnalyze(imageBuffer, roi)
           : await onVoiceBridge.performOCR(imageBuffer);
 
         if (!result.ok) {
           return {
             success: false,
-            error: result.error || 'OCR + 분석 처리 실패',
+            error: result.error || "OCR + 분석 처리 실패",
           };
         }
 
         // 서버 응답 형식으로 변환
-        const texts = result.text 
-          ? result.text.split(/\r?\n/).filter(line => line.trim().length > 0)
-          : [];
+        const texts = result.text ? result.text.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
 
         return {
           success: true,
@@ -237,28 +229,28 @@ export function registerServerHandlers(): void {
           },
         };
       } catch (error: any) {
-        console.error('[IPC] Windows OCR+분석 요청 실패:', error.message);
+        console.error("[IPC] Windows OCR+분석 요청 실패:", error.message);
         return {
           success: false,
           error: error.message,
         };
       }
-    },
+    }
   );
 
-  console.log('[IPC] 서버 IPC 핸들러 등록 완료');
+  console.log("[IPC] 서버 IPC 핸들러 등록 완료");
 }
 
 export async function checkServerConnection(): Promise<boolean> {
   try {
     const serverUrl = getServerUrl();
     const url = `${serverUrl}/health`;
-    console.log('[IPC] 서버 연결 확인 시도:', url);
+    console.log("[IPC] 서버 연결 확인 시도:", url);
     const response = await axios.get<HealthResponse>(url, {
       timeout: 2000,
     });
-    console.log('[IPC] 서버 응답:', response.data);
-    const isOk = response.data.status === 'ok';
+    console.log("[IPC] 서버 응답:", response.data);
+    const isOk = response.data.status === "ok";
     if (!isOk) {
       console.warn('[IPC] 서버 상태가 "ok"가 아님:', response.data);
     }
@@ -266,7 +258,7 @@ export async function checkServerConnection(): Promise<boolean> {
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
-      console.error('[IPC] 서버 연결 실패:', {
+      console.error("[IPC] 서버 연결 실패:", {
         message: axiosError.message,
         code: axiosError.code,
         status: axiosError.response?.status,
@@ -274,9 +266,8 @@ export async function checkServerConnection(): Promise<boolean> {
         url: axiosError.config?.url,
       });
     } else {
-      console.error('[IPC] 서버 연결 실패 (알 수 없는 오류):', error);
+      console.error("[IPC] 서버 연결 실패 (알 수 없는 오류):", error);
     }
     return false;
   }
 }
-
