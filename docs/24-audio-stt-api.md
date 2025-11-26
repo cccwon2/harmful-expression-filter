@@ -324,7 +324,7 @@ transformers==4.35.0
 
 - [Whisper GitHub](https://github.com/openai/whisper)
 - [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/)
-- [KoELECTRA Hugging Face](https://huggingface.co/monologg/koelectra-base-v3-discriminator)
+- [KoELECTRA Hugging Face](https://huggingface.co/skplanet/dialog-koelectra-small-discriminator)
 
 ## 🗒️ 업데이트 로그
 

@@ -67,6 +67,7 @@ MODEL_PATH=models/your-custom-model
 직접 학습한 모델을 사용하려면:
 
 1. **모델 폴더 구조 준비**:
+
    ```
    server/models/your-custom-model/
    ├── config.json
@@ -77,14 +78,16 @@ MODEL_PATH=models/your-custom-model
    ```
 
 2. **환경 변수 설정**:
+
    ```env
    MODEL_PATH=models/your-custom-model
    ```
 
 3. **서버 재시작**: 모델은 서버 시작 시 로드됩니다.
 
-**참고**: 
-- `MODEL_PATH`가 설정되지 않으면 기본값으로 Hugging Face Hub의 `monologg/koelectra-base-v3-discriminator` 모델을 사용합니다.
+**참고**:
+
+- `MODEL_PATH`가 설정되지 않으면 기본값으로 Hugging Face Hub의 `skplanet/dialog-koelectra-small-discriminator` 모델을 사용합니다.
 - 로컬 모델 경로는 상대 경로(server 폴더 기준) 또는 절대 경로 모두 지원합니다.
 
 ## 주요 기능
@@ -95,12 +98,13 @@ MODEL_PATH=models/your-custom-model
 ## OCR 처리
 
 **OCR은 Electron에서 Windows SDK OCR을 직접 사용합니다.**
+
 - C# COM Bridge (`dotnet/OnVoiceComBridge/Startup.cs`)를 통해 Windows.Media.Ocr API 사용
 - 서버의 `/api/ocr` 엔드포인트는 현재 사용되지 않음 (하위 호환성을 위해 유지)
 
 ## API 문서
 
 서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다:
+
 - Swagger UI: http://127.0.0.1:8000/docs
 - ReDoc: http://127.0.0.1:8000/redoc
-

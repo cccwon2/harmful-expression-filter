@@ -77,7 +77,7 @@ MODEL_TYPE=koelectra
 
 # Base 모델 (Hugging Face 모델 이름)
 # KoElectra 사용 시:
-BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+BASE_MODEL_NAME=skplanet/dialog-koelectra-small-discriminator
 # Kanana 사용 시:
 #BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
 

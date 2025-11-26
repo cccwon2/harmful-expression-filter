@@ -16,7 +16,7 @@
 
 **배경**:
 
-- 기존에는 `monologg/koelectra-base-v3-discriminator`를 Hugging Face에서 다운로드하여 사용
+- 기존에는 `skplanet/dialog-koelectra-small-discriminator`를 Hugging Face에서 다운로드하여 사용
 - 파인튜닝된 모델을 로컬에 저장하여 더 정확한 유해 표현 분류 가능
 - 로컬 모델 사용 시 네트워크 의존성 제거 및 초기 로딩 시간 단축
 
@@ -34,7 +34,7 @@ FastAPI Server (main.py)
     ↓ 환경 변수: MODEL_TYPE=koelectra
 HarmfulTextClassifier
     ↓ Hugging Face에서 다운로드
-monologg/koelectra-base-v3-discriminator
+skplanet/dialog-koelectra-small-discriminator
     ↓ 추론
 유해 표현 분류 결과
 ```
@@ -97,7 +97,7 @@ server/models/koelectra-classifier-v1/
 ```env
 # KoElectra 모델 사용
 MODEL_TYPE=koelectra
-BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+BASE_MODEL_NAME=skplanet/dialog-koelectra-small-discriminator
 MODEL_PATH=models/koelectra-classifier-v1
 USE_QUANTIZATION=false
 ```
@@ -118,7 +118,7 @@ USE_QUANTIZATION=false
 if model_type_env == "koelectra":
     # Base 모델 이름 설정
     if not base_model_env or "kanana" in base_model_env.lower():
-        target_base_model = "monologg/koelectra-base-v3-discriminator"
+        target_base_model = "skplanet/dialog-koelectra-small-discriminator"
     else:
         target_base_model = base_model_env
     
@@ -235,7 +235,7 @@ cat .env | grep -E "MODEL_TYPE|MODEL_PATH|BASE_MODEL_NAME"
 예상 출력:
 ```
 MODEL_TYPE=koelectra
-BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+BASE_MODEL_NAME=skplanet/dialog-koelectra-small-discriminator
 MODEL_PATH=models/koelectra-classifier-v1
 ```
 
@@ -267,7 +267,7 @@ uvicorn main:app --reload
 ```
 [Init] 🚀 KoElectra 모델 선택됨
 [Init] 📂 KoElectra 로컬 모델 경로 확인됨: C:\...\server\models\koelectra-classifier-v1
-Loading Base Model: monologg/koelectra-base-v3-discriminator
+Loading Base Model: skplanet/dialog-koelectra-small-discriminator
 📂 로컬 KoElectra 모델 로드: C:\...\server\models\koelectra-classifier-v1
 [Init] ✅ KoElectra 모델 로드 완료!
 ```
@@ -490,7 +490,7 @@ print(f"\n정확도: {accuracy:.2%} ({correct}/{total})")
 3. 토크나이저 파일이 손상된 경우:
    ```bash
    # Base 모델에서 토크나이저 다운로드
-   python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('monologg/koelectra-base-v3-discriminator').save_pretrained('models/koelectra-classifier-v1')"
+   python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('skplanet/dialog-koelectra-small-discriminator').save_pretrained('models/koelectra-classifier-v1')"
    ```
 
 ### 문제 3: 모델 가중치 불일치
@@ -553,7 +553,7 @@ RuntimeError: Error(s) in loading state_dict for ElectraForSequenceClassificatio
 ## 📚 참고 자료
 
 - [Hugging Face Transformers 문서](https://huggingface.co/docs/transformers)
-- [KoElectra 모델 카드](https://huggingface.co/monologg/koelectra-base-v3-discriminator)
+- [KoElectra 모델 카드](https://huggingface.co/skplanet/dialog-koelectra-small-discriminator)
 - [SafeTensors 형식](https://huggingface.co/docs/safetensors)
 - [ElectraForSequenceClassification 문서](https://huggingface.co/docs/transformers/model_doc/electra#transformers.ElectraForSequenceClassification)
 

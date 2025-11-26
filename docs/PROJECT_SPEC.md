@@ -324,7 +324,7 @@ interface Window {
   - 중간 결과(Interim Results) 지원
   - 서버 연결 실패 시 자동 재연결
 - NLP 모델 (환경 변수로 선택)
-  - **KoElectra** (`monologg/koelectra-base-v3-discriminator`): 빠른 추론, 경량 (약 110M 파라미터)
+  - **KoElectra** (`skplanet/dialog-koelectra-small-discriminator`): 빠른 추론, 경량 (약 110M 파라미터)
   - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
     - Base 모델만 사용 또는 LoRA 어댑터 사용 가능
 

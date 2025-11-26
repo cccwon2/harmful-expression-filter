@@ -149,7 +149,7 @@ MODEL_TYPE=koelectra
 
 # Base 모델 (Hugging Face 모델 이름)
 # KoElectra 사용 시:
-BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+BASE_MODEL_NAME=skplanet/dialog-koelectra-small-discriminator
 # Kanana 사용 시:
 #BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
 
@@ -191,7 +191,7 @@ source venv312/bin/activate
 # 유해 표현 감지 모델 사전 캐싱
 # .env 파일의 MODEL_TYPE과 BASE_MODEL_NAME에 맞게 모델을 다운로드합니다
 # KoElectra 사용 시:
-python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model_name='monologg/koelectra-base-v3-discriminator'; AutoTokenizer.from_pretrained(model_name); AutoModelForSequenceClassification.from_pretrained(model_name); print('✅ KoElectra 모델 다운로드 완료')"
+python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model_name='skplanet/dialog-koelectra-small-discriminator'; AutoTokenizer.from_pretrained(model_name); AutoModelForSequenceClassification.from_pretrained(model_name); print('✅ KoElectra 모델 다운로드 완료')"
 
 # Kanana 사용 시:
 # python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model_name='kakaocorp/kanana-nano-2.1b-instruct'; AutoTokenizer.from_pretrained(model_name); AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2); print('✅ Kanana 모델 다운로드 완료')"

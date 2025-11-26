@@ -364,7 +364,7 @@ async def lifespan(app: FastAPI):
         if model_type_env == "koelectra":
             # KoElectra 기본값 강제 설정
             if not base_model_env or "kanana" in base_model_env.lower():
-                target_base_model = "monologg/koelectra-base-v3-discriminator"
+                target_base_model = "skplanet/dialog-koelectra-small-discriminator"
             else:
                 target_base_model = base_model_env
             LOGGER.info("[Init] 🚀 KoElectra 모델 선택됨")

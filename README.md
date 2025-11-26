@@ -45,7 +45,7 @@
     - 말하는 도중에도 유해 표현 즉시 감지 (체감 지연: 2-3초 → 0.5-0.8초)
     - 서버 연결 실패 시 자동 재연결 시도
 - **NLP 모델**: KoElectra 또는 Kanana Nano (환경 변수로 선택)
-  - **KoElectra** (`monologg/koelectra-base-v3-discriminator`): 빠른 추론, 경량 모델 (약 110M 파라미터)
+  - **KoElectra** (`skplanet/dialog-koelectra-small-discriminator`): 빠른 추론, 경량 모델 (약 110M 파라미터)
     - CPU 환경에 최적화, `optimum`/`onnxruntime`로 추가 가속 가능
     - **파인튜닝 모델 지원**: `server/models/koelectra-classifier-v1` 로컬 모델 사용 가능
   - **Kanana Nano** (`kakaocorp/kanana-nano-2.1b-instruct`): 더 정확하지만 느림 (약 2.1B 파라미터)
@@ -84,7 +84,7 @@ DEEPGRAM_API_KEY=your_deepgram_api_key_here
 # [MODE 1] KoElectra (CPU 추천, 빠름)
 # ==========================================
 MODEL_TYPE=koelectra
-BASE_MODEL_NAME=monologg/koelectra-base-v3-discriminator
+BASE_MODEL_NAME=skplanet/dialog-koelectra-small-discriminator
 MODEL_PATH=
 USE_QUANTIZATION=false
 
