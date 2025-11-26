@@ -116,6 +116,9 @@ echo $env:DOTNET_ROOT
 # Electron 환경 변수
 set EDGE_USE_CORECLR=1
 set DOTNET_ROOT=C:\Program Files\dotnet
+
+# C++ COM DLL 프로젝트 경로 (선택사항, 기본값 자동 탐색)
+set NATIVE_PROJECT_PATH=C:\github\onvoice-com-bridge\phase3-com-dll\OnVoiceAudioBridge
 ```
 
 ### 2. 프로젝트 빌드
@@ -242,12 +245,16 @@ git submodule update --init --recursive
 harmful-expression-filter/
 ├── native/
 │   └── OnVoiceAudioBridge/     # 서브모듈
-│       ├── OnVoiceCapture.cpp
-│       ├── OnVoiceCapture.h
-│       └── ...
+│       └── phase3-com-dll/
+│           └── OnVoiceAudioBridge/  # 실제 프로젝트
+│               ├── OnVoiceCapture.cpp
+│               ├── OnVoiceCapture.h
+│               └── OnVoiceAudioBridge.sln
 ├── dotnet/
 └── electron/
 ```
+
+**참고**: 실제 프로젝트는 `phase3-com-dll/OnVoiceAudioBridge/` 경로에 있습니다.
 
 빌드 스크립트 추가 (`package.json`):
 ```json
@@ -259,25 +266,53 @@ harmful-expression-filter/
 }
 ```
 
-##### 방법 2: 빌드된 DLL 파일 직접 포함
+##### 방법 2: 상대 경로로 프로젝트 사용 (권장)
 
-빌드된 DLL을 프로젝트에 직접 복사:
+C++ 프로젝트가 현재 프로젝트와 같은 레벨에 있는 경우:
+
+```
+github/
+├── harmful-expression-filter/  # 현재 프로젝트
+│   ├── electron/
+│   ├── dotnet/
+│   └── native/                  # 빌드된 DLL 저장
+└── onvoice-com-bridge/          # C++ 프로젝트
+    └── phase3-com-dll/
+        └── OnVoiceAudioBridge/
+            └── OnVoiceAudioBridge.sln
+```
+
+스크립트가 자동으로 `../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge` 경로를 찾습니다:
 
 ```bash
-# native 폴더 생성
-mkdir -p native
-
-# 빌드된 DLL 복사
-cp /path/to/OnVoiceAudioBridge.dll native/
+# 빌드 실행 (자동으로 상대 경로 탐색)
+npm run build:native
 ```
 
-프로젝트 구조:
+또는 환경 변수로 상대 경로 지정:
+
+```bash
+# 상대 경로로 지정
+set NATIVE_PROJECT_PATH=../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge
+npm run build:native
 ```
-harmful-expression-filter/
-├── native/
-│   └── OnVoiceAudioBridge.dll  # 빌드된 DLL
-├── dotnet/
-└── electron/
+
+빌드된 DLL 복사:
+
+```bash
+# 빌드된 DLL을 native 폴더로 복사
+copy ..\onvoice-com-bridge\phase3-com-dll\OnVoiceAudioBridge\x64\Release\OnVoiceAudioBridge.dll native\
+npm run copy:native
+```
+
+##### 방법 3: 절대 경로로 프로젝트 사용
+
+C++ 프로젝트가 다른 위치에 있는 경우:
+
+```bash
+# 환경 변수로 절대 경로 지정
+set NATIVE_PROJECT_PATH=C:\github\onvoice-com-bridge\phase3-com-dll\OnVoiceAudioBridge
+npm run build:native
 ```
 
 ##### 방법 3: C++ 소스 코드 직접 포함

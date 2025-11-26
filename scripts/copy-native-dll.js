@@ -5,18 +5,66 @@
 const fs = require("fs");
 const path = require("path");
 
-// 1. C++ DLL 소스 경로 (여러 가능한 경로 확인)
-const possibleSourcePaths = [
-  // Visual Studio 기본 빌드 경로 (x64/Release)
-  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "x64", "Release", "OnVoiceAudioBridge.dll"),
+// 1. 프로젝트 경로 찾기
+function findProjectPath() {
+  // 환경 변수로 경로 지정 가능
+  const envPath = process.env.NATIVE_PROJECT_PATH;
+  if (envPath && fs.existsSync(envPath)) {
+    return envPath;
+  }
+
+  // 가능한 경로 목록 (상대 경로 우선)
+  const possiblePaths = [
+    // 상대 경로 (현재 프로젝트 기준 ../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge)
+    path.join(__dirname, "..", "..", "onvoice-com-bridge", "phase3-com-dll", "OnVoiceAudioBridge"),
+    // 서브모듈 경로 (phase3-com-dll 포함)
+    path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "phase3-com-dll", "OnVoiceAudioBridge"),
+    // 서브모듈 경로 (직접)
+    path.join(__dirname, "..", "native", "OnVoiceAudioBridge"),
+    // 절대 경로 (fallback)
+    "C:\\github\\onvoice-com-bridge\\phase3-com-dll\\OnVoiceAudioBridge",
+    path.join(process.env.USERPROFILE || "", "github", "onvoice-com-bridge", "phase3-com-dll", "OnVoiceAudioBridge"),
+  ];
+
+  for (const projectPath of possiblePaths) {
+    if (fs.existsSync(projectPath)) {
+      return projectPath;
+    }
+  }
+
+  return null;
+}
+
+const projectDir = findProjectPath();
+
+// 2. C++ DLL 소스 경로 (여러 가능한 경로 확인)
+const possibleSourcePaths = projectDir ? [
+  // Visual Studio 기본 빌드 경로 (x64/Release) - phase3-com-dll 포함
+  path.join(projectDir, "x64", "Release", "OnVoiceAudioBridge.dll"),
   // Visual Studio 기본 빌드 경로 (Release)
+  path.join(projectDir, "Release", "OnVoiceAudioBridge.dll"),
+  // Debug 빌드 경로 (개발용)
+  path.join(projectDir, "x64", "Debug", "OnVoiceAudioBridge.dll"),
+  path.join(projectDir, "Debug", "OnVoiceAudioBridge.dll"),
+] : [];
+
+// 상대 경로 및 서브모듈 경로도 확인
+possibleSourcePaths.push(
+  // 상대 경로 (x64/Release)
+  path.join(__dirname, "..", "..", "onvoice-com-bridge", "phase3-com-dll", "OnVoiceAudioBridge", "x64", "Release", "OnVoiceAudioBridge.dll"),
+  path.join(__dirname, "..", "..", "onvoice-com-bridge", "phase3-com-dll", "OnVoiceAudioBridge", "Release", "OnVoiceAudioBridge.dll"),
+  // 서브모듈 경로 (x64/Release)
+  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "phase3-com-dll", "OnVoiceAudioBridge", "x64", "Release", "OnVoiceAudioBridge.dll"),
+  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "x64", "Release", "OnVoiceAudioBridge.dll"),
+  // 서브모듈 경로 (Release)
+  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "phase3-com-dll", "OnVoiceAudioBridge", "Release", "OnVoiceAudioBridge.dll"),
   path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "Release", "OnVoiceAudioBridge.dll"),
   // 이미 native 폴더에 복사된 경우
   path.join(__dirname, "..", "native", "OnVoiceAudioBridge.dll"),
-  // Debug 빌드 경로 (개발용)
-  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "x64", "Debug", "OnVoiceAudioBridge.dll"),
-  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "Debug", "OnVoiceAudioBridge.dll"),
-];
+  // 절대 경로 (fallback)
+  "C:\\github\\onvoice-com-bridge\\phase3-com-dll\\OnVoiceAudioBridge\\x64\\Release\\OnVoiceAudioBridge.dll",
+  "C:\\github\\onvoice-com-bridge\\phase3-com-dll\\OnVoiceAudioBridge\\Release\\OnVoiceAudioBridge.dll",
+);
 
 // 2. Electron 배포용 DLL 저장 경로
 const targetDir = path.join(__dirname, "..", "native");
