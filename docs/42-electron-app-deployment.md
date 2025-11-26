@@ -213,6 +213,96 @@ const dllPath = path.join(
 );
 ```
 
+#### C++ COM DLL 포함 (필수)
+
+C# DLL이 `OnVoiceAudioBridge.OnVoiceCapture` COM 객체를 사용하므로, C++ COM DLL도 함께 배포해야 합니다.
+
+**1. C++ DLL 빌드 및 준비**
+
+C++ COM DLL은 별도 리포지토리(`cccwon2/onvoice-com-bridge`)에서 빌드합니다:
+
+```bash
+# C++ 프로젝트 빌드 (Visual Studio 또는 MSBuild)
+# 빌드 결과물: OnVoiceAudioBridge.dll
+```
+
+**2. package.json에 C++ DLL 추가**
+
+```json
+{
+  "build": {
+    "extraResources": [
+      {
+        "from": "dotnet/OnVoiceComBridge/bin/Debug/net6.0",
+        "to": "dotnet",
+        "filter": ["**/*.dll", "**/*.json"]
+      },
+      {
+        "from": "native/OnVoiceAudioBridge.dll",
+        "to": "native",
+        "filter": ["*.dll"]
+      }
+    ],
+    "nsis": {
+      "include": "build/installer.nsh"
+    }
+  }
+}
+```
+
+**3. COM 등록 스크립트 생성**
+
+`build/installer.nsh` 파일 생성:
+
+```nsis
+; NSIS 스크립트: 설치 후 COM DLL 등록
+Section -Post
+  ; COM DLL 등록 (관리자 권한 필요)
+  ExecWait '"$SYSDIR\regsvr32.exe" /s "$INSTDIR\resources\native\OnVoiceAudioBridge.dll"'
+SectionEnd
+
+Section Uninstall
+  ; COM DLL 등록 해제
+  ExecWait '"$SYSDIR\regsvr32.exe" /s /u "$INSTDIR\resources\native\OnVoiceAudioBridge.dll"'
+SectionEnd
+```
+
+**4. 대안: 설치 후 스크립트로 등록**
+
+관리자 권한 없이 설치하는 경우, 앱 시작 시 자동 등록:
+
+```typescript
+// electron/main.ts
+import { exec } from 'child_process';
+import path from 'path';
+
+function registerComDll() {
+  const dllPath = path.join(
+    process.resourcesPath,
+    'native',
+    'OnVoiceAudioBridge.dll'
+  );
+  
+  exec(`regsvr32.exe /s "${dllPath}"`, (error) => {
+    if (error) {
+      console.error('[COM Registration] Failed:', error);
+    } else {
+      console.log('[COM Registration] Success');
+    }
+  });
+}
+
+// 앱 시작 시 한 번만 실행
+app.whenReady().then(() => {
+  registerComDll();
+});
+```
+
+**주의사항**:
+- COM 등록은 관리자 권한이 필요할 수 있습니다.
+- 사용자가 관리자 권한을 거부하면 COM 객체를 사용할 수 없습니다.
+- 설치 시 자동 등록이 가장 안정적입니다.
+
 ## 코드 서명 (선택사항)
 
 ### Windows 코드 서명 설정
@@ -293,6 +383,8 @@ if (process.env.NODE_ENV === 'production') {
 - [ ] .NET 6 런타임이 설치되지 않은 환경에서 테스트 (필요 시)
 - [ ] 관리자 권한 없이 설치 가능한지 확인
 - [ ] 제거(Uninstall)가 정상적으로 작동하는지 확인
+- [ ] C++ COM DLL이 정상적으로 등록되었는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
+- [ ] COM 객체를 통한 오디오 캡처가 정상 작동하는지 확인
 
 ## 문제 해결
 
@@ -325,6 +417,24 @@ npm run build:electron
 - `process.resourcesPath` 경로 확인
 - DLL 파일이 `resources/dotnet/`에 포함되었는지 확인
 - .NET 6 런타임이 설치되어 있는지 확인
+
+#### COM 객체 생성 실패
+```bash
+# COM 등록 확인
+reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"
+
+# COM DLL 수동 등록 (관리자 권한 필요)
+regsvr32.exe "C:\path\to\OnVoiceAudioBridge.dll"
+
+# COM DLL 등록 해제
+regsvr32.exe /u "C:\path\to\OnVoiceAudioBridge.dll"
+```
+
+**해결 방법**:
+1. C++ COM DLL이 `resources/native/`에 포함되었는지 확인
+2. 설치 후 COM 등록이 실행되었는지 확인
+3. 관리자 권한으로 설치했는지 확인
+4. 앱 시작 시 자동 등록 스크립트가 실행되었는지 확인
 
 #### electron-edge-js 오류
 ```bash
