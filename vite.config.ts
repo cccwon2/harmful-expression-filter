@@ -7,7 +7,10 @@ export default defineConfig({
   base: '/',
   root: 'renderer',
   build: {
-    outDir: '../dist/renderer',
+    // 📦 Electron 패키징 시 main 번들과 같은 트리(dist-electron)에 렌더러 파일을 배치
+    // main.ts 의 __dirname 은 dist-electron/windows 이므로
+    // ../renderer/index.html, ../renderer/overlay.html 을 바라보게 맞춘다
+    outDir: '../dist-electron/renderer',
     emptyOutDir: true,
     rollupOptions: {
       input: {

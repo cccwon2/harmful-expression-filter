@@ -336,7 +336,10 @@ export function createOverlayWindow(): BrowserWindow {
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
     overlayWindow.loadURL('http://localhost:5173/overlay.html');
   } else {
-    overlayWindow.loadFile(path.join(__dirname, '../../dist/renderer/overlay.html'));
+    // 패키지 환경에서 __dirname 은 dist-electron/windows 이므로
+    // Vite build 결과(dist-electron/renderer)를 그대로 바라본다
+    const overlayPath = path.join(__dirname, '../renderer/overlay.html');
+    overlayWindow.loadFile(overlayPath);
   }
 
   return overlayWindow;

@@ -76,10 +76,15 @@ export function createMainWindow(): BrowserWindow {
       }
     });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../dist/renderer/index.html')).catch((err) => {
-      // 프로덕션 모드에서도 실패 시 조용히 처리
-      console.warn('[Main] Failed to load main window:', err);
-    });
+    // 패키지 환경에서 __dirname 은 dist-electron/windows 이므로
+    // Vite build 결과(dist-electron/renderer)를 그대로 바라본다
+    const indexPath = path.join(__dirname, '../renderer/index.html');
+    mainWindow
+      .loadFile(indexPath)
+      .catch((err) => {
+        // 프로덕션 모드에서도 실패 시 조용히 처리
+        console.warn('[Main] Failed to load main window:', err);
+      });
   }
 
   return mainWindow;
