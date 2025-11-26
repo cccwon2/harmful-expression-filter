@@ -82,10 +82,31 @@ class HarmfulTextClassifier:
         self.use_lora = False
         self.model_path: Optional[Path] = None
 
-        # 5) LoRA 경로 계산 및 검증
+        # 5) 모델 경로 계산 및 검증
         project_root = Path(__file__).resolve().parent.parent  # .../server
         
-        if not self.is_koelectra:
+        if self.is_koelectra:
+            # 🔥 KoElectra 로컬 모델 경로 처리
+            if model_path and model_path.strip():
+                candidate = Path(model_path)
+                if not candidate.is_absolute():
+                    candidate = (project_root / candidate).resolve()
+                
+                # 모델 파일 존재 여부 확인
+                config_file = candidate / "config.json"
+                model_file = candidate / "model.safetensors"
+                
+                if candidate.exists() and config_file.exists() and model_file.exists():
+                    self.model_path = candidate
+                    logger.info("✅ Valid KoElectra local model found: %s", self.model_path)
+                else:
+                    logger.warning("⚠️ KoElectra 로컬 모델 경로(%s)에 필수 파일이 없습니다.", candidate)
+                    logger.warning("➡️ Hugging Face에서 Base 모델 다운로드")
+                    self.model_path = None
+            else:
+                self.model_path = None
+        else:
+            # Kanana LoRA 경로 계산 및 검증
             # 우선순위: 환경변수 > 인자 > 기본값
             env_path = os.getenv("KANANA_LORA_DIR", "").strip()
             
@@ -113,7 +134,17 @@ class HarmfulTextClassifier:
                     self.model_path = None
 
         # 6) 토크나이저 로드
-        self.tokenizer = self._AutoTokenizer.from_pretrained(self.base_model_name)
+        if self.is_koelectra and self.model_path:
+            # 🔥 KoElectra 로컬 모델의 토크나이저 로드 시도
+            try:
+                self.tokenizer = self._AutoTokenizer.from_pretrained(str(self.model_path))
+                logger.info("✅ 로컬 KoElectra 토크나이저 로드 완료")
+            except Exception as e:
+                logger.warning("⚠️ 로컬 토크나이저 로드 실패 (%s). Base 모델의 토크나이저 사용", e)
+                self.tokenizer = self._AutoTokenizer.from_pretrained(self.base_model_name)
+        else:
+            self.tokenizer = self._AutoTokenizer.from_pretrained(self.base_model_name)
+        
         if self.tokenizer.pad_token is None and getattr(self.tokenizer, "eos_token", None) is not None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -152,7 +183,21 @@ class HarmfulTextClassifier:
                 )
 
         if self.is_koelectra:
-            self.model = load_base()
+            # 🔥 KoElectra 로컬 모델 로드 또는 Base 모델 다운로드
+            if self.model_path:
+                try:
+                    logger.info("📂 로컬 KoElectra 모델 로드: %s", self.model_path)
+                    self.model = self._AutoModelForSequenceClassification.from_pretrained(
+                        str(self.model_path),
+                        num_labels=num_labels,
+                        **load_kwargs
+                    )
+                    logger.info("✅ 로컬 KoElectra 모델 로드 완료")
+                except Exception as e:
+                    logger.error("❌ 로컬 KoElectra 모델 로드 실패 (%s). Base 모델로 폴백", e)
+                    self.model = load_base()
+            else:
+                self.model = load_base()
         else:
             self.base_model = load_base()
             self.model = self.base_model

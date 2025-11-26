@@ -355,8 +355,22 @@ async def lifespan(app: FastAPI):
             else:
                 target_base_model = base_model_env
             LOGGER.info("[Init] 🚀 KoElectra 모델 선택됨")
-            # KoElectra는 LoRA를 사용하지 않으므로 model_path는 빈 문자열
-            target_model_path = ""
+            
+            # 🔥 KoElectra 로컬 모델 경로 처리
+            if model_path_env and model_path_env.strip():
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                full_model_path = os.path.join(base_dir, model_path_env)
+                
+                if os.path.exists(full_model_path):
+                    target_model_path = full_model_path
+                    LOGGER.info(f"[Init] 📂 KoElectra 로컬 모델 경로 확인됨: {target_model_path}")
+                else:
+                    LOGGER.warning(f"[Init] ⚠️ 로컬 모델 경로를 찾을 수 없음: {full_model_path}")
+                    LOGGER.info("[Init] 💡 Hugging Face에서 Base 모델 다운로드")
+                    target_model_path = ""  # Hugging Face에서 다운로드
+            else:
+                target_model_path = ""  # Hugging Face에서 다운로드
+                LOGGER.info("[Init] 💡 MODEL_PATH가 설정되지 않음. Hugging Face에서 Base 모델 다운로드")
         else:
             # Kanana (Default)
             if not base_model_env or "koelectra" in base_model_env.lower():

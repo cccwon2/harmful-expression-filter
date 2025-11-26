@@ -48,6 +48,7 @@
 38. **[코드 리팩토링 및 정리](./38-code-refactoring-cleanup.md)** ✅ 완료
 39. **[C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)** ✅ 완료
 40. **[C++ Core Audio 구현 상세](./40-cpp-core-audio-implementation.md)** ✅ 완료
+41. **[파인튜닝된 KoElectra 분류기 연동](./41-koelectra-classifier-integration.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -156,6 +157,7 @@
 | 코드 리팩토링 및 정리 | ✅ 완료      | 100%   | Medium   |
 | C# 기반 PID 볼륨 제어 통합 | ✅ 완료      | 100%   | High     |
 | C++ Core Audio 구현 상세 | ✅ 완료      | 100%   | Low      |
+| 파인튜닝된 KoElectra 분류기 연동 | ✅ 완료      | 100%   | High     |
 
 ## 최근 변경 사항 (2025-11-25)
 
@@ -200,3 +202,8 @@
   - `AUDIOCLIENT_ACTIVATION_PARAMS`를 사용한 PID 기반 오디오 캡처 상세 설명
   - Windows OCR (C++/WinRT) 구현 내용 포함
   - 빌드 및 배포 주의사항 정리 (Windows SDK 버전, 런타임 요구사항 등)
+- **Task 41: 파인튜닝된 KoElectra 분류기 연동 완료**
+  - 로컬 파인튜닝 모델(`server/models/koelectra-classifier-v1`) 로드 지원
+  - `MODEL_PATH` 환경 변수를 통한 로컬 모델 경로 지정
+  - 모델 파일 검증 및 로드 실패 시 Hugging Face Base 모델로 폴백
+  - 파인튜닝된 모델 사용으로 유해 표현 분류 정확도 향상
