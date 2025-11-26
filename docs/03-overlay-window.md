@@ -35,6 +35,7 @@
 - [작업 1: 기본 Electron 앱 설정](./01-electron-setup.md)
 - [작업 5: Edit Mode 관리](./05-edit-mode.md)
 - [작업 8: 개발자 도구 통합](./08-devtools-integration.md)
+- [작업 42: Electron 앱 배포](./42-electron-app-deployment.md) (배포 모드에서 오버레이 창 문제 해결)
 
 ## 관련 파일
 - `electron/windows/createOverlayWindow.ts`

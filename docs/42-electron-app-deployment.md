@@ -15,6 +15,7 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 - ✅ C# DLL 자동 포함 (extraResources)
 - ✅ C++ COM DLL 포함 방법 문서화
 - ✅ 프로덕션 빌드 스크립트
+- ✅ 오버레이 창 배포 모드 문제 해결 (Vite base 경로, file:// 프로토콜 지원)
 
 ### 주요 설정
 
@@ -54,6 +55,7 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 3. **DLL 복사**: 빌드된 DLL들을 적절한 위치로 복사 (Release 우선)
 4. **TypeScript 컴파일**: 메인 프로세스 TypeScript 코드 컴파일
 5. **렌더러 빌드**: Vite를 사용하여 React 앱 빌드
+   - ⚠️ **중요**: `vite.config.ts`에서 `base: './'` 설정 필요 (배포 모드에서 `file://` 프로토콜 지원)
 6. **패키징**: electron-builder로 설치 패키지 생성
 
 ## 의존성
@@ -750,6 +752,158 @@ echo %DOTNET_ROOT%
 npm run build:all
 ```
 
+#### 오버레이 창이 배포 파일에서 표시되지 않음
+
+**증상**: 개발 모드(`npm run dev`)에서는 오버레이가 정상적으로 표시되지만, 배포 파일(`OnVoice.exe`)에서는 오버레이가 표시되지 않거나 빈 화면이 나타남
+
+**원인**: 개발 모드는 웹 서버(`http://localhost...`)를 사용하지만, 배포판은 로컬 파일 시스템(`file://...`)을 사용하기 때문입니다. 이로 인해:
+
+1. **Vite base 경로 문제**: 절대 경로(`/`)를 사용하면 `file://` 프로토콜에서 자산(JS, CSS)을 찾을 수 없음
+2. **경로 해석 문제**: React Router가 `file://` 프로토콜에서 제대로 작동하지 않을 수 있음
+
+**해결 방법**:
+
+##### 1. Vite base 경로 설정 (필수)
+
+`vite.config.ts`에서 `base`를 상대 경로로 설정:
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+  plugins: [react()],
+  base: './', // ✅ file:// 프로토콜에서 리소스를 찾기 위해 상대 경로 사용
+  root: 'renderer',
+  // ...
+});
+```
+
+**중요**: `base: '/'` (절대 경로)는 개발 모드에서는 작동하지만, 배포 모드에서 `file://` 프로토콜 사용 시 자산 로드가 실패합니다.
+
+##### 2. 오버레이 창 로드 경로 확인
+
+`electron/windows/createOverlayWindow.ts`에서 배포 모드 경로 로깅 및 에러 처리 추가:
+
+```typescript
+// electron/windows/createOverlayWindow.ts
+if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+  // 🟢 개발 모드: Vite 개발 서버 사용
+  overlayWindow.loadURL('http://localhost:5173/overlay.html');
+  console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
+} else {
+  // 🔴 배포 모드: file:// 프로토콜로 로컬 파일 로드
+  const overlayPath = path.join(__dirname, '../renderer/overlay.html');
+  console.log('[Overlay] Production mode - loading overlay from:', overlayPath);
+  console.log('[Overlay] __dirname:', __dirname);
+  
+  // 파일 존재 여부 확인
+  const fs = require('fs');
+  if (fs.existsSync(overlayPath)) {
+    console.log('[Overlay] ✓ overlay.html file found at:', overlayPath);
+  } else {
+    console.error('[Overlay] ✗ overlay.html file NOT found at:', overlayPath);
+    console.error('[Overlay] This will cause the overlay window to fail loading!');
+  }
+  
+  overlayWindow.loadFile(overlayPath).catch((err) => {
+    console.error('[Overlay] Failed to load overlay.html:', err);
+  });
+}
+```
+
+##### 3. 빌드 결과 확인
+
+빌드 후 `overlay.html`이 올바른 위치에 생성되었는지 확인:
+
+```bash
+# 빌드 실행
+npm run build:all
+npm run build:renderer
+
+# 빌드 결과 확인
+dir dist-electron\renderer\overlay.html
+
+# 예상 출력:
+# overlay.html  ← 이 파일이 있어야 함
+```
+
+**파일 구조**:
+```
+프로젝트/
+├── renderer/
+│   ├── index.html          ← 소스
+│   ├── overlay.html        ← 소스
+│   └── src/
+└── dist-electron/
+    ├── renderer/           ← 빌드 결과
+    │   ├── index.html
+    │   ├── overlay.html    ✅
+    │   └── assets/
+    └── windows/
+        └── createOverlayWindow.js
+```
+
+**경로 일치성**:
+- `__dirname` = `dist-electron/windows`
+- `overlayPath` = `dist-electron/windows/../renderer/overlay.html` = `dist-electron/renderer/overlay.html` ✅
+
+##### 4. 디버깅 방법
+
+배포 파일에서도 개발자 도구를 열어 오류를 확인할 수 있습니다:
+
+1. `dist\win-unpacked\OnVoice.exe`를 실행합니다
+2. 오버레이가 떠야 하는 시점에 단축키 `Ctrl + Shift + I` (또는 `F12`)를 눌러 개발자 도구를 엽니다
+3. **Console 탭**을 확인합니다:
+   - `[Overlay] Production mode - loading overlay from: ...` 로그 확인
+   - `[Overlay] ✓ overlay.html file found` 메시지 확인
+   - `Not allowed to load local resource` 에러가 있다면 → Vite base 경로 문제 (1번 해결 방법 적용)
+   - 아무 에러가 없는데 화면이 비어 있다면 → Elements 탭에서 `<div id="root">` 안에 내용이 있는지 확인
+4. **Network 탭**에서 자산(JS, CSS)이 정상적으로 로드되는지 확인
+
+**예상 콘솔 로그 (정상)**:
+```
+[Overlay] Production mode - loading overlay from: C:\...\dist-electron\renderer\overlay.html
+[Overlay] __dirname: C:\...\dist-electron\windows
+[Overlay] ✓ overlay.html file found at: C:\...\dist-electron\renderer\overlay.html
+[Overlay] Window created
+[Overlay] DOM ready
+```
+
+##### 5. React Router 사용 시 주의사항
+
+현재 프로젝트는 별도의 `overlay.html` 파일을 사용하므로 React Router 설정이 필요하지 않습니다.
+
+하지만 향후 단일 HTML 파일(`index.html`)로 통합하고 React Router를 사용하려면:
+
+- `BrowserRouter` 대신 **`HashRouter`** 사용 (Electron 배포 모드에서 필수)
+- `createOverlayWindow.ts`에서 해시 경로(`#/overlay`) 추가
+
+**현재 구조에서는 불필요**하지만, 참고용으로 예시 코드:
+
+```typescript
+// ❌ 변경 전 (BrowserRouter: 개발에선 되지만 배포시 file:// 경로 인식 불가)
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
+// ✅ 변경 후 (HashRouter: 주소 뒤에 #/overlay 형태로 접근)
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+```
+
+```typescript
+// createOverlayWindow.ts
+if (process.env.NODE_ENV === 'development') {
+  overlayWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}#/overlay`);
+} else {
+  overlayWindow.loadFile(indexPath, { hash: 'overlay' });
+  // 또는
+  // overlayWindow.loadURL(`file://${indexPath}#/overlay`);
+}
+```
+
+**요약**:
+- ✅ `vite.config.ts`에서 `base: './'` 설정 (가장 중요)
+- ✅ `createOverlayWindow.ts`에서 배포 모드 경로 로깅 및 에러 처리
+- ✅ 빌드 결과 확인 (`dist-electron/renderer/overlay.html`)
+- ✅ 개발자 도구로 디버깅 (Console, Network 탭)
+
 ## 빌드 최적화
 
 ### 파일 크기 최적화
@@ -804,7 +958,8 @@ electron-builder는 자동으로 캐시를 사용합니다. 캐시 위치:
 
 - `package.json`: 빌드 설정 및 스크립트
 - `electron/tsconfig.json`: 메인 프로세스 TypeScript 설정
-- `vite.config.ts`: 렌더러 빌드 설정
+- `vite.config.ts`: 렌더러 빌드 설정 (⚠️ `base: './'` 설정 필수 - 배포 모드에서 file:// 프로토콜 지원)
+- `electron/windows/createOverlayWindow.ts`: 오버레이 창 생성 및 로드 경로 관리
 - `scripts/copy-dll.js`: C# DLL 복사 스크립트
 - `scripts/copy-native-dll.js`: C++ COM DLL 복사 스크립트
 - `dotnet/OnVoiceComBridge/OnVoiceComBridge.csproj`: C# 프로젝트 설정

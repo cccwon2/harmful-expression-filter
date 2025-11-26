@@ -32,7 +32,7 @@
 - **Task 39**: C# 기반 PID 볼륨 제어 통합 (native-sound-mixer 완전 제거, C# Bridge로 통합)
 - **Task 40**: C++ Core Audio 구현 상세 (Application Loopback 내부 구현 원리 문서화)
 - **Task 41**: 파인튜닝된 KoElectra 분류기 연동 (로컬 모델 로드, 정확도 향상)
-- **Task 42**: Electron 앱 배포 (Windows NSIS 인스톨러 생성, C# 및 C++ DLL 포함, electron-builder 통합)
+- **Task 42**: Electron 앱 배포 (Windows NSIS 인스톨러 생성, C# 및 C++ DLL 포함, electron-builder 통합, 오버레이 창 배포 모드 문제 해결)
 
 ### 주요 기술 스택
 
@@ -354,6 +354,7 @@ npm start
 ```
 
 **배포 관련**:
+
 - 자세한 배포 가이드는 [docs/42-electron-app-deployment.md](./docs/42-electron-app-deployment.md) 참조
 - C++ COM DLL은 상대 경로(`../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge`)에서 자동 탐색
 - 빌드된 DLL은 `native/OnVoiceAudioBridge.dll`로 복사되어 electron-builder에 포함됨
