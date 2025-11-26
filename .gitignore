@@ -80,14 +80,14 @@ server/models/kakaocorp/
 .vs/
 
 # Native / C++ Build Outputs
-native/**/*.dll
-native/**/*.lib
-native/**/*.exp
-native/**/x64/
-native/**/x86/
-native/**/Release/
-native/**/Debug/
-native/**/bin/
-native/**/obj/
-# 하지만 native/OnVoiceAudioBridge.dll은 포함 (빌드된 최종 DLL)
-!native/OnVoiceAudioBridge.dll
+# 서브모듈(native/OnVoiceAudioBridge)은 .gitmodules에 의해 관리되므로 무시할 수 없음
+# native 폴더 루트의 빌드 산출물만 무시
+
+# native 폴더 루트의 모든 파일 무시
+native/*
+# .gitkeep 파일만 포함 (폴더 구조 유지용)
+!native/.gitkeep
+# DLL은 무시 (배포 시 electron-builder가 자동으로 포함)
+
+# 서브모듈 내부의 빌드 산출물은 서브모듈의 .gitignore에서 관리됨
+# (native/OnVoiceAudioBridge/.gitignore 참조)
