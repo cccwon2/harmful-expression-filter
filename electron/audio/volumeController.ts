@@ -135,12 +135,14 @@ export class VolumeController {
       const totalElapsed = Date.now() - startTime;
 
       if (ok) {
+        const timestamp = new Date().toISOString();
         console.log(
-          `[VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%) for ${this.targetAppIdentifier} (AppVolumeController: ${appVolumeElapsed}ms, 총: ${totalElapsed}ms)`,
+          `[${timestamp}] [VolumeController] 🔊 Volume set to level ${clampedLevel} (${percent}%) for ${this.targetAppIdentifier} (AppVolumeController: ${appVolumeElapsed}ms, 총: ${totalElapsed}ms)`,
         );
       } else {
+        const timestamp = new Date().toISOString();
         console.warn(
-          `[VolumeController] ⚠️ Failed to set volume for ${this.targetAppIdentifier} (${totalElapsed}ms)`,
+          `[${timestamp}] [VolumeController] ⚠️ Failed to set volume for ${this.targetAppIdentifier} (${totalElapsed}ms)`,
         );
       }
     } catch (err) {

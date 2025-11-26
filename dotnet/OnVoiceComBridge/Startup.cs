@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Diagnostics;
+using System.Text;
 
 // Windows API (WinRT)
 using Windows.Graphics.Imaging;
@@ -37,6 +38,16 @@ namespace OnVoiceComBridge
         
         static Startup()
         {
+            // 한글 로그 출력을 위한 UTF-8 인코딩 설정
+            try
+            {
+                Console.OutputEncoding = Encoding.UTF8;
+            }
+            catch
+            {
+                // 콘솔 인코딩 설정 실패 시 무시 (일부 환경에서 지원하지 않을 수 있음)
+            }
+            
             // Windows SDK 런타임 DLL 로드를 위한 AssemblyResolve 이벤트 핸들러
             AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
         }

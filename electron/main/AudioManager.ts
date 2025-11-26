@@ -436,10 +436,12 @@ class AudioManager {
       await this.volumeController.setVolumeLevel(savedVolumeLevel);
       
       const volumeControlElapsed = Date.now() - volumeControlStartTime;
-      console.log(`[AudioManager] ⏱️ 볼륨 조절 완료 (총 소요 시간: ${volumeControlElapsed}ms)`);
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] [AudioManager] ⏱️ 볼륨 조절 완료 (총 소요 시간: ${volumeControlElapsed}ms)`);
     } catch (error) {
       const volumeControlElapsed = Date.now() - volumeControlStartTime;
-      console.error(`[AudioManager] 유해 표현 처리 중 오류 (${volumeControlElapsed}ms):`, error);
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}] [AudioManager] 유해 표현 처리 중 오류 (${volumeControlElapsed}ms):`, error);
     }
   }
 }

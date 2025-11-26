@@ -7,6 +7,24 @@ import { EventEmitter } from "events";
 import axios, { AxiosError } from "axios";
 import * as dotenv from "dotenv";
 
+/**
+ * 타임스탬프가 포함된 로그 유틸리티
+ */
+function logWithTimestamp(message: string, ...args: any[]): void {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${message}`, ...args);
+}
+
+function warnWithTimestamp(message: string, ...args: any[]): void {
+  const timestamp = new Date().toISOString();
+  console.warn(`[${timestamp}] ${message}`, ...args);
+}
+
+function errorWithTimestamp(message: string, ...args: any[]): void {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] ${message}`, ...args);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const edge = require("electron-edge-js");
 
@@ -297,15 +315,15 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
     const totalElapsed = Date.now() - startTime;
     
     if (result && result.ok === true) {
-      console.log(`[OnVoiceBridge] ⏱️ setVolumeByPid 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms)`);
+      logWithTimestamp(`[OnVoiceBridge] ⏱️ setVolumeByPid 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms)`);
       return true;
     } else {
-      console.warn(`[OnVoiceBridge] ⚠️ setVolumeByPid 실패 (${totalElapsed}ms)`);
+      warnWithTimestamp(`[OnVoiceBridge] ⚠️ setVolumeByPid 실패 (${totalElapsed}ms)`);
       return false;
     }
   } catch (error) {
     const totalElapsed = Date.now() - startTime;
-    console.error(`[OnVoiceBridge] 볼륨 조절 실패 (PID: ${pid}, ${totalElapsed}ms)`, error);
+    errorWithTimestamp(`[OnVoiceBridge] 볼륨 조절 실패 (PID: ${pid}, ${totalElapsed}ms)`, error);
     return false;
   }
 }
@@ -319,15 +337,15 @@ export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
     
     if (result && Array.isArray(result.sessions)) {
       const totalElapsed = Date.now() - startTime;
-      console.log(`[OnVoiceBridge] ⏱️ listAudioSessions 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms, 세션 수: ${result.sessions.length})`);
+      logWithTimestamp(`[OnVoiceBridge] ⏱️ listAudioSessions 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms, 세션 수: ${result.sessions.length})`);
       return result.sessions as BridgeAudioSession[];
     }
     const totalElapsed = Date.now() - startTime;
-    console.warn(`[OnVoiceBridge] ⚠️ listAudioSessions 결과 형식 오류 (${totalElapsed}ms)`);
+    warnWithTimestamp(`[OnVoiceBridge] ⚠️ listAudioSessions 결과 형식 오류 (${totalElapsed}ms)`);
     return [];
   } catch (error) {
     const totalElapsed = Date.now() - startTime;
-    console.error(`[OnVoiceBridge] 오디오 세션 조회 실패 (${totalElapsed}ms)`, error);
+    errorWithTimestamp(`[OnVoiceBridge] 오디오 세션 조회 실패 (${totalElapsed}ms)`, error);
     return [];
   }
   return [];

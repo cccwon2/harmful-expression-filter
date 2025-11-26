@@ -144,7 +144,8 @@ export class AppVolumeController {
     }
     
     const totalElapsed = Date.now() - startTime;
-    console.log(`[AppVolumeController] ⏱️ setVolumeByPid 완료 (C# Bridge: ${bridgeElapsed}ms, 총: ${totalElapsed}ms)`);
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [AppVolumeController] ⏱️ setVolumeByPid 완료 (C# Bridge: ${bridgeElapsed}ms, 총: ${totalElapsed}ms)`);
     
     return success;
   }
@@ -231,9 +232,11 @@ export class AppVolumeController {
 
     if (success) {
       const normalizedVolume = Math.max(0, Math.min(1, volumeLevel / 10));
-      console.log(`[AppVolumeController] 🔊 ${targetSession.name}: ${Math.round(normalizedVolume * 100)}% (PID ${targetSession.pid}) - 세션 조회: ${fetchSessionsElapsed}ms, 앱 찾기: ${findSessionElapsed}ms, 볼륨 조절: ${setVolumeElapsed}ms, 총: ${totalElapsed}ms`);
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] [AppVolumeController] 🔊 ${targetSession.name}: ${Math.round(normalizedVolume * 100)}% (PID ${targetSession.pid}) - 세션 조회: ${fetchSessionsElapsed}ms, 앱 찾기: ${findSessionElapsed}ms, 볼륨 조절: ${setVolumeElapsed}ms, 총: ${totalElapsed}ms`);
     } else {
-      console.warn(`[AppVolumeController] ⚠️ 볼륨 조절 실패 (${totalElapsed}ms)`);
+      const timestamp = new Date().toISOString();
+      console.warn(`[${timestamp}] [AppVolumeController] ⚠️ 볼륨 조절 실패 (${totalElapsed}ms)`);
     }
 
     return success;
