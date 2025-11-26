@@ -6,8 +6,10 @@
   "scripts": {
     "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet build",
     "copy:dll": "node scripts/copy-dll.js",
+    "build:native": "node scripts/build-native.js",
+    "copy:native": "node scripts/copy-native-dll.js",
     "build:main": "tsc -p electron/tsconfig.json",
-    "build:all": "npm run build:dotnet && npm run copy:dll && npm run build:main",
+    "build:all": "npm run build:dotnet && npm run build:native && npm run copy:dll && npm run copy:native && npm run build:main",
     "dev:main": "tsc -w -p electron/tsconfig.json",
     "dev:renderer": "vite",
     "dev": "cross-env EDGE_USE_CORECLR=1 concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",

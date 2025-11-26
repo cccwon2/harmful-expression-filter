@@ -78,3 +78,16 @@ server/models/kakaocorp/
 *.user
 *.suo
 .vs/
+
+# Native / C++ Build Outputs
+native/**/*.dll
+native/**/*.lib
+native/**/*.exp
+native/**/x64/
+native/**/x86/
+native/**/Release/
+native/**/Debug/
+native/**/bin/
+native/**/obj/
+# 하지만 native/OnVoiceAudioBridge.dll은 포함 (빌드된 최종 DLL)
+!native/OnVoiceAudioBridge.dll

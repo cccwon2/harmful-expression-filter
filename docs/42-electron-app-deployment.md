@@ -5,7 +5,7 @@
 
 ## 개요
 
-Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로 빌드하고 배포하는 프로세스를 설정합니다. electron-builder를 사용하여 프로덕션 빌드, C# DLL 포함, 설치 패키지 생성 등을 자동화합니다.
+Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로 빌드하고 배포하는 프로세스를 설정합니다. electron-builder를 사용하여 프로덕션 빌드, C# DLL 및 C++ COM DLL 포함, 설치 패키지 생성 등을 자동화합니다.
 
 ## 완료된 기능
 
@@ -13,6 +13,7 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 - ✅ electron-builder 설정 (`package.json`)
 - ✅ Windows NSIS 인스톨러 타겟 설정
 - ✅ C# DLL 자동 포함 (extraResources)
+- ✅ C++ COM DLL 포함 방법 문서화
 - ✅ 프로덕션 빌드 스크립트
 
 ### 주요 설정
@@ -47,10 +48,11 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 ### 빌드 프로세스
 
 1. **C# DLL 빌드**: `.NET 6` 프로젝트를 빌드하여 DLL 생성
-2. **DLL 복사**: 빌드된 DLL을 `dist-electron/dotnet`으로 복사
-3. **TypeScript 컴파일**: 메인 프로세스 TypeScript 코드 컴파일
-4. **렌더러 빌드**: Vite를 사용하여 React 앱 빌드
-5. **패키징**: electron-builder로 설치 패키지 생성
+2. **C++ COM DLL 빌드** (선택): C++ COM DLL을 빌드하거나 기존 DLL 사용
+3. **DLL 복사**: 빌드된 DLL들을 적절한 위치로 복사
+4. **TypeScript 컴파일**: 메인 프로세스 TypeScript 코드 컴파일
+5. **렌더러 빌드**: Vite를 사용하여 React 앱 빌드
+6. **패키징**: electron-builder로 설치 패키지 생성
 
 ## 의존성
 
@@ -100,7 +102,9 @@ npm run build:electron
 - Node.js 18+ 및 npm
 - .NET 6 SDK (C# DLL 빌드용)
 - Windows SDK (Windows 빌드용)
-- Visual Studio 2022 또는 Build Tools (C++ 컴파일러)
+- **Visual Studio 2019 이상 또는 Visual Studio Build Tools** (C++ 컴파일러)
+  - "C++ 빌드 도구" 워크로드 필수
+  - MSBuild가 PATH에 없어도 스크립트가 자동으로 찾습니다
 
 #### 환경 변수
 ```bash
@@ -217,19 +221,106 @@ const dllPath = path.join(
 
 C# DLL이 `OnVoiceAudioBridge.OnVoiceCapture` COM 객체를 사용하므로, C++ COM DLL도 함께 배포해야 합니다.
 
-**1. C++ DLL 빌드 및 준비**
+**포함 방법 선택**
 
-C++ COM DLL은 별도 리포지토리(`cccwon2/onvoice-com-bridge`)에서 빌드합니다:
+C++ COM DLL을 프로젝트에 포함하는 방법은 여러 가지가 있습니다:
+
+##### 방법 1: Git 서브모듈로 포함 (권장)
+
+별도 리포지토리의 C++ 프로젝트를 서브모듈로 포함:
 
 ```bash
-# C++ 프로젝트 빌드 (Visual Studio 또는 MSBuild)
-# 빌드 결과물: OnVoiceAudioBridge.dll
+# 서브모듈 추가
+git submodule add https://github.com/cccwon2/onvoice-com-bridge.git native/OnVoiceAudioBridge
+
+# 서브모듈 초기화 및 업데이트
+git submodule update --init --recursive
 ```
 
-**2. package.json에 C++ DLL 추가**
+프로젝트 구조:
+```
+harmful-expression-filter/
+├── native/
+│   └── OnVoiceAudioBridge/     # 서브모듈
+│       ├── OnVoiceCapture.cpp
+│       ├── OnVoiceCapture.h
+│       └── ...
+├── dotnet/
+└── electron/
+```
+
+빌드 스크립트 추가 (`package.json`):
+```json
+{
+  "scripts": {
+    "build:native": "cd native/OnVoiceAudioBridge && msbuild OnVoiceAudioBridge.sln /p:Configuration=Release",
+    "build:all": "npm run build:dotnet && npm run build:native && npm run copy:dll && npm run build:main"
+  }
+}
+```
+
+##### 방법 2: 빌드된 DLL 파일 직접 포함
+
+빌드된 DLL을 프로젝트에 직접 복사:
+
+```bash
+# native 폴더 생성
+mkdir -p native
+
+# 빌드된 DLL 복사
+cp /path/to/OnVoiceAudioBridge.dll native/
+```
+
+프로젝트 구조:
+```
+harmful-expression-filter/
+├── native/
+│   └── OnVoiceAudioBridge.dll  # 빌드된 DLL
+├── dotnet/
+└── electron/
+```
+
+##### 방법 3: C++ 소스 코드 직접 포함
+
+C++ 소스 코드를 프로젝트에 직접 포함:
+
+```bash
+# native 폴더 생성
+mkdir -p native/OnVoiceAudioBridge
+
+# C++ 소스 코드 복사 또는 클론
+git clone https://github.com/cccwon2/onvoice-com-bridge.git native/OnVoiceAudioBridge
+```
+
+프로젝트 구조:
+```
+harmful-expression-filter/
+├── native/
+│   └── OnVoiceAudioBridge/     # C++ 소스 코드
+│       ├── OnVoiceCapture.cpp
+│       ├── OnVoiceCapture.h
+│       ├── OnVoiceAudioBridge.sln
+│       └── ...
+├── dotnet/
+└── electron/
+```
+
+**권장 방법**: 방법 1 (Git 서브모듈)을 사용하면:
+- 원본 리포지토리와 동기화 가능
+- 버전 관리 용이
+- 프로젝트 구조가 깔끔함
+
+**빌드된 DLL을 package.json에 추가**
+
+어떤 방법을 선택하든, 최종적으로 빌드된 DLL을 `native/` 폴더에 배치하고 `package.json`에 추가합니다:
 
 ```json
 {
+  "scripts": {
+    "build:native": "cd native/OnVoiceAudioBridge && msbuild OnVoiceAudioBridge.sln /p:Configuration=Release /p:Platform=x64",
+    "copy:native": "node scripts/copy-native-dll.js",
+    "build:all": "npm run build:dotnet && npm run build:native && npm run copy:dll && npm run copy:native && npm run build:main"
+  },
   "build": {
     "extraResources": [
       {
@@ -248,6 +339,48 @@ C++ COM DLL은 별도 리포지토리(`cccwon2/onvoice-com-bridge`)에서 빌드
     }
   }
 }
+```
+
+**DLL 복사 스크립트** (`scripts/copy-native-dll.js`):
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+// C++ DLL 빌드 출력 경로 (Visual Studio 기본 경로)
+const sourcePaths = [
+  path.join(__dirname, '..', 'native', 'OnVoiceAudioBridge', 'x64', 'Release', 'OnVoiceAudioBridge.dll'),
+  path.join(__dirname, '..', 'native', 'OnVoiceAudioBridge', 'Release', 'OnVoiceAudioBridge.dll'),
+  path.join(__dirname, '..', 'native', 'OnVoiceAudioBridge.dll'), // 이미 복사된 경우
+];
+
+const targetDir = path.join(__dirname, '..', 'native');
+const targetFile = path.join(targetDir, 'OnVoiceAudioBridge.dll');
+
+// 소스 파일 찾기
+let sourceFile = null;
+for (const sourcePath of sourcePaths) {
+  if (fs.existsSync(sourcePath)) {
+    sourceFile = sourcePath;
+    break;
+  }
+}
+
+if (!sourceFile) {
+  console.error('[Copy Native DLL] ❌ DLL을 찾을 수 없습니다.');
+  console.error('           다음 경로를 확인하세요:');
+  sourcePaths.forEach(p => console.error(`           - ${p}`));
+  process.exit(1);
+}
+
+// 타겟 디렉토리 생성
+if (!fs.existsSync(targetDir)) {
+  fs.mkdirSync(targetDir, { recursive: true });
+}
+
+// DLL 복사
+fs.copyFileSync(sourceFile, targetFile);
+console.log(`[Copy Native DLL] ✅ 복사 완료: ${sourceFile} → ${targetFile}`);
 ```
 
 **3. COM 등록 스크립트 생성**
@@ -399,6 +532,26 @@ npm run copy:dll
 npm run build:dotnet
 ```
 
+#### MSBuild를 찾을 수 없음
+```bash
+# MSBuild 경로 확인
+node scripts/find-msbuild.js
+
+# 해결 방법:
+# 1. Visual Studio 2019 이상 또는 Visual Studio Build Tools 설치
+# 2. 또는 Visual Studio Developer Command Prompt에서 직접 빌드
+cd native/OnVoiceAudioBridge
+msbuild OnVoiceAudioBridge.sln /p:Configuration=Release /p:Platform=x64
+
+# 3. 또는 Visual Studio에서 솔루션을 열어 직접 빌드
+# 4. 또는 빌드된 DLL을 수동으로 복사
+```
+
+**Visual Studio Build Tools 설치**:
+1. [Visual Studio Build Tools 다운로드](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
+2. "C++ 빌드 도구" 워크로드 선택
+3. 설치 후 재시도
+
 #### electron-builder 오류
 ```bash
 # 캐시 정리
@@ -501,8 +654,11 @@ electron-builder는 자동으로 캐시를 사용합니다. 캐시 위치:
 - `package.json`: 빌드 설정 및 스크립트
 - `electron/tsconfig.json`: 메인 프로세스 TypeScript 설정
 - `vite.config.ts`: 렌더러 빌드 설정
-- `scripts/copy-dll.js`: DLL 복사 스크립트
+- `scripts/copy-dll.js`: C# DLL 복사 스크립트
+- `scripts/copy-native-dll.js`: C++ COM DLL 복사 스크립트
 - `dotnet/OnVoiceComBridge/OnVoiceComBridge.csproj`: C# 프로젝트 설정
+- `native/OnVoiceAudioBridge/`: C++ COM DLL 소스 코드 (서브모듈 또는 직접 포함)
+- `build/installer.nsh`: NSIS 설치 스크립트 (COM 등록)
 
 ## 다음 작업
 

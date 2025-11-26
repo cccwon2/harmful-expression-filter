@@ -1,0 +1,3 @@
+[submodule "native/OnVoiceAudioBridge"]
+	path = native/OnVoiceAudioBridge
+	url = https://github.com/cccwon2/onvoice-com-bridge.git
