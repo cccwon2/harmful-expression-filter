@@ -5,14 +5,13 @@ import { SERVER_CHANNELS } from './channels';
 
 // SERVER_URL은 main.ts에서 dotenv로 로드된 환경 변수 사용
 // 기본값: http://127.0.0.1:8000
-// 참고: serverHandlers.ts는 main.ts에서 dotenv.config() 이후에 로드되므로
-// process.env.SERVER_URL이 이미 설정되어 있어야 함
-const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:8000';
+// ❗ 중요: .env는 app.whenReady() 이후에 로드되므로,
+// 모듈 로드 시점에 SERVER_URL을 상수로 굳혀두면 .env 값이 반영되지 않는다.
 const REQUEST_TIMEOUT = 5000;
 
-console.log('[ServerHandlers] SERVER_URL:', SERVER_URL);
-console.log('[ServerHandlers] process.env.SERVER_URL:', process.env.SERVER_URL || '(설정 안 됨)');
-console.log('[ServerHandlers] NODE_ENV:', process.env.NODE_ENV || '(설정 안 됨)');
+function getServerUrl(): string {
+  return process.env.SERVER_URL || 'http://127.0.0.1:8000';
+}
 
 interface HealthResponse {
   status: string;
@@ -69,13 +68,19 @@ function handleServerError(error: unknown, context: string): ErrorResponse {
 export function registerServerHandlers(): void {
   console.log('[IPC] 서버 IPC 핸들러 등록 중...');
 
+  const resolvedServerUrl = getServerUrl();
+  console.log('[ServerHandlers] SERVER_URL:', resolvedServerUrl);
+  console.log('[ServerHandlers] process.env.SERVER_URL:', process.env.SERVER_URL || '(설정 안 됨)');
+  console.log('[ServerHandlers] NODE_ENV:', process.env.NODE_ENV || '(설정 안 됨)');
+
   ipcMain.handle(
     SERVER_CHANNELS.HEALTH_CHECK,
     async (): Promise<HealthResponse | ErrorResponse> => {
       try {
-        const url = `${SERVER_URL}/health`;
+        const serverUrl = getServerUrl();
+        const url = `${serverUrl}/health`;
         console.log('[IPC] 헬스 체크 요청:', url);
-        console.log('[IPC] 현재 SERVER_URL:', SERVER_URL);
+        console.log('[IPC] 현재 SERVER_URL:', serverUrl);
         const response = await axios.get<HealthResponse>(url, {
           timeout: REQUEST_TIMEOUT,
         });
@@ -90,7 +95,7 @@ export function registerServerHandlers(): void {
             code: axiosError.code,
             status: axiosError.response?.status,
             url: axiosError.config?.url,
-            serverUrl: SERVER_URL,
+            serverUrl: serverUrl,
           });
           if (axiosError.code === 'ECONNREFUSED') {
             console.error('[IPC] ⚠️ 서버 연결 거부 - 서버가 실행 중인지 확인하세요');
@@ -115,8 +120,9 @@ export function registerServerHandlers(): void {
           };
         }
 
+        const serverUrl = getServerUrl();
         const response = await axios.post<AnalyzeResponse>(
-          `${SERVER_URL}/analyze`,
+          `${serverUrl}/analyze`,
           { text, use_ai: false },
           {
             timeout: REQUEST_TIMEOUT,
@@ -141,7 +147,8 @@ export function registerServerHandlers(): void {
     SERVER_CHANNELS.GET_KEYWORDS,
     async (): Promise<KeywordsResponse | ErrorResponse> => {
       try {
-        const response = await axios.get<KeywordsResponse>(`${SERVER_URL}/keywords`, {
+        const serverUrl = getServerUrl();
+        const response = await axios.get<KeywordsResponse>(`${serverUrl}/keywords`, {
           timeout: REQUEST_TIMEOUT,
         });
         console.log(`[IPC] 키워드 ${response.data.total}개 로드 완료`);
@@ -244,7 +251,8 @@ export function registerServerHandlers(): void {
 
 export async function checkServerConnection(): Promise<boolean> {
   try {
-    const url = `${SERVER_URL}/health`;
+    const serverUrl = getServerUrl();
+    const url = `${serverUrl}/health`;
     console.log('[IPC] 서버 연결 확인 시도:', url);
     const response = await axios.get<HealthResponse>(url, {
       timeout: 2000,
