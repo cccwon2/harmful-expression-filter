@@ -103,13 +103,23 @@ function findProjectPath() {
     const dirExists = fs.existsSync(projectPath);
     const solutionExists = fs.existsSync(solutionFile);
     
+    // x64/Debug 또는 x64/Release 폴더가 있으면 프로젝트로 인식
+    const hasBuildOutput = dirExists && (
+      fs.existsSync(path.join(projectPath, "x64", "Debug")) ||
+      fs.existsSync(path.join(projectPath, "x64", "Release")) ||
+      fs.existsSync(path.join(projectPath, "Debug")) ||
+      fs.existsSync(path.join(projectPath, "Release"))
+    );
+    
     if (process.env.DEBUG_NATIVE_BUILD) {
       console.log(`  - ${projectPath}`);
       console.log(`    디렉토리 존재: ${dirExists ? '✅' : '❌'}`);
       console.log(`    솔루션 파일 존재: ${solutionExists ? '✅' : '❌'} (${solutionFile})`);
+      console.log(`    빌드 출력 폴더 존재: ${hasBuildOutput ? '✅' : '❌'}`);
     }
     
-    if (solutionExists) {
+    // 솔루션 파일이 있거나, 빌드 출력 폴더가 있으면 프로젝트로 인식
+    if (solutionExists || hasBuildOutput) {
       if (process.env.DEBUG_NATIVE_BUILD) {
         console.log(`[Build Native] ✅ 프로젝트 찾음: ${projectPath}`);
       }
