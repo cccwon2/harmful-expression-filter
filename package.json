@@ -76,6 +76,13 @@
           "**/*.dll",
           "**/*.json"
         ]
+      },
+      {
+        "from": "native/OnVoiceAudioBridge.dll",
+        "to": "native",
+        "filter": [
+          "*.dll"
+        ]
       }
     ]
   }
