@@ -179,6 +179,14 @@
 - 모델 파일 검증 및 로드 실패 시 Hugging Face Base 모델로 폴백
 - 파인튜닝된 모델 사용으로 유해 표현 분류 정확도 향상
 
+### T42: Electron 앱 배포 ✅
+- electron-builder를 사용한 Windows NSIS 인스톨러 생성
+- C# DLL 및 C++ COM DLL 자동 포함 (extraResources)
+- MSBuild 자동 탐색 및 빌드 스크립트 자동화
+- 상대 경로 기반 C++ 프로젝트 자동 탐색
+- `.slnx` 파일 형식 지원
+- 프로덕션 빌드 및 패키징 프로세스 문서화
+
 ### T26: 앱별 볼륨 조절 마이그레이션 ✅
 - `loudness` 패키지 제거 및 `native-sound-mixer`로 마이그레이션
 - 앱별 독립 볼륨 조절 기능
@@ -361,5 +369,6 @@ npm start
 
 - 2025-01-XX: 초기 명세서 작성
 - 2025-XX-XX: T24-T26 완료 반영
+- 2025-XX-XX: T42 Electron 앱 배포 완료 반영
 
 

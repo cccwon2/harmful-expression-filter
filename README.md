@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~41**까지 진행 중입니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~42**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -32,6 +32,7 @@
 - **Task 39**: C# 기반 PID 볼륨 제어 통합 (native-sound-mixer 완전 제거, C# Bridge로 통합)
 - **Task 40**: C++ Core Audio 구현 상세 (Application Loopback 내부 구현 원리 문서화)
 - **Task 41**: 파인튜닝된 KoElectra 분류기 연동 (로컬 모델 로드, 정확도 향상)
+- **Task 42**: Electron 앱 배포 (Windows NSIS 인스톨러 생성, C# 및 C++ DLL 포함, electron-builder 통합)
 
 ### 주요 기술 스택
 
@@ -334,16 +335,28 @@ npm run dev
 npm run typecheck
 npm run build:main
 
-# 전체 빌드 (C# DLL + TypeScript)
+# 전체 빌드 (C# DLL + C++ DLL + TypeScript)
 npm run build:all
 
-# C# DLL 빌드 및 복사
-npm run build:dotnet
-npm run copy:dll
+# 개별 빌드
+npm run build:dotnet    # C# DLL 빌드
+npm run build:native    # C++ COM DLL 빌드
+npm run copy:dll        # C# DLL 복사
+npm run copy:native     # C++ DLL 복사
+
+# 프로덕션 빌드 및 패키징
+npm run build:renderer  # 렌더러 빌드 (Vite)
+npm run build:electron  # Electron 패키지 생성
+npm run build           # 전체 빌드 + 패키징
 
 # 프로덕션 실행
 npm start
 ```
+
+**배포 관련**:
+- 자세한 배포 가이드는 [docs/42-electron-app-deployment.md](./docs/42-electron-app-deployment.md) 참조
+- C++ COM DLL은 상대 경로(`../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge`)에서 자동 탐색
+- 빌드된 DLL은 `native/OnVoiceAudioBridge.dll`로 복사되어 electron-builder에 포함됨
 
 ## 📖 프로젝트 구조
 
@@ -353,7 +366,7 @@ harmful-expression-filter/
 ├── docs/                    # 작업/문서 모음
 │   ├── PROJECT_SPEC.md      # 마스터 플랜 (전체 프로젝트 명세서)
 │   ├── INTERFACES.md        # 핵심 인터페이스 및 연결부 코드
-│   └── ...                  # 각 작업 문서 (00~40)
+│   └── ...                  # 각 작업 문서 (00~42)
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 │   ├── main/                # 메인 프로세스 핵심 모듈
 │   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)
@@ -366,6 +379,17 @@ harmful-expression-filter/
 ├── dotnet/                  # C# COM Bridge
 │   └── OnVoiceComBridge/    # .NET 6 프로젝트
 │       └── Startup.cs       # Windows SDK OCR + OnVoice COM 래퍼
+├── native/                  # C++ COM DLL (빌드 산출물)
+│   ├── .gitkeep            # 폴더 구조 유지
+│   └── OnVoiceAudioBridge.dll  # 빌드된 C++ COM DLL (배포용)
+│   └── OnVoiceAudioBridge/  # C++ 소스 코드 (서브모듈)
+│       └── phase3-com-dll/
+│           └── OnVoiceAudioBridge/  # 실제 프로젝트
+├── scripts/                 # 빌드 스크립트
+│   ├── copy-dll.js         # C# DLL 복사
+│   ├── copy-native-dll.js  # C++ DLL 복사
+│   ├── build-native.js     # C++ DLL 빌드 (MSBuild 자동 탐색)
+│   └── find-msbuild.js     # MSBuild 경로 찾기
 ├── server/                  # FastAPI 백엔드 서버
 │   ├── main.py              # FastAPI 앱 진입점
 │   ├── requirements.txt     # Python 의존성 목록
@@ -409,8 +433,13 @@ harmful-expression-filter/
 - `electron/tray.ts` – 시스템 트레이 (오디오 모니터링 상태 표시, AudioManager 통합)
 - `electron/windows/createOverlayWindow.ts` – 오버레이 창 생성
 - `electron/state/editMode.ts` – Edit Mode 상태 관리
+- `scripts/build-native.js` – C++ COM DLL 빌드 스크립트 (MSBuild 자동 탐색, .slnx 지원)
+- `scripts/copy-native-dll.js` – C++ COM DLL 복사 스크립트 (상대 경로 자동 탐색)
+- `package.json` – electron-builder 설정 (Windows NSIS 인스톨러, C# 및 C++ DLL 포함)
 
 자세한 내용은 [docs/INTERFACES.md](./docs/INTERFACES.md)와 각 Task 문서를 참조하세요.
+
+**배포 관련**: 자세한 배포 가이드는 [docs/42-electron-app-deployment.md](./docs/42-electron-app-deployment.md)를 참조하세요.
 
 ## 📝 작업 추가하기
 
