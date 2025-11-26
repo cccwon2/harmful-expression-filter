@@ -99,9 +99,12 @@ function findProjectPath() {
   }
 
   for (const projectPath of possiblePaths) {
-    const solutionFile = path.join(projectPath, "OnVoiceAudioBridge.sln");
+    const solutionFileSln = path.join(projectPath, "OnVoiceAudioBridge.sln");
+    const solutionFileSlnx = path.join(projectPath, "OnVoiceAudioBridge.slnx");
     const dirExists = fs.existsSync(projectPath);
-    const solutionExists = fs.existsSync(solutionFile);
+    const solutionExistsSln = fs.existsSync(solutionFileSln);
+    const solutionExistsSlnx = fs.existsSync(solutionFileSlnx);
+    const solutionExists = solutionExistsSln || solutionExistsSlnx;
     
     // x64/Debug 또는 x64/Release 폴더가 있으면 프로젝트로 인식
     const hasBuildOutput = dirExists && (
@@ -114,7 +117,8 @@ function findProjectPath() {
     if (process.env.DEBUG_NATIVE_BUILD) {
       console.log(`  - ${projectPath}`);
       console.log(`    디렉토리 존재: ${dirExists ? '✅' : '❌'}`);
-      console.log(`    솔루션 파일 존재: ${solutionExists ? '✅' : '❌'} (${solutionFile})`);
+      console.log(`    솔루션 파일 (.sln) 존재: ${solutionExistsSln ? '✅' : '❌'} (${solutionFileSln})`);
+      console.log(`    솔루션 파일 (.slnx) 존재: ${solutionExistsSlnx ? '✅' : '❌'} (${solutionFileSlnx})`);
       console.log(`    빌드 출력 폴더 존재: ${hasBuildOutput ? '✅' : '❌'}`);
     }
     
@@ -165,13 +169,24 @@ if (!projectDir) {
   process.exit(1);
 }
 
-const solutionFile = path.join(projectDir, "OnVoiceAudioBridge.sln");
+// .sln 또는 .slnx 파일 확인
+const solutionFileSln = path.join(projectDir, "OnVoiceAudioBridge.sln");
+const solutionFileSlnx = path.join(projectDir, "OnVoiceAudioBridge.slnx");
+const solutionFile = fs.existsSync(solutionFileSlnx) ? solutionFileSlnx : solutionFileSln;
 
-if (!fs.existsSync(solutionFile)) {
-  console.error(`[Build Native] ❌ 솔루션 파일을 찾을 수 없습니다: ${solutionFile}`);
+if (!fs.existsSync(solutionFileSln) && !fs.existsSync(solutionFileSlnx)) {
+  console.error(`[Build Native] ❌ 솔루션 파일을 찾을 수 없습니다.`);
+  console.error(`           확인한 경로:`);
+  console.error(`           - ${solutionFileSln}`);
+  console.error(`           - ${solutionFileSlnx}`);
   console.error("");
   console.error("           C++ 프로젝트가 올바르게 포함되었는지 확인하세요.");
   process.exit(1);
+}
+
+// .slnx 파일인 경우 MSBuild가 지원하는지 확인
+if (solutionFile.endsWith('.slnx')) {
+  console.log(`[Build Native] ⚠️  .slnx 파일을 사용합니다. Visual Studio 2022 이상이 필요할 수 있습니다.`);
 }
 
 // MSBuild 찾기
@@ -197,7 +212,8 @@ console.log(`[Build Native] 프로젝트 경로: ${projectDir}`);
 console.log(`[Build Native] 빌드 시작...`);
 
 try {
-  // MSBuild 실행
+  // MSBuild 실행 (.slnx 파일도 지원)
+  // .slnx 파일은 Visual Studio 2022 이상의 MSBuild에서 지원
   execSync(
     `"${msbuildPath}" "${solutionFile}" /p:Configuration=Release /p:Platform=x64 /t:Build /v:minimal`,
     { 
@@ -209,6 +225,11 @@ try {
   console.log(`[Build Native] ✅ 빌드 완료`);
 } catch (err) {
   console.error(`[Build Native] ❌ 빌드 실패: ${err.message}`);
+  if (solutionFile.endsWith('.slnx')) {
+    console.error("");
+    console.error("           .slnx 파일은 Visual Studio 2022 이상이 필요할 수 있습니다.");
+    console.error("           또는 Visual Studio에서 직접 빌드한 후 npm run copy:native를 실행하세요.");
+  }
   process.exit(1);
 }
 
