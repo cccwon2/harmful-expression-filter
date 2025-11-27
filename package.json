@@ -59,6 +59,11 @@
   "build": {
     "productName": "OnVoice",
     "appId": "com.onvoice.app",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/electron-edge-js/**"
+    ],
     "directories": {
       "output": "dist"
     },

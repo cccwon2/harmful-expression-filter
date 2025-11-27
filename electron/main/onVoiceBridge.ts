@@ -1,6 +1,8 @@
 /**
  * OnVoice Electron Main Bridge Module
  */
+process.env.EDGE_USE_CORECLR = '1';
+
 import path from "node:path";
 import { app } from "electron";
 import { EventEmitter } from "events";
