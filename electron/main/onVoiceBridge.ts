@@ -57,18 +57,36 @@ if (!process.env.EDGE_APP_ROOT) {
 // ✅ [중요] 배포 환경일 경우 Bootstrap 경로 강제 지정
 // 이것이 없으면 edge.js는 app.asar 내부를 뒤지다가 실패합니다.
 // Bootstrap.dll은 .NET 런타임이 직접 접근해야 하므로 ASAR 밖에 있어야 합니다.
+// EDGE_BOOTSTRAP_DIR은 bootstrap.dll이 있는 디렉토리(bin/Release/netcoreapp1.1)를 가리켜야 합니다.
 if (app.isPackaged) {
-  const bootstrapPath = path.join(process.resourcesPath, "bootstrap", "bin", "Release", "netcoreapp1.1");
+  const fs = require("fs");
+  // resources/bootstrap 폴더 경로 (package.json의 extraResources에 의해 복사됨)
+  const bootstrapBasePath = path.join(process.resourcesPath, "bootstrap");
+  const bootstrapPath = path.join(bootstrapBasePath, "bin", "Release", "netcoreapp1.1");
+  
+  // bootstrap.dll이 있는 디렉토리 경로 설정 (edge.js가 이 경로에서 bootstrap.dll을 찾습니다)
   process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
   console.log(`[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to: ${bootstrapPath}`);
   
   // 파일 존재 확인
-  const fs = require("fs");
   const bootstrapDllPath = path.join(bootstrapPath, "bootstrap.dll");
   if (fs.existsSync(bootstrapDllPath)) {
     console.log(`[OnVoiceBridge] ✅ Bootstrap.dll 확인됨: ${bootstrapDllPath}`);
   } else {
     console.warn(`[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다: ${bootstrapDllPath}`);
+    // bootstrap 폴더 구조 확인
+    if (fs.existsSync(bootstrapBasePath)) {
+      console.log(`[OnVoiceBridge] ℹ️ bootstrap 폴더는 존재합니다: ${bootstrapBasePath}`);
+      try {
+        const files = fs.readdirSync(bootstrapBasePath);
+        console.log(`[OnVoiceBridge] ℹ️ bootstrap 폴더 내용:`, files);
+      } catch (e) {
+        console.warn(`[OnVoiceBridge] ⚠️ bootstrap 폴더 읽기 실패:`, e);
+      }
+    } else {
+      console.error(`[OnVoiceBridge] ❌ bootstrap 폴더가 존재하지 않습니다: ${bootstrapBasePath}`);
+      console.error(`[OnVoiceBridge] ❌ package.json의 extraResources 설정을 확인하세요.`);
+    }
   }
 }
 
