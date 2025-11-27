@@ -78,16 +78,18 @@
       "!**/*.ts",
       "!**/*.tsx",
       "!vite.config.ts",
-      "!**/node_modules/sharp/vendor/8.17.3/linux-x64/**/*",
-      "!**/node_modules/sharp/vendor/8.17.3/darwin-x64/**/*",
-      "!**/node_modules/electron-edge-js/lib/native/win32/ia32/**/*"
+      "!**/node_modules/sharp/vendor/**/darwin-x64/**/*",
+      "!**/node_modules/electron-edge-js/lib/native/win32/ia32/**/*",
+      "!**/node_modules/electron-edge-js/lib/native/win32/x64/1*/**/*",
+      "!**/node_modules/electron-edge-js/lib/native/win32/x64/2[0-7].*/**/*"
     ],
     "extraResources": [
       {
         "from": "dotnet/OnVoiceComBridge/bin/Publish",
         "to": "dotnet",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/*.pdb" 
         ]
       },
       {
