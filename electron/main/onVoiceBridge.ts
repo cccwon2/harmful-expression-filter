@@ -2,186 +2,84 @@
  * OnVoice Electron Main Bridge Module
  */
 
-import path from "node:path";
 import { app } from "electron";
+import path from "node:path";
 import { EventEmitter } from "events";
 import axios, { AxiosError } from "axios";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 
-// ============================================================
-// 1. 환경 변수 설정 (가장 먼저 실행 - electron-edge-js 로드 전)
-// ============================================================
+// ==================================================================================
+// 1. electron-edge-js 및 환경 변수 관리 (지연 로딩)
+// ==================================================================================
 
-// CoreCLR 모드 활성화 (필수)
-process.env.EDGE_USE_CORECLR = '1';
-
-// 배포 환경(패키징됨)일 때 Bootstrap 경로 강제 지정
-// 이것이 없으면 edge.js는 app.asar 내부를 뒤지다가 실패합니다.
-// Bootstrap.dll은 .NET 런타임이 직접 접근해야 하므로 ASAR 밖에 있어야 합니다.
-if (app.isPackaged) {
-  // package.json의 extraResources에 의해 resources/bootstrap에 복사됨
-  const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
-  process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-  console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
-  
-  // 파일 존재 확인
-  const bootstrapDllPath = path.join(bootstrapPath, 'bootstrap.dll');
-  if (fs.existsSync(bootstrapDllPath)) {
-    console.log(`[OnVoiceBridge] ✅ Bootstrap.dll 확인됨: ${bootstrapDllPath}`);
-  } else {
-    console.warn(`[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다: ${bootstrapDllPath}`);
-  }
-}
-
-// Self-contained 배포 시 .NET 런타임 경로 설정 (EDGE_APP_ROOT)
-if (app.isPackaged) {
-  const dotnetPath = path.join(process.resourcesPath, "dotnet");
-  if (!process.env.EDGE_APP_ROOT) {
-    process.env.EDGE_APP_ROOT = dotnetPath;
-    console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
-  }
-} else {
-  const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
-  if (!process.env.EDGE_APP_ROOT) {
-    process.env.EDGE_APP_ROOT = dotnetPath;
-  }
-}
-
-// ============================================================
-// 2. electron-edge-js 로드 (환경 변수 설정 후 실행)
-// ============================================================
-
-let edge: any;
-try {
-  // 지연 로딩 (Lazy Loading) - 이 시점에 위 환경 변수가 적용됨
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  edge = require('electron-edge-js');
-  console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
-} catch (e) {
-  console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', e);
-}
+// 전역 변수로 edge 모듈 캐싱
+let edgeInstance: any = null;
 
 /**
- * 타임스탬프가 포함된 로그 유틸리티
+ * electron-edge-js를 안전하게 로드하는 헬퍼 함수
+ * 이 함수가 호출되는 시점은 이미 앱이 완전히 시작된 후이므로 환경 변수 설정이 안전하게 적용됩니다.
  */
-function logWithTimestamp(message: string, ...args: any[]): void {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${message}`, ...args);
-}
+function getEdge() {
+  if (edgeInstance) return edgeInstance;
 
-function warnWithTimestamp(message: string, ...args: any[]): void {
-  const timestamp = new Date().toISOString();
-  console.warn(`[${timestamp}] ${message}`, ...args);
-}
+  console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js...');
 
-function errorWithTimestamp(message: string, ...args: any[]): void {
-  const timestamp = new Date().toISOString();
-  console.error(`[${timestamp}] ${message}`, ...args);
-}
+  // 1. CoreCLR 모드 활성화 (필수)
+  process.env.EDGE_USE_CORECLR = '1';
 
-// ============================================================
-// 3. 기타 설정 및 유틸리티 함수
-// ============================================================
+  // 2. 배포 환경(패키징됨)일 때 Bootstrap 및 Runtime 경로 강제 지정
+  if (app.isPackaged) {
+    // 2-1. Bootstrap 경로 설정
+    // package.json의 extraResources에 의해 resources/bootstrap에 복사됨
+    const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
+    process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+    console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
+    
+    // 파일 존재 확인 (디버깅용)
+    const bootstrapDllPath = path.join(bootstrapPath, 'bootstrap.dll');
+    if (fs.existsSync(bootstrapDllPath)) {
+      console.log(`[OnVoiceBridge] ✅ Bootstrap.dll 확인됨: ${bootstrapDllPath}`);
+    } else {
+      console.warn(`[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다: ${bootstrapDllPath}`);
+    }
 
-// .env 파일 로드 (이 모듈이 import될 때 실행)
-// 여러 경로를 시도하여 .env 파일 찾기
-let envLoaded = false;
-function ensureEnvLoaded() {
-  if (envLoaded) return;
-  
+    // 2-2. .NET 런타임 경로 설정 (Self-contained 배포 시)
+    const dotnetPath = path.join(process.resourcesPath, "dotnet");
+    if (!process.env.EDGE_APP_ROOT) {
+      process.env.EDGE_APP_ROOT = dotnetPath;
+      console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
+    }
+  } else {
+    // 개발 환경 설정
+    const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
+    if (!process.env.EDGE_APP_ROOT) {
+      process.env.EDGE_APP_ROOT = dotnetPath;
+    }
+  }
+
+  // 3. 모듈 로드 (환경 변수 설정 후 require)
   try {
-    // 시도할 경로 목록
-    const possiblePaths: string[] = [];
-    
-    // 1. 배포 환경: process.resourcesPath (extraResources로 복사된 .env 위치)
-    if (app && app.isPackaged && process.resourcesPath) {
-      possiblePaths.push(path.join(process.resourcesPath, ".env"));
-    }
-    
-    // 2. 개발 모드: 프로젝트 루트 (__dirname 기준)
-    possiblePaths.push(path.join(__dirname, "../../.env"));
-    possiblePaths.push(path.join(__dirname, "../../../.env"));
-    
-    // 3. 프로덕션 모드: app.getAppPath() (fallback)
-    if (app && app.isPackaged) {
-      try {
-        possiblePaths.push(path.join(app.getAppPath(), ".env"));
-      } catch (e) {
-        // app이 아직 초기화되지 않았을 수 있음
-      }
-    }
-    
-    // 4. 현재 작업 디렉토리
-    possiblePaths.push(path.join(process.cwd(), ".env"));
-    
-    let loaded = false;
-    for (const envPath of possiblePaths) {
-      const envResult = dotenv.config({ path: envPath });
-      if (!envResult.error && envResult.parsed) {
-        console.log(`[OnVoiceBridge] ✅ .env 파일 로드 성공: ${envPath}`);
-        console.log(`[OnVoiceBridge] .env 파일 내용:`, Object.keys(envResult.parsed));
-        loaded = true;
-        break;
-      }
-    }
-    
-    if (!loaded) {
-      console.warn(`[OnVoiceBridge] ⚠️ .env 파일을 찾을 수 없습니다. 시도한 경로:`, possiblePaths);
-    }
-    
-    envLoaded = true;
-  } catch (error) {
-    console.warn(`[OnVoiceBridge] .env 파일 로드 중 오류:`, error);
-    envLoaded = true; // 오류가 발생해도 다시 시도하지 않도록
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    edgeInstance = require('electron-edge-js');
+    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
+    return edgeInstance;
+  } catch (e) {
+    console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', e);
+    throw e;
   }
 }
+
+// ==================================================================================
+// 2. 타입 정의 및 유틸리티
+// ==================================================================================
 
 type EdgeCallback = (error: Error | null, result?: any) => void;
 type EdgeFunc = (payload: any, callback: EdgeCallback) => void;
 
-// 타임아웃: 5초
+// 타임아웃 설정
 const BRIDGE_TIMEOUT_MS = 5000;
-
-// 서버 설정
-// ⚠️ 중요: .env 파일이 로드되기 전에 이 모듈이 import될 수 있으므로,
-// SERVER_URL은 함수 내부에서 지연 평가(lazy evaluation)하도록 변경
-function getServerUrl(): string {
-  // .env 파일이 아직 로드되지 않았다면 로드 시도
-  if (!envLoaded) {
-    ensureEnvLoaded();
-  }
-  
-  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:8000";
-  
-  // 디버깅: 환경 변수 상태 확인 (한 번만 출력)
-  if (!process.env.SERVER_URL) {
-    console.warn(`[OnVoiceBridge] ⚠️ SERVER_URL 환경 변수가 설정되지 않았습니다. 기본값 사용: ${serverUrl}`);
-  }
-  
-  return serverUrl;
-}
 const SERVER_REQUEST_TIMEOUT = 5000;
-
-// 🔇 키워드 리스트 주석처리 (kanana-lora-v1 모델만 사용)
-// const HARMFUL_KEYWORDS = [
-//   "새끼",
-//   "시발",
-//   "씨발",
-//   "병신",
-//   "꺼져",
-//   "죽어",
-//   "미친",
-//   "지랄",
-//   "존나",
-//   "개새끼",
-//   "느금마",
-//   "애미",
-//   "느개비",
-//   "놈",
-//   "년",
-//   // 필요한 단어 추가
-// ];
 
 export interface OCRResult {
   ok: boolean;
@@ -216,40 +114,123 @@ export interface OnVoiceBridge {
   ): Promise<OCRResult>;
 }
 
+// 이벤트 이미터
 const events = new EventEmitter();
 
+// 로그 유틸리티
+function logWithTimestamp(message: string, ...args: any[]): void {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${message}`, ...args);
+}
+
+function warnWithTimestamp(message: string, ...args: any[]): void {
+  const timestamp = new Date().toISOString();
+  console.warn(`[${timestamp}] ${message}`, ...args);
+}
+
+function errorWithTimestamp(message: string, ...args: any[]): void {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] ${message}`, ...args);
+}
+
+// .env 로드 관리
+let envLoaded = false;
+function ensureEnvLoaded() {
+  if (envLoaded) return;
+  
+  try {
+    const possiblePaths: string[] = [];
+    
+    // 1. 배포 환경: process.resourcesPath
+    if (app && app.isPackaged && process.resourcesPath) {
+      possiblePaths.push(path.join(process.resourcesPath, ".env"));
+    }
+    
+    // 2. 개발 모드: 프로젝트 루트
+    possiblePaths.push(path.join(__dirname, "../../.env"));
+    possiblePaths.push(path.join(__dirname, "../../../.env"));
+    
+    // 3. Fallback: app.getAppPath()
+    if (app && app.isPackaged) {
+      try {
+        possiblePaths.push(path.join(app.getAppPath(), ".env"));
+      } catch (e) { /* ignore */ }
+    }
+    
+    // 4. CWD
+    possiblePaths.push(path.join(process.cwd(), ".env"));
+    
+    let loaded = false;
+    for (const envPath of possiblePaths) {
+      const envResult = dotenv.config({ path: envPath });
+      if (!envResult.error && envResult.parsed) {
+        console.log(`[OnVoiceBridge] ✅ .env 파일 로드 성공: ${envPath}`);
+        loaded = true;
+        break;
+      }
+    }
+    
+    if (!loaded) {
+      console.warn(`[OnVoiceBridge] ⚠️ .env 파일을 찾을 수 없습니다. 시도한 경로:`, possiblePaths);
+    }
+    
+    envLoaded = true;
+  } catch (error) {
+    console.warn(`[OnVoiceBridge] .env 파일 로드 중 오류:`, error);
+    envLoaded = true;
+  }
+}
+
+function getServerUrl(): string {
+  if (!envLoaded) {
+    ensureEnvLoaded();
+  }
+  
+  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:8000";
+  
+  if (!process.env.SERVER_URL) {
+    console.warn(`[OnVoiceBridge] ⚠️ SERVER_URL 환경 변수가 설정되지 않았습니다. 기본값 사용: ${serverUrl}`);
+  }
+  
+  return serverUrl;
+}
+
+// ==================================================================================
+// 3. C# Bridge 호출 로직
+// ==================================================================================
+
+// C# 함수 캐싱 (싱글톤)
 let bridgeFunc: EdgeFunc | null = null;
 let initialized = false;
 
 function getBridgeFunc(): EdgeFunc {
   if (bridgeFunc) return bridgeFunc;
 
-  // edge 모듈이 로드되지 않았으면 에러
+  // ✅ 여기서 지연 로딩을 수행하여 edge 모듈을 가져옵니다.
+  const edge = getEdge();
+  
   if (!edge) {
-    throw new Error('electron-edge-js 모듈이 로드되지 않았습니다.');
+    throw new Error('electron-edge-js 모듈 로드 실패');
   }
 
-  console.log(`[OnVoiceBridge] 🔧 EDGE_USE_CORECLR: ${process.env.EDGE_USE_CORECLR}`);
-
-  // 1. 경로 설정 (절대 경로 사용 - 핵심!)
+  // 1. 경로 설정 (절대 경로 사용)
   let assemblyFile: string;
   if (app.isPackaged) {
-    // 배포 모드: resources/dotnet 폴더 안을 가리킴
-    // process.resourcesPath는 'resources' 폴더까지의 절대 경로입니다.
+    // 배포 모드: resources/dotnet/OnVoiceComBridge.dll
     assemblyFile = path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.dll");
   } else {
-    // 개발 모드: 로컬 빌드 폴더 가리킴 (절대 경로로 변환)
+    // 개발 모드: 로컬 빌드 경로
     const relativePath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish/OnVoiceComBridge.dll");
     assemblyFile = path.resolve(relativePath);
   }
 
-  // 2. 실행 (경로 확인용 로그 추가)
+  // 2. 실행 로그
   console.log(`[OnVoiceBridge] Loading .NET DLL from: ${assemblyFile}`);
   console.log(`[OnVoiceBridge] DLL 경로 확인 (절대 경로): ${path.isAbsolute(assemblyFile) ? "✅ 절대 경로" : "❌ 상대 경로"}`);
 
   try {
     bridgeFunc = edge.func({
-      assemblyFile, // 절대 경로 변수 사용
+      assemblyFile, 
       typeName: "OnVoiceComBridge.Startup",
       methodName: "Invoke",
     });
@@ -267,13 +248,14 @@ function callBridge(payload: any): Promise<any> {
     const timer = setTimeout(() => {
       if (!isCompleted) {
         isCompleted = true;
-        // console.error(`[OnVoiceBridge] Timeout...`); // 로그 과다 방지
         reject(new Error("BRIDGE_TIMEOUT"));
       }
     }, BRIDGE_TIMEOUT_MS);
 
     try {
+      // ✅ 호출 시점에 getBridgeFunc() 내부에서 edge 모듈이 로드됨
       const func = getBridgeFunc();
+      
       func(payload, (err: Error | null, result?: any) => {
         if (isCompleted) return;
         isCompleted = true;
@@ -295,29 +277,23 @@ function callBridge(payload: any): Promise<any> {
   });
 }
 
+// ==================================================================================
+// 4. 주요 기능 구현 (OCR, Audio, Volume)
+// ==================================================================================
+
 /**
  * 서버의 KoElectra/Kanana 모델을 사용하여 텍스트 유해성 분석
- * 
- * @param text 분석할 텍스트
- * @returns 분석 결과 (isHarmful, confidence)
  */
 async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean; confidence: number }> {
-  // 빈 텍스트 처리
   if (!text || !text.trim()) {
-    console.log(`[OnVoiceBridge] 빈 텍스트로 인해 분석을 건너뜁니다.`);
     return { isHarmful: false, confidence: 0.0 };
   }
 
   try {
     const serverUrl = getServerUrl();
-    console.log(`[OnVoiceBridge] 서버 분석 요청: ${serverUrl}/analyze (텍스트: "${text.substring(0, 30)}${text.length > 30 ? "..." : ""}")`);
-    
     const response = await axios.post<{
       has_violation: boolean;
-      ai_analysis: {
-        is_harmful: boolean;
-        confidence: number;
-      } | null;
+      ai_analysis: { is_harmful: boolean; confidence: number; } | null;
     }>(
       `${serverUrl}/analyze`,
       { text: text.trim() },
@@ -327,53 +303,25 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
       }
     );
 
-    // 서버 응답 파싱
-    console.log(`[OnVoiceBridge] 서버 응답 수신:`, {
-      has_violation: response.data.has_violation,
-      ai_analysis: response.data.ai_analysis ? {
-        is_harmful: response.data.ai_analysis.is_harmful,
-        confidence: response.data.ai_analysis.confidence,
-      } : null,
-    });
-    
     if (response.data.ai_analysis) {
-      const result = {
+      return {
         isHarmful: response.data.ai_analysis.is_harmful,
         confidence: response.data.ai_analysis.confidence,
       };
-      console.log(`[OnVoiceBridge] ✅ AI 분석 결과: isHarmful=${result.isHarmful}, confidence=${result.confidence}`);
-      return result;
     }
 
-    // AI 분석이 없는 경우 has_violation 사용
-    const result = {
+    return {
       isHarmful: response.data.has_violation,
       confidence: response.data.has_violation ? 1.0 : 0.0,
     };
-    console.log(`[OnVoiceBridge] ⚠️ AI 분석 없음, has_violation 사용: isHarmful=${result.isHarmful}`);
-    return result;
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-      console.error(`[OnVoiceBridge] 서버 분석 요청 실패:`, {
-        message: axiosError.message,
-        code: axiosError.code,
-        status: axiosError.response?.status,
-      });
-    } else {
-      console.error(`[OnVoiceBridge] 서버 분석 요청 실패 (알 수 없는 오류):`, error);
-    }
-
-    // 서버 오류 시 안전하게 false 반환
+    // 에러 발생 시 로그는 최소화하거나 필요 시 추가
     return { isHarmful: false, confidence: 0.0 };
   }
 }
 
 /**
- * 특정 PID의 애플리케이션 볼륨 조절 (C# Bridge)
- * @param pid 프로세스 ID
- * @param volume 0.0 ~ 1.0 사이의 실수
- * @returns 성공 여부
+ * 특정 PID의 애플리케이션 볼륨 조절
  */
 export async function setVolumeByPid(pid: number, volume: number): Promise<boolean> {
   const startTime = Date.now();
@@ -390,7 +338,8 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
     const totalElapsed = Date.now() - startTime;
     
     if (result && result.ok === true) {
-      logWithTimestamp(`[OnVoiceBridge] ⏱️ setVolumeByPid 성공 (C# Bridge 호출: ${bridgeCallElapsed}ms, 총: ${totalElapsed}ms)`);
+      // 성공 로그는 너무 빈번할 수 있으므로 필요 시 주석 처리 가능
+      // logWithTimestamp(`[OnVoiceBridge] ⏱️ setVolumeByPid 성공 (PID: ${pid})`);
       return true;
     } else {
       warnWithTimestamp(`[OnVoiceBridge] ⚠️ setVolumeByPid 실패 (${totalElapsed}ms)`);
@@ -403,6 +352,9 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
   }
 }
 
+/**
+ * 오디오 세션 목록 조회
+ */
 export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
   try {
     const result = await callBridge({ command: 'listSessions' });
@@ -412,17 +364,20 @@ export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
     }
     return [];
   } catch (error) {
-    // 오류 발생 시에만 로그 출력
     errorWithTimestamp(`[OnVoiceBridge] 오디오 세션 조회 실패`, error);
     return [];
   }
 }
 
+// OnVoiceBridge 객체 export
 export const onVoiceBridge: OnVoiceBridge = {
   events,
 
   async init(onAudioData: (pcm: Buffer, timestamp?: number) => void): Promise<void> {
     if (initialized) return;
+    
+    // init 호출 시 내부적으로 callBridge -> getBridgeFunc -> getEdge 순으로 호출되어
+    // 환경 변수 설정 및 모듈 로드가 이 시점에 이루어집니다.
     await callBridge({
       command: "init",
       onAudioData: function (msg: any, cb: EdgeCallback) {
@@ -457,27 +412,20 @@ export const onVoiceBridge: OnVoiceBridge = {
   },
 
   async performOCR(imageBuffer: Buffer): Promise<OCRResult> {
-    // 기존 함수도 로컬 분석 사용하도록 통일
     return this.performOCRAndAnalyze(imageBuffer);
   },
 
-  // 🔥 [수정됨] C#에 ROI를 보내지 않음 (순수 OCR 모드 강제)
   async performOCRAndAnalyze(
     imageBuffer: Buffer,
     roi?: { x: number; y: number; width: number; height: number }
   ): Promise<OCRResult> {
     try {
-      // console.log(`[OnVoiceBridge] OCR 요청: ${imageBuffer.length} bytes`);
-
-      // 1. Payload 생성: command는 'ocr', roi 정보는 '제거'
-      // ROI 정보를 보내면 C# DLL이 좌표 계산이나 블러링을 시도하다가 죽을 수 있음
       const payload: any = {
         command: "ocr",
         imageData: imageBuffer,
-        // roi: roi,  <-- ❌ 제거함! Node가 이미 자른 이미지를 보내므로 C#은 몰라도 됨
+        // roi 정보 제거 (Node가 이미 자른 이미지를 보냄)
       };
 
-      // 2. C# 호출
       const result = await callBridge(payload);
 
       if (!result || result.ok === false) {
@@ -485,35 +433,24 @@ export const onVoiceBridge: OnVoiceBridge = {
       }
 
       const extractedText = result.text || "";
-      
-      // OCR 텍스트 추출 로그
-      console.log(`[OnVoiceBridge] 📝 OCR 텍스트 추출 완료: "${extractedText.substring(0, 50)}${extractedText.length > 50 ? "..." : ""}" (길이: ${extractedText.length})`);
+      console.log(`[OnVoiceBridge] 📝 OCR 텍스트: "${extractedText.substring(0, 50)}${extractedText.length > 50 ? "..." : ""}"`);
 
-      // 3. 서버의 KoElectra/Kanana 모델을 사용한 유해성 분석
+      // 서버 유해성 분석
       let analysisResult = { isHarmful: false, confidence: 0.0 };
-      
       if (extractedText.trim().length > 0) {
-        console.log(`[OnVoiceBridge] 🔍 서버에 유해성 분석 요청 중...`);
         analysisResult = await analyzeTextWithServer(extractedText);
-        
-        console.log(
-          `[OnVoiceBridge] 📊 분석 결과: "${extractedText.substring(0, 30)}${extractedText.length > 30 ? "..." : ""}" | ` +
-          `유해성: ${analysisResult.isHarmful ? "⚠️ 유해" : "✅ 정상"} (신뢰도: ${(analysisResult.confidence * 100).toFixed(1)}%)`
-        );
-      } else {
-        console.log(`[OnVoiceBridge] ⚠️ 추출된 텍스트가 비어있어 분석을 건너뜁니다.`);
+        console.log(`[OnVoiceBridge] 📊 분석: 유해성=${analysisResult.isHarmful}, 신뢰도=${(analysisResult.confidence * 100).toFixed(1)}%`);
       }
 
       return {
         ok: true,
         text: extractedText,
         isHarmful: analysisResult.isHarmful,
-        matchedKeywords: [], // 서버 모델은 키워드 리스트를 반환하지 않음
+        matchedKeywords: [],
         confidence: analysisResult.confidence,
         blurredImage: undefined,
       };
     } catch (error: any) {
-      // console.error(`[OnVoiceBridge] 오류:`, error.message);
       return {
         ok: false,
         error: error.message || "처리 중 오류",
