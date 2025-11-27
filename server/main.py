@@ -416,15 +416,23 @@ async def lifespan(app: FastAPI):
             
             LOGGER.info("[Init] 🚀 Kanana 모델 선택됨")
 
-        # 2. Classifier 초기화
+        # 2. 모델 타입에 따른 threshold 설정
+        if model_type_env == "koelectra":
+            target_threshold = 0.5  # KoElectra threshold
+        else:
+            target_threshold = 0.22  # Kanana threshold
+
+        # 3. Classifier 초기화
         LOGGER.info(f" - Base Model: {target_base_model}")
         LOGGER.info(f" - Adapter Path: {target_model_path if target_model_path else 'None (Base Only)'}")
         LOGGER.info(f" - Quantization: {use_quantization}")
+        LOGGER.info(f" - Threshold: {target_threshold}")
 
         classifier = HarmfulTextClassifier(
             model_path=target_model_path,     # ✅ 절대 경로 또는 빈 문자열
             base_model_name=target_base_model,
-            use_quantization=use_quantization
+            use_quantization=use_quantization,
+            threshold=target_threshold  # 🔥 모델별 threshold 적용
         )
         
         app.state.model_type_display = "KoElectra" if model_type_env == "koelectra" else ("Kanana-LoRA" if target_model_path else "Kanana-Base")
