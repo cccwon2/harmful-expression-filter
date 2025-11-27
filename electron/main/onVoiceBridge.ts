@@ -1,13 +1,66 @@
 /**
  * OnVoice Electron Main Bridge Module
  */
-process.env.EDGE_USE_CORECLR = '1';
 
 import path from "node:path";
 import { app } from "electron";
 import { EventEmitter } from "events";
 import axios, { AxiosError } from "axios";
 import * as dotenv from "dotenv";
+import * as fs from "fs";
+
+// ============================================================
+// 1. 환경 변수 설정 (가장 먼저 실행 - electron-edge-js 로드 전)
+// ============================================================
+
+// CoreCLR 모드 활성화 (필수)
+process.env.EDGE_USE_CORECLR = '1';
+
+// 배포 환경(패키징됨)일 때 Bootstrap 경로 강제 지정
+// 이것이 없으면 edge.js는 app.asar 내부를 뒤지다가 실패합니다.
+// Bootstrap.dll은 .NET 런타임이 직접 접근해야 하므로 ASAR 밖에 있어야 합니다.
+if (app.isPackaged) {
+  // package.json의 extraResources에 의해 resources/bootstrap에 복사됨
+  const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
+  process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+  console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
+  
+  // 파일 존재 확인
+  const bootstrapDllPath = path.join(bootstrapPath, 'bootstrap.dll');
+  if (fs.existsSync(bootstrapDllPath)) {
+    console.log(`[OnVoiceBridge] ✅ Bootstrap.dll 확인됨: ${bootstrapDllPath}`);
+  } else {
+    console.warn(`[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다: ${bootstrapDllPath}`);
+  }
+}
+
+// Self-contained 배포 시 .NET 런타임 경로 설정 (EDGE_APP_ROOT)
+if (app.isPackaged) {
+  const dotnetPath = path.join(process.resourcesPath, "dotnet");
+  if (!process.env.EDGE_APP_ROOT) {
+    process.env.EDGE_APP_ROOT = dotnetPath;
+    console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
+  }
+} else {
+  const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
+  if (!process.env.EDGE_APP_ROOT) {
+    process.env.EDGE_APP_ROOT = dotnetPath;
+  }
+}
+
+// ============================================================
+// 2. electron-edge-js 로드 (환경 변수 설정 후 실행)
+// ============================================================
+
+let edge: any;
+try {
+  // 지연 로딩 (Lazy Loading) - 이 시점에 위 환경 변수가 적용됨
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  edge = require('electron-edge-js');
+  console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
+} catch (e) {
+  console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', e);
+}
 
 /**
  * 타임스탬프가 포함된 로그 유틸리티
@@ -27,72 +80,9 @@ function errorWithTimestamp(message: string, ...args: any[]): void {
   console.error(`[${timestamp}] ${message}`, ...args);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-// ⚠️ 중요: electron-edge-js가 .NET Framework 대신 .NET 6 CoreCLR을 사용하도록 강제
-// 패키지된 exe에서는 npm 스크립트의 EDGE_USE_CORECLR 환경변수가 적용되지 않기 때문에
-// 여기서 직접 설정해 준다.
-if (!process.env.EDGE_USE_CORECLR) {
-  process.env.EDGE_USE_CORECLR = "1";
-}
-
-// ⚠️ 중요: Self-contained 배포 시 .NET 런타임 경로 설정 (EDGE_APP_ROOT)
-// electron-edge-js가 번들링된 .NET 런타임(hostfxr.dll 등)을 찾을 수 있도록 설정해야 함
-let dotnetPath: string;
-if (app.isPackaged) {
-  // 배포 모드: resources/dotnet 폴더
-  dotnetPath = path.join(process.resourcesPath, "dotnet");
-} else {
-  // 개발 모드: 로컬 빌드 폴더
-  dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
-}
-
-// EDGE_APP_ROOT가 설정되지 않았을 때만 설정
-if (!process.env.EDGE_APP_ROOT) {
-  process.env.EDGE_APP_ROOT = dotnetPath;
-  console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
-} else {
-  console.log(`[OnVoiceBridge] ℹ️ EDGE_APP_ROOT already set: ${process.env.EDGE_APP_ROOT}`);
-}
-
-// ✅ [중요] 배포 환경일 경우 Bootstrap 경로 강제 지정
-// 이것이 없으면 edge.js는 app.asar 내부를 뒤지다가 실패합니다.
-// Bootstrap.dll은 .NET 런타임이 직접 접근해야 하므로 ASAR 밖에 있어야 합니다.
-// EDGE_BOOTSTRAP_DIR은 bootstrap.dll이 있는 디렉토리(bin/Release/netcoreapp1.1)를 가리켜야 합니다.
-if (app.isPackaged) {
-  const fs = require("fs");
-  // resources/bootstrap 폴더 경로 (package.json의 extraResources에 의해 복사됨)
-  const bootstrapBasePath = path.join(process.resourcesPath, "bootstrap");
-  const bootstrapPath = path.join(bootstrapBasePath, "bin", "Release", "netcoreapp1.1");
-  
-  // bootstrap.dll이 있는 디렉토리 경로 설정 (edge.js가 이 경로에서 bootstrap.dll을 찾습니다)
-  process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-  console.log(`[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to: ${bootstrapPath}`);
-  
-  // 파일 존재 확인
-  const bootstrapDllPath = path.join(bootstrapPath, "bootstrap.dll");
-  if (fs.existsSync(bootstrapDllPath)) {
-    console.log(`[OnVoiceBridge] ✅ Bootstrap.dll 확인됨: ${bootstrapDllPath}`);
-  } else {
-    console.warn(`[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다: ${bootstrapDllPath}`);
-    // bootstrap 폴더 구조 확인
-    if (fs.existsSync(bootstrapBasePath)) {
-      console.log(`[OnVoiceBridge] ℹ️ bootstrap 폴더는 존재합니다: ${bootstrapBasePath}`);
-      try {
-        const files = fs.readdirSync(bootstrapBasePath);
-        console.log(`[OnVoiceBridge] ℹ️ bootstrap 폴더 내용:`, files);
-      } catch (e) {
-        console.warn(`[OnVoiceBridge] ⚠️ bootstrap 폴더 읽기 실패:`, e);
-      }
-    } else {
-      console.error(`[OnVoiceBridge] ❌ bootstrap 폴더가 존재하지 않습니다: ${bootstrapBasePath}`);
-      console.error(`[OnVoiceBridge] ❌ package.json의 extraResources 설정을 확인하세요.`);
-    }
-  }
-}
-
-// ⚠️ 중요: electron-edge-js를 최상단에서 require하지 않음
-// 지연 로딩(Lazy Loading)을 위해 getBridgeFunc() 함수 내부에서 require하도록 변경
-// 이렇게 하면 환경 변수가 확실히 설정된 후에 electron-edge-js가 로드됩니다.
+// ============================================================
+// 3. 기타 설정 및 유틸리티 함수
+// ============================================================
 
 // .env 파일 로드 (이 모듈이 import될 때 실행)
 // 여러 경로를 시도하여 .env 파일 찾기
@@ -234,51 +224,12 @@ let initialized = false;
 function getBridgeFunc(): EdgeFunc {
   if (bridgeFunc) return bridgeFunc;
 
-  // ✅ 환경 변수 확실히 설정 (안전을 위해 매번 확인)
-  if (!process.env.EDGE_USE_CORECLR) {
-    process.env.EDGE_USE_CORECLR = "1";
+  // edge 모듈이 로드되지 않았으면 에러
+  if (!edge) {
+    throw new Error('electron-edge-js 모듈이 로드되지 않았습니다.');
   }
+
   console.log(`[OnVoiceBridge] 🔧 EDGE_USE_CORECLR: ${process.env.EDGE_USE_CORECLR}`);
-
-  // ✅ 네이티브 모듈 경로 명시적 설정 (asar 언패킹 경로)
-  if (app.isPackaged && !process.env.EDGE_NATIVE) {
-    // 배포 모드: app.asar.unpacked 경로 사용
-    // process.resourcesPath는 'resources' 폴더이므로, 상위 폴더로 이동해야 함
-    const appPath = app.getAppPath(); // app.asar 경로
-    const appDir = path.dirname(appPath); // app.asar가 있는 폴더 (dist/win-unpacked/resources)
-    const electronVersion = process.versions.electron.split(".")[0] + ".0.0";
-    const nativeModulePath = path.join(
-      appDir,
-      "app.asar.unpacked",
-      "node_modules",
-      "electron-edge-js",
-      "lib",
-      "native",
-      "win32",
-      "x64",
-      electronVersion,
-      "edge_coreclr.node"
-    );
-    
-    // 파일이 존재하는지 확인
-    const fs = require("fs");
-    if (fs.existsSync(nativeModulePath)) {
-      process.env.EDGE_NATIVE = nativeModulePath;
-      console.log(`[OnVoiceBridge] 🔧 EDGE_NATIVE set to: ${nativeModulePath}`);
-    } else {
-      console.warn(`[OnVoiceBridge] ⚠️ 네이티브 모듈을 찾을 수 없습니다: ${nativeModulePath}`);
-      // 대체 경로 시도 (직접 확인)
-      const altPath = path.join(process.resourcesPath, "..", "app.asar.unpacked", "node_modules", "electron-edge-js", "lib", "native", "win32", "x64", electronVersion, "edge_coreclr.node");
-      if (fs.existsSync(altPath)) {
-        process.env.EDGE_NATIVE = altPath;
-        console.log(`[OnVoiceBridge] 🔧 EDGE_NATIVE set to (대체 경로): ${altPath}`);
-      }
-    }
-  }
-
-  // ✅ 지연 로딩 (Lazy Load): 환경 변수가 설정된 후에 electron-edge-js 로드
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const edge = require("electron-edge-js");
 
   // 1. 경로 설정 (절대 경로 사용 - 핵심!)
   let assemblyFile: string;
