@@ -70,7 +70,6 @@
     },
     "extraResources": [
       {
-        "// 변경됨": "Publish 폴더를 직접 참조하고, 모든 파일(**/*)을 포함",
         "from": "dotnet/OnVoiceComBridge/bin/Publish",
         "to": "dotnet",
         "filter": [
