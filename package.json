@@ -79,6 +79,7 @@
       "!dist-electron/dotnet/**/*",
       "dist/renderer/**/*",
       "package.json",
+      "!**/node_modules/electron-edge-js/**/*",
       "!server/**/*",
       "!dotnet/**/*",
       "!native/**/*",
@@ -92,8 +93,8 @@
     ],
     "extraResources": [
       {
-        "from": "node_modules/electron-edge-js/lib/bootstrap",
-        "to": "bootstrap",
+        "from": "node_modules/electron-edge-js",
+        "to": "modules/electron-edge-js",
         "filter": ["**/*"]
       },
       {

@@ -14,151 +14,54 @@ let edgeInstance: any = null;
 function getEdge() {
   if (edgeInstance) return edgeInstance;
 
-  console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js...');
+  console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (External Mode)...');
 
-  // 1. CoreCLR 모드 활성화
+  // 1. CoreCLR 모드 활성화 (필수)
   process.env.EDGE_USE_CORECLR = '1';
 
-  // 2. 배포 환경 경로 설정
+  let edgePath = 'electron-edge-js'; // 개발 환경 기본값
+
   if (app.isPackaged) {
-    // ----------------------------------------------------------------------
-    // [FIX 1] Bootstrap 경로 설정 (이 부분이 누락되어 있었습니다!)
-    // ----------------------------------------------------------------------
-    const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
-    process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-    console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
+    // 2. 배포 환경 설정
+    // package.json의 extraResources로 복사된 외부 모듈 경로를 직접 지정
+    const externalModulePath = path.join(process.resourcesPath, 'modules', 'electron-edge-js');
     
-    // 파일 존재 확인 (디버깅)
-    if (fs.existsSync(path.join(bootstrapPath, 'bootstrap.dll'))) {
-        console.log('[OnVoiceBridge] ✅ Bootstrap.dll 확인됨');
-    } else {
-        console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다! (package.json extraResources 확인 필요)');
-    }
-
-    // ----------------------------------------------------------------------
-    // [FIX 2] Native 경로 탐색 (Electron 28 버전 우선 선택)
-    // ----------------------------------------------------------------------
-    try {
-      const baseNativePath = path.join(
-        process.resourcesPath, 
-        'app.asar.unpacked', 
-        'node_modules', 
-        'electron-edge-js', 
-        'lib', 
-        'native', 
-        'win32', 
-        'x64'
-      );
-      
-      console.log(`[OnVoiceBridge] 📂 Native Path 탐색: ${baseNativePath}`);
-
-      if (fs.existsSync(baseNativePath)) {
-        const dirs = fs.readdirSync(baseNativePath);
-        // console.log(`[OnVoiceBridge] 📂 발견된 버전 폴더들: ${JSON.stringify(dirs)}`);
-
-        // 역순 정렬하여 28.0.0이 17.0.0보다 먼저 오도록 함
-        const sortedDirs = dirs.sort().reverse();
-        
-        // 1순위: '28.'로 시작하는 폴더 (Electron 28)
-        let versionDir = sortedDirs.find(d => d.startsWith('28.'));
-        
-        // 2순위: 없다면 가장 높은 버전 숫자
-        if (!versionDir) {
-           versionDir = sortedDirs.find(d => /^\d+\./.test(d));
-        }
-
-        if (versionDir) {
-          const edgeNativePath = path.join(baseNativePath, versionDir, 'edge_coreclr.node');
-          process.env.EDGE_NATIVE = edgeNativePath;
-          console.log('[OnVoiceBridge] ✅ EDGE_NATIVE 설정:', edgeNativePath);
-        }
-      }
-    } catch (err) {
-      console.warn('[OnVoiceBridge] ⚠️ EDGE_NATIVE 경로 탐색 오류:', err);
-    }
-
-    // 2-3. .NET 런타임 경로
+    // 모듈 진입점 (lib/edge.js)
+    edgePath = path.join(externalModulePath, 'lib', 'edge.js');
+    
+    console.log(`[OnVoiceBridge] 🔧 Target Module Path: ${edgePath}`);
+    
+    // Bootstrap 경로도 외부 모듈 내부로 지정
+    // (electron-edge-js 폴더 구조가 그대로 복사되었으므로 내부 경로 사용)
+    const bootstrapPath = path.join(externalModulePath, 'lib', 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
+    process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+    console.log(`[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to: ${bootstrapPath}`);
+    
+    // .NET 런타임 경로
     const dotnetPath = path.join(process.resourcesPath, "dotnet");
-    if (!process.env.EDGE_APP_ROOT) {
-      process.env.EDGE_APP_ROOT = dotnetPath;
-      console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
-    }
+    process.env.EDGE_APP_ROOT = dotnetPath;
+    console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
   } else {
-    // 개발 환경
+    // 개발 환경: .NET 빌드 경로
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
-    if (!process.env.EDGE_APP_ROOT) {
-      process.env.EDGE_APP_ROOT = dotnetPath;
-    }
+    process.env.EDGE_APP_ROOT = dotnetPath;
   }
 
-  // 3. 모듈 로드
+  // 3. 모듈 로드 (절대 경로 require)
   try {
-    // 진단 로그: require.resolve로 실제 로드 경로 확인
-    try {
-      const resolved = require.resolve('electron-edge-js');
-      console.log('[OnVoiceBridge] electron-edge-js resolved from:', resolved);
-    } catch (e) {
-      console.warn('[OnVoiceBridge] require.resolve failed', e);
-    }
-    
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    edgeInstance = require('electron-edge-js');
+    edgeInstance = require(edgePath);
     
-    // 진단 로그: 로드된 객체의 키와 함수 타입 확인
-    console.log('[OnVoiceBridge] edge keys:', Object.keys(edgeInstance || {}));
-    console.log('[OnVoiceBridge] typeof edge.func =', typeof edgeInstance.func);
-    console.log('[OnVoiceBridge] typeof edge.initializeClrFunc =', typeof (edgeInstance as any).initializeClrFunc);
-    console.log('[OnVoiceBridge] EDGE_NATIVE=', process.env.EDGE_NATIVE);
-    console.log('[OnVoiceBridge] EDGE_APP_ROOT=', process.env.EDGE_APP_ROOT);
-    console.log('[OnVoiceBridge] EDGE_BOOTSTRAP_DIR=', process.env.EDGE_BOOTSTRAP_DIR);
-    
-    // 진단: native 직접 require 및 노출 심볼 확인
-    try {
-      const nativePath = process.env.EDGE_NATIVE || (app.isPackaged 
-        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib', 'native', 'win32', 'x64', '28.0.0', 'edge_coreclr.node')
-        : path.join(__dirname, '../../node_modules/electron-edge-js/lib/native/win32/x64/28.0.0/edge_coreclr.node'));
-      
-      console.log('[OnVoiceBridge] 🔎 attempting to require native module directly:', nativePath);
-      
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const nativeModule = require(nativePath);
-        console.log('[OnVoiceBridge] native require succeeded. keys:', Object.keys(nativeModule || {}));
-        // 초기화 심볼 직접 체크 시도 (있으면 function)
-        console.log('[OnVoiceBridge] native.initializeClrFunc type=', typeof (nativeModule as any).initializeClrFunc);
-      } catch (eNative) {
-        console.warn('[OnVoiceBridge] native require failed or returns non-object:', eNative && (eNative as any).message ? (eNative as any).message : eNative);
-      }
-    } catch (e) {
-      console.warn('[OnVoiceBridge] native-inspect failed', e);
-    }
-    
-    // ✅ 로드 후 함수 존재 확인
-    if (typeof edgeInstance.func !== 'function') {
-      throw new Error('edge.func is not a function - native module load failed');
-    }
-    
-    // initializeClrFunc 존재 확인 (디버깅)
+    // 로드 검증
     if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
-      console.warn('[OnVoiceBridge] ⚠️ edge.initializeClrFunc is not a function - native module may not be properly loaded');
-      
-      // 임시: unpacked 위치에서 직접 require 시도 (디버그 전용)
-      if (app.isPackaged) {
-        try {
-          const unpackedEdgePath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib', 'edge.js');
-          if (fs.existsSync(unpackedEdgePath)) {
-            console.log('[OnVoiceBridge] 🔍 Attempting to require unpacked edge.js:', unpackedEdgePath);
-            const unpackedEdge = require(unpackedEdgePath);
-            console.log('[OnVoiceBridge] require unpacked edge succeeded, typeof func=', typeof unpackedEdge.func);
-            console.log('[OnVoiceBridge] typeof unpackedEdge.initializeClrFunc =', typeof (unpackedEdge as any).initializeClrFunc);
-          }
-        } catch (e) {
-          console.error('[OnVoiceBridge] require unpacked edge failed', e);
-        }
+      // func는 있는데 initializeClrFunc가 없으면 ABI 불일치
+      if (typeof edgeInstance.func === 'function') {
+        console.error('[OnVoiceBridge] ⚠️ WARNING: edge.func exists but initializeClrFunc is missing. This usually means a Native Module ABI mismatch.');
       }
+      throw new Error('electron-edge-js loaded but initializeClrFunc is missing.');
     }
     
-    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
+    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 및 검증 완료');
     return edgeInstance;
   } catch (e) {
     console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', e);
