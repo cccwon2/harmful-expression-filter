@@ -17,7 +17,8 @@
     "start": "cross-env NODE_ENV=production DOTNET_ROOT=\"C:\\Program Files\\dotnet\" EDGE_USE_CORECLR=1 electron .",
     "build:renderer": "vite build",
     "rebuild": "electron-rebuild -f -w electron-edge-js",
-    "build:electron": "npm run rebuild && electron-builder",
+    "prebuild:electron": "npm run rebuild && npm run copy:native",
+    "build:electron": "npm run prebuild:electron && electron-builder",
     "build": "npm run build:all && npm run build:renderer && npm run build:electron",
     "build:win": "npm run build",
     "postinstall": "electron-builder install-app-deps"
@@ -62,6 +63,8 @@
     "appId": "com.onvoice.app",
     "asar": true,
     "asarUnpack": [
+      "node_modules/electron-edge-js/lib/native/**/*",
+      "node_modules/electron-edge-js/lib/bootstrap/**/*",
       "node_modules/electron-edge-js/**/*"
     ],
     "directories": {
@@ -89,6 +92,11 @@
     ],
     "extraResources": [
       {
+        "from": "node_modules/electron-edge-js/lib/bootstrap",
+        "to": "bootstrap",
+        "filter": ["**/*"]
+      },
+      {
         "from": "dotnet/OnVoiceComBridge/bin/Publish",
         "to": "dotnet",
         "filter": [
@@ -97,20 +105,15 @@
         ]
       },
       {
+        "from": ".env.production",
+        "to": ".env"
+      },
+      {
         "from": "native/OnVoiceAudioBridge.dll",
         "to": "native",
         "filter": [
           "*.dll"
         ]
-      },
-      {
-        "from": ".env.production",
-        "to": ".env"
-      },
-      {
-        "from": "node_modules/electron-edge-js/lib/bootstrap",
-        "to": "bootstrap",
-        "filter": ["**/*"]
       }
     ]
   }

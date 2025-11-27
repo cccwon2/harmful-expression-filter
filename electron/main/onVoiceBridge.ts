@@ -93,12 +93,48 @@ function getEdge() {
 
   // 3. 모듈 로드
   try {
+    // 진단 로그: require.resolve로 실제 로드 경로 확인
+    try {
+      const resolved = require.resolve('electron-edge-js');
+      console.log('[OnVoiceBridge] electron-edge-js resolved from:', resolved);
+    } catch (e) {
+      console.warn('[OnVoiceBridge] require.resolve failed', e);
+    }
+    
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     edgeInstance = require('electron-edge-js');
+    
+    // 진단 로그: 로드된 객체의 키와 함수 타입 확인
+    console.log('[OnVoiceBridge] edge keys:', Object.keys(edgeInstance || {}));
+    console.log('[OnVoiceBridge] typeof edge.func =', typeof edgeInstance.func);
+    console.log('[OnVoiceBridge] typeof edge.initializeClrFunc =', typeof (edgeInstance as any).initializeClrFunc);
+    console.log('[OnVoiceBridge] EDGE_NATIVE=', process.env.EDGE_NATIVE);
+    console.log('[OnVoiceBridge] EDGE_APP_ROOT=', process.env.EDGE_APP_ROOT);
+    console.log('[OnVoiceBridge] EDGE_BOOTSTRAP_DIR=', process.env.EDGE_BOOTSTRAP_DIR);
     
     // ✅ 로드 후 함수 존재 확인
     if (typeof edgeInstance.func !== 'function') {
       throw new Error('edge.func is not a function - native module load failed');
+    }
+    
+    // initializeClrFunc 존재 확인 (디버깅)
+    if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
+      console.warn('[OnVoiceBridge] ⚠️ edge.initializeClrFunc is not a function - native module may not be properly loaded');
+      
+      // 임시: unpacked 위치에서 직접 require 시도 (디버그 전용)
+      if (app.isPackaged) {
+        try {
+          const unpackedEdgePath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib', 'edge.js');
+          if (fs.existsSync(unpackedEdgePath)) {
+            console.log('[OnVoiceBridge] 🔍 Attempting to require unpacked edge.js:', unpackedEdgePath);
+            const unpackedEdge = require(unpackedEdgePath);
+            console.log('[OnVoiceBridge] require unpacked edge succeeded, typeof func=', typeof unpackedEdge.func);
+            console.log('[OnVoiceBridge] typeof unpackedEdge.initializeClrFunc =', typeof (unpackedEdge as any).initializeClrFunc);
+          }
+        } catch (e) {
+          console.error('[OnVoiceBridge] require unpacked edge failed', e);
+        }
+      }
     }
     
     console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
