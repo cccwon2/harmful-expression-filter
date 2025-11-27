@@ -63,7 +63,8 @@
     "asar": true,
     "asarUnpack": [
       "**/*.node",
-      "**/electron-edge-js/**"
+      "**/electron-edge-js/**",
+      "**/electron-edge-js/lib/bootstrap/**"
     ],
     "directories": {
       "output": "dist"
@@ -86,11 +87,7 @@
       "!**/*.tsx",
       "!vite.config.ts",
       "!**/node_modules/sharp/vendor/**/linux-x64/**/*",
-      "!**/node_modules/sharp/vendor/**/darwin-x64/**/*",
-      "!**/node_modules/electron-edge-js/lib/native/win32/ia32/**/*",
-      "!**/node_modules/electron-edge-js/samples/**/*",
-      "!**/node_modules/electron-edge-js/lib/native/win32/x64/1?.*/**/*",
-      "!**/node_modules/electron-edge-js/lib/native/win32/x64/2[0-7].*/**/*"
+      "!**/node_modules/sharp/vendor/**/darwin-x64/**/*"
     ],
     "extraResources": [
       {
