@@ -62,12 +62,7 @@
     "appId": "com.onvoice.app",
     "asar": true,
     "asarUnpack": [
-      "**/*.node",
-      "**/electron-edge-js/**/*",
-      "**/electron-edge-js/lib/**/*",
-      "**/electron-edge-js/lib/bootstrap/**/*",
-      "**/electron-edge-js/lib/native/**/*",
-      "**/electron-edge-js/bin/**/*"
+      "node_modules/electron-edge-js/**/*"
     ],
     "directories": {
       "output": "dist"
@@ -111,11 +106,6 @@
       {
         "from": ".env.production",
         "to": ".env"
-      },
-      {
-        "from": "node_modules/electron-edge-js/lib/bootstrap",
-        "to": "bootstrap",
-        "filter": ["**/*"]
       }
     ]
   }

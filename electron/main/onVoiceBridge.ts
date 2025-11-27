@@ -9,29 +9,24 @@ import * as fs from "fs";
 // 1. electron-edge-js 및 환경 변수 관리 (지연 로딩)
 // ==================================================================================
 
-// 전역 변수로 edge 모듈 캐싱
 let edgeInstance: any = null;
 
-/**
- * electron-edge-js를 안전하게 로드하는 헬퍼 함수
- */
 function getEdge() {
   if (edgeInstance) return edgeInstance;
 
   console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js...');
 
-  // 1. CoreCLR 모드 활성화 (필수)
+  // 1. CoreCLR 모드 활성화
   process.env.EDGE_USE_CORECLR = '1';
 
-  // 2. 배포 환경(패키징됨)일 때 경로 강제 지정
+  // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
-    // 2-1. Bootstrap 경로 설정 (resources/bootstrap)
-    const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
-    process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-    console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
-    
-    // 2-2. EDGE_NATIVE 경로 강제 설정 (핵심 Fix!)
-    // app.asar.unpacked 폴더 내부의 edge_coreclr.node 위치를 찾아 지정합니다.
+    // 2-1. .NET 런타임 경로 (먼저 설정)
+    const dotnetPath = path.join(process.resourcesPath, "dotnet");
+    process.env.EDGE_APP_ROOT = dotnetPath;
+    console.log('[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to:', dotnetPath);
+
+    // 2-2. EDGE_NATIVE 경로 설정
     try {
       const baseNativePath = path.join(
         process.resourcesPath, 
@@ -44,39 +39,56 @@ function getEdge() {
         'x64'
       );
       
+      console.log(`[OnVoiceBridge] 📂 Native Path 탐색: ${baseNativePath}`);
+
       if (fs.existsSync(baseNativePath)) {
-        // 버전 폴더 찾기 (예: 28.0.0)
         const dirs = fs.readdirSync(baseNativePath);
-        const versionDir = dirs.find(d => /^\d+\./.test(d)) || dirs[0]; // 숫자로 시작하는 폴더
-        
+        console.log(`[OnVoiceBridge] 📂 발견된 버전 폴더들: ${JSON.stringify(dirs)}`);
+
+        // Electron 28 버전 우선 탐색
+        let versionDir = dirs.find(d => d.startsWith('28.'));
+        if (!versionDir) {
+          versionDir = dirs.sort().reverse().find(d => /^\d+\./.test(d));
+        }
+
         if (versionDir) {
           const edgeNativePath = path.join(baseNativePath, versionDir, 'edge_coreclr.node');
-          process.env.EDGE_NATIVE = edgeNativePath;
-          console.log('[OnVoiceBridge] 🔧 EDGE_NATIVE set to:', edgeNativePath);
+          
+          // ✅ 파일 존재 여부 확인
+          if (fs.existsSync(edgeNativePath)) {
+            process.env.EDGE_NATIVE = edgeNativePath;
+            console.log('[OnVoiceBridge] ✅ EDGE_NATIVE 설정:', edgeNativePath);
+          } else {
+            console.error('[OnVoiceBridge] ❌ edge_coreclr.node 파일 없음:', edgeNativePath);
+          }
+        } else {
+          console.warn('[OnVoiceBridge] ⚠️ 적절한 버전 폴더를 찾지 못했습니다.');
         }
+      } else {
+        console.error('[OnVoiceBridge] ❌ Native 경로 없음:', baseNativePath);
       }
     } catch (err) {
-      console.warn('[OnVoiceBridge] ⚠️ EDGE_NATIVE 경로 탐색 실패:', err);
+      console.error('[OnVoiceBridge] ❌ EDGE_NATIVE 경로 탐색 오류:', err);
     }
-
-    // 2-3. .NET 런타임 경로 설정
-    const dotnetPath = path.join(process.resourcesPath, "dotnet");
-    if (!process.env.EDGE_APP_ROOT) {
-      process.env.EDGE_APP_ROOT = dotnetPath;
-      console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
-    }
+    
+    // ⚠️ electron-edge-js v28+에서는 별도 bootstrap 설정이 필요 없음
+    // EDGE_BOOTSTRAP_DIR 설정 제거
   } else {
-    // 개발 환경 설정
+    // 개발 환경
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
-    if (!process.env.EDGE_APP_ROOT) {
-      process.env.EDGE_APP_ROOT = dotnetPath;
-    }
+    process.env.EDGE_APP_ROOT = dotnetPath;
   }
 
   // 3. 모듈 로드
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     edgeInstance = require('electron-edge-js');
+    
+    // ✅ 로드 후 함수 존재 확인
+    if (typeof edgeInstance.func !== 'function') {
+      throw new Error('edge.func is not a function - native module load failed');
+    }
+    
     console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
     return edgeInstance;
   } catch (e) {
@@ -85,10 +97,8 @@ function getEdge() {
   }
 }
 
-// ... (이하 나머지 코드는 기존과 동일하게 유지하거나 아래 내용을 사용)
-
 // ==================================================================================
-// 2. Bridge 함수 및 유틸리티
+// 2. Bridge 함수 및 유틸리티 (나머지는 그대로 유지)
 // ==================================================================================
 
 type EdgeCallback = (error: Error | null, result?: any) => void;
@@ -162,7 +172,7 @@ let initialized = false;
 function getBridgeFunc(): EdgeFunc {
   if (bridgeFunc) return bridgeFunc;
 
-  const edge = getEdge(); // 지연 로드
+  const edge = getEdge();
   if (!edge) throw new Error('electron-edge-js 모듈 로드 실패');
 
   let assemblyFile: string;
@@ -174,8 +184,7 @@ function getBridgeFunc(): EdgeFunc {
   }
 
   console.log(`[OnVoiceBridge] Loading .NET DLL from: ${assemblyFile}`);
-  console.log(`[OnVoiceBridge] DLL 경로 확인 (절대 경로): ${path.isAbsolute(assemblyFile) ? "✅ 절대 경로" : "❌ 상대 경로"}`);
-
+  
   try {
     bridgeFunc = edge.func({
       assemblyFile, 
