@@ -78,14 +78,9 @@
       "!**/*.ts",
       "!**/*.tsx",
       "!vite.config.ts",
-      "!**/node_modules/onnxruntime-node/bin/napi-v3/darwin/**/*",
-      "!**/node_modules/onnxruntime-node/bin/napi-v3/linux/**/*",
       "!**/node_modules/sharp/vendor/8.17.3/linux-x64/**/*",
       "!**/node_modules/sharp/vendor/8.17.3/darwin-x64/**/*",
-      "!**/node_modules/electron-edge-js/lib/native/win32/ia32/**/*",
-      "!**/node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**/*",
-      "!**/node_modules/@huggingface/**/*",
-      "!**/node_modules/onnxruntime-node/**/*"
+      "!**/node_modules/electron-edge-js/lib/native/win32/ia32/**/*"
     ],
     "extraResources": [
       {
