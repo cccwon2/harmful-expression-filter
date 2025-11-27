@@ -1,85 +1,74 @@
-/**
- * .NET DLL을 Electron 빌드 출력 디렉토리로 복사하는 스크립트
- * (모든 의존성 DLL을 포함하여 복사)
- */
+const fs = require('fs');
+const path = require('path');
 
-const fs = require("fs");
-const path = require("path");
+// ✅ [수정됨] bin/Debug 대신 bin/Publish 폴더를 바라보도록 수정
+// package.json의 build:dotnet 스크립트가 --output bin/Publish 로 설정되어 있기 때문입니다.
+const sourceDir = path.join(__dirname, '../dotnet/OnVoiceComBridge/bin/Publish');
+const targetDir = path.join(__dirname, '../dist-electron/dotnet');
 
-// 1. .NET 빌드 출력 디렉토리 설정
-// .csproj에 <RuntimeIdentifier>win-x64</RuntimeIdentifier>가 있으므로 win-x64 폴더를 바라봅니다.
-const baseDir = path.join(__dirname, "..", "dotnet", "OnVoiceComBridge", "bin", "Debug");
-const frameworkDir = "net6.0-windows10.0.19041.0";
-const runtimeDir = "win-x64";
-
-// 우선 win-x64 경로를 확인하고, 없으면 상위 폴더를 확인 (혹시 모를 경로 오류 방지)
-let sourceDir = path.join(baseDir, frameworkDir, runtimeDir);
+// 폴더가 없으면 에러 (빌드 순서 확인용)
 if (!fs.existsSync(sourceDir)) {
-  sourceDir = path.join(baseDir, frameworkDir);
-}
-
-// 2. Electron 배포용 DLL 저장 경로
-const targetDir = path.join(__dirname, "..", "dist-electron", "dotnet");
-
-console.log(`[Copy DLL] Source: ${sourceDir}`);
-console.log(`[Copy DLL] Target: ${targetDir}`);
-
-// 소스 디렉토리 존재 확인
-if (!fs.existsSync(sourceDir)) {
-  console.error(`[Copy DLL] ❌ 빌드 디렉토리를 찾을 수 없습니다: ${sourceDir}`);
-  console.error("           먼저 .NET 프로젝트를 빌드하세요 (npm run build:dotnet)");
+  console.error(`[Copy DLL] ❌ 소스 디렉토리를 찾을 수 없습니다: ${sourceDir}`);
+  console.error('           먼저 "npm run build:dotnet"을 실행해 주세요.');
   process.exit(1);
 }
 
 // 타겟 디렉토리 생성
 if (!fs.existsSync(targetDir)) {
   fs.mkdirSync(targetDir, { recursive: true });
-  console.log(`[Copy DLL] 디렉토리 생성됨: ${targetDir}`);
 }
 
-// 3. 복사할 파일 확장자 목록 (DLL, PDB, JSON 설정 파일 등)
-const allowedExtensions = [".dll", ".pdb", ".json"];
+console.log(`[Copy DLL] Source: ${sourceDir}`);
+console.log(`[Copy DLL] Target: ${targetDir}`);
 
-try {
-  const files = fs.readdirSync(sourceDir);
-  let copiedCount = 0;
-  let hasSdkDll = false;
+// 파일 복사 함수 (재귀적)
+function copyFolderSync(from, to) {
+  if (!fs.existsSync(to)) {
+    fs.mkdirSync(to, { recursive: true });
+  }
+  
+  const files = fs.readdirSync(from);
+  let count = 0;
 
-  files.forEach((file) => {
-    const ext = path.extname(file).toLowerCase();
-
-    // 확장자가 일치하면 복사 (모든 종속성 포함)
-    if (allowedExtensions.includes(ext)) {
-      const sourceFile = path.join(sourceDir, file);
-      const targetFile = path.join(targetDir, file);
-
-      // 파일 복사 (덮어쓰기)
-      fs.copyFileSync(sourceFile, targetFile);
-      copiedCount++;
-
-      // 주요 파일 로깅 (확인용)
-      if (file === "OnVoiceComBridge.dll") {
-        console.log(`[Copy DLL] ✅ 메인 DLL 복사됨: ${file}`);
-      } else if (file.includes("Microsoft.Windows.SDK.NET")) {
-        console.log(`[Copy DLL] ✅ SDK 런타임 복사됨: ${file}`);
-        hasSdkDll = true;
-      } else if (file.includes("WinRT.Runtime")) {
-        console.log(`[Copy DLL] ✅ WinRT 런타임 복사됨: ${file}`);
-      }
+  files.forEach(element => {
+    const stat = fs.lstatSync(path.join(from, element));
+    if (stat.isFile()) {
+      fs.copyFileSync(path.join(from, element), path.join(to, element));
+      count++;
+    } else if (stat.isDirectory()) {
+      const subCount = copyFolderSync(path.join(from, element), path.join(to, element));
+      count += subCount;
     }
   });
+  return count;
+}
 
-  console.log(`[Copy DLL] 총 ${copiedCount}개 파일 복사 완료.`);
-
-  if (!hasSdkDll) {
-    console.warn(`[Copy DLL] ⚠️  경고: 'Microsoft.Windows.SDK.NET.dll'이 발견되지 않았습니다.`);
-    console.warn(
-      `           .csproj 파일에 <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>가 있는지 확인하세요.`
-    );
+try {
+  const fileCount = copyFolderSync(sourceDir, targetDir);
+  console.log(`[Copy DLL] ✅ 복사 완료: 총 ${fileCount}개 파일`);
+  
+  // 검증: 핵심 파일 확인
+  if (fs.existsSync(path.join(targetDir, 'coreclr.dll'))) {
+     console.log(`[Copy DLL] 👌 CoreCLR 런타임 확인됨 (coreclr.dll)`);
   } else {
-    console.log(`[Copy DLL] 👌 필수 WinRT 파일이 모두 포함되었습니다.`);
+     console.warn(`[Copy DLL] ⚠️ 경고: coreclr.dll이 보이지 않습니다. Self-contained 빌드가 맞나요?`);
   }
+  
+  // 추가 검증: hostfxr.dll 확인
+  if (fs.existsSync(path.join(targetDir, 'hostfxr.dll'))) {
+     console.log(`[Copy DLL] 👌 HostFxr 확인됨 (hostfxr.dll)`);
+  } else {
+     console.warn(`[Copy DLL] ⚠️ 경고: hostfxr.dll이 보이지 않습니다.`);
+  }
+  
+  // 메인 DLL 확인
+  if (fs.existsSync(path.join(targetDir, 'OnVoiceComBridge.dll'))) {
+     console.log(`[Copy DLL] 👌 메인 DLL 확인됨 (OnVoiceComBridge.dll)`);
+  } else {
+     console.error(`[Copy DLL] ❌ OnVoiceComBridge.dll이 없습니다!`);
+  }
+  
 } catch (err) {
-  console.error(`[Copy DLL] ❌ 오류 발생: ${err.message}`);
+  console.error('[Copy DLL] ❌ 복사 중 오류 발생:', err);
   process.exit(1);
 }
