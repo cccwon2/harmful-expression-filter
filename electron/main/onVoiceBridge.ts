@@ -169,18 +169,25 @@ let initialized = false;
 function getBridgeFunc(): EdgeFunc {
   if (bridgeFunc) return bridgeFunc;
 
+  // 1. 경로 설정 (절대 경로 사용 - 핵심!)
   let assemblyFile: string;
   if (app.isPackaged) {
+    // 배포 모드: resources/dotnet 폴더 안을 가리킴
+    // process.resourcesPath는 'resources' 폴더까지의 절대 경로입니다.
     assemblyFile = path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.dll");
   } else {
-    assemblyFile = path.join(__dirname, "..", "dotnet", "OnVoiceComBridge.dll");
+    // 개발 모드: 로컬 빌드 폴더 가리킴 (절대 경로로 변환)
+    const relativePath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish/OnVoiceComBridge.dll");
+    assemblyFile = path.resolve(relativePath);
   }
 
-  console.log(`[OnVoiceBridge] Loading DLL from: ${assemblyFile}`);
+  // 2. 실행 (경로 확인용 로그 추가)
+  console.log(`[OnVoiceBridge] Loading .NET DLL from: ${assemblyFile}`);
+  console.log(`[OnVoiceBridge] DLL 경로 확인 (절대 경로): ${path.isAbsolute(assemblyFile) ? "✅ 절대 경로" : "❌ 상대 경로"}`);
 
   try {
     bridgeFunc = edge.func({
-      assemblyFile,
+      assemblyFile, // 절대 경로 변수 사용
       typeName: "OnVoiceComBridge.Startup",
       methodName: "Invoke",
     });
