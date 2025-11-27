@@ -54,6 +54,24 @@ if (!process.env.EDGE_APP_ROOT) {
   console.log(`[OnVoiceBridge] ℹ️ EDGE_APP_ROOT already set: ${process.env.EDGE_APP_ROOT}`);
 }
 
+// ✅ [중요] 배포 환경일 경우 Bootstrap 경로 강제 지정
+// 이것이 없으면 edge.js는 app.asar 내부를 뒤지다가 실패합니다.
+// Bootstrap.dll은 .NET 런타임이 직접 접근해야 하므로 ASAR 밖에 있어야 합니다.
+if (app.isPackaged) {
+  const bootstrapPath = path.join(process.resourcesPath, "bootstrap", "bin", "Release", "netcoreapp1.1");
+  process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+  console.log(`[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to: ${bootstrapPath}`);
+  
+  // 파일 존재 확인
+  const fs = require("fs");
+  const bootstrapDllPath = path.join(bootstrapPath, "bootstrap.dll");
+  if (fs.existsSync(bootstrapDllPath)) {
+    console.log(`[OnVoiceBridge] ✅ Bootstrap.dll 확인됨: ${bootstrapDllPath}`);
+  } else {
+    console.warn(`[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다: ${bootstrapDllPath}`);
+  }
+}
+
 // ⚠️ 중요: electron-edge-js를 최상단에서 require하지 않음
 // 지연 로딩(Lazy Loading)을 위해 getBridgeFunc() 함수 내부에서 require하도록 변경
 // 이렇게 하면 환경 변수가 확실히 설정된 후에 electron-edge-js가 로드됩니다.
