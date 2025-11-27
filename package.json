@@ -68,6 +68,19 @@
       "target": "nsis",
       "requestedExecutionLevel": "asInvoker"
     },
+    "files": [
+      "dist-electron/**/*",
+      "dist/renderer/**/*",
+      "package.json",
+      "!server/**/*",
+      "!dotnet/**/*",
+      "!native/**/*",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/*.map",
+      "!**/*.ts",
+      "!**/*.tsx",
+      "!vite.config.ts"
+    ],
     "extraResources": [
       {
         "from": "dotnet/OnVoiceComBridge/bin/Publish",
