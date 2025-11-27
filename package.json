@@ -63,8 +63,11 @@
     "asar": true,
     "asarUnpack": [
       "**/*.node",
-      "**/electron-edge-js/**",
-      "**/electron-edge-js/lib/bootstrap/**"
+      "**/electron-edge-js/**/*",
+      "**/electron-edge-js/lib/**/*",
+      "**/electron-edge-js/lib/bootstrap/**/*",
+      "**/electron-edge-js/lib/native/**/*",
+      "**/electron-edge-js/bin/**/*"
     ],
     "directories": {
       "output": "dist"

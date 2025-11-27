@@ -204,6 +204,42 @@ function getBridgeFunc(): EdgeFunc {
   }
   console.log(`[OnVoiceBridge] 🔧 EDGE_USE_CORECLR: ${process.env.EDGE_USE_CORECLR}`);
 
+  // ✅ 네이티브 모듈 경로 명시적 설정 (asar 언패킹 경로)
+  if (app.isPackaged && !process.env.EDGE_NATIVE) {
+    // 배포 모드: app.asar.unpacked 경로 사용
+    // process.resourcesPath는 'resources' 폴더이므로, 상위 폴더로 이동해야 함
+    const appPath = app.getAppPath(); // app.asar 경로
+    const appDir = path.dirname(appPath); // app.asar가 있는 폴더 (dist/win-unpacked/resources)
+    const electronVersion = process.versions.electron.split(".")[0] + ".0.0";
+    const nativeModulePath = path.join(
+      appDir,
+      "app.asar.unpacked",
+      "node_modules",
+      "electron-edge-js",
+      "lib",
+      "native",
+      "win32",
+      "x64",
+      electronVersion,
+      "edge_coreclr.node"
+    );
+    
+    // 파일이 존재하는지 확인
+    const fs = require("fs");
+    if (fs.existsSync(nativeModulePath)) {
+      process.env.EDGE_NATIVE = nativeModulePath;
+      console.log(`[OnVoiceBridge] 🔧 EDGE_NATIVE set to: ${nativeModulePath}`);
+    } else {
+      console.warn(`[OnVoiceBridge] ⚠️ 네이티브 모듈을 찾을 수 없습니다: ${nativeModulePath}`);
+      // 대체 경로 시도 (직접 확인)
+      const altPath = path.join(process.resourcesPath, "..", "app.asar.unpacked", "node_modules", "electron-edge-js", "lib", "native", "win32", "x64", electronVersion, "edge_coreclr.node");
+      if (fs.existsSync(altPath)) {
+        process.env.EDGE_NATIVE = altPath;
+        console.log(`[OnVoiceBridge] 🔧 EDGE_NATIVE set to (대체 경로): ${altPath}`);
+      }
+    }
+  }
+
   // ✅ 지연 로딩 (Lazy Load): 환경 변수가 설정된 후에 electron-edge-js 로드
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const edge = require("electron-edge-js");
