@@ -54,7 +54,9 @@ if (!process.env.EDGE_APP_ROOT) {
   console.log(`[OnVoiceBridge] ℹ️ EDGE_APP_ROOT already set: ${process.env.EDGE_APP_ROOT}`);
 }
 
-const edge = require("electron-edge-js");
+// ⚠️ 중요: electron-edge-js를 최상단에서 require하지 않음
+// 지연 로딩(Lazy Loading)을 위해 getBridgeFunc() 함수 내부에서 require하도록 변경
+// 이렇게 하면 환경 변수가 확실히 설정된 후에 electron-edge-js가 로드됩니다.
 
 // .env 파일 로드 (이 모듈이 import될 때 실행)
 // 여러 경로를 시도하여 .env 파일 찾기
@@ -195,6 +197,16 @@ let initialized = false;
 
 function getBridgeFunc(): EdgeFunc {
   if (bridgeFunc) return bridgeFunc;
+
+  // ✅ 환경 변수 확실히 설정 (안전을 위해 매번 확인)
+  if (!process.env.EDGE_USE_CORECLR) {
+    process.env.EDGE_USE_CORECLR = "1";
+  }
+  console.log(`[OnVoiceBridge] 🔧 EDGE_USE_CORECLR: ${process.env.EDGE_USE_CORECLR}`);
+
+  // ✅ 지연 로딩 (Lazy Load): 환경 변수가 설정된 후에 electron-edge-js 로드
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const edge = require("electron-edge-js");
 
   // 1. 경로 설정 (절대 경로 사용 - 핵심!)
   let assemblyFile: string;
