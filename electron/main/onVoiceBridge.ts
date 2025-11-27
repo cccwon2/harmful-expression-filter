@@ -112,6 +112,27 @@ function getEdge() {
     console.log('[OnVoiceBridge] EDGE_APP_ROOT=', process.env.EDGE_APP_ROOT);
     console.log('[OnVoiceBridge] EDGE_BOOTSTRAP_DIR=', process.env.EDGE_BOOTSTRAP_DIR);
     
+    // 진단: native 직접 require 및 노출 심볼 확인
+    try {
+      const nativePath = process.env.EDGE_NATIVE || (app.isPackaged 
+        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib', 'native', 'win32', 'x64', '28.0.0', 'edge_coreclr.node')
+        : path.join(__dirname, '../../node_modules/electron-edge-js/lib/native/win32/x64/28.0.0/edge_coreclr.node'));
+      
+      console.log('[OnVoiceBridge] 🔎 attempting to require native module directly:', nativePath);
+      
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const nativeModule = require(nativePath);
+        console.log('[OnVoiceBridge] native require succeeded. keys:', Object.keys(nativeModule || {}));
+        // 초기화 심볼 직접 체크 시도 (있으면 function)
+        console.log('[OnVoiceBridge] native.initializeClrFunc type=', typeof (nativeModule as any).initializeClrFunc);
+      } catch (eNative) {
+        console.warn('[OnVoiceBridge] native require failed or returns non-object:', eNative && (eNative as any).message ? (eNative as any).message : eNative);
+      }
+    } catch (e) {
+      console.warn('[OnVoiceBridge] native-inspect failed', e);
+    }
+    
     // ✅ 로드 후 함수 존재 확인
     if (typeof edgeInstance.func !== 'function') {
       throw new Error('edge.func is not a function - native module load failed');
