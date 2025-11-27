@@ -83,17 +83,20 @@ type OverlayStatePayload = {
 Menu.setApplicationMenu(null);
 
 app.whenReady().then(async () => {
-  // .env 파일 로드 (프로젝트 루트에서)
-  // 개발 모드: 프로젝트 루트, 프로덕션 모드: app.getAppPath()
-  const envPath =
-    process.env.NODE_ENV === "production" ? path.join(app.getAppPath(), ".env") : path.join(__dirname, "../.env");
+  // .env 파일 로드
+  // 🔍 배포 환경(.exe)에서는 process.resourcesPath 사용
+  // 🔍 개발 환경에서는 프로젝트 루트 사용
+  const envPath = app.isPackaged
+    ? path.join(process.resourcesPath, ".env")  // ✅ 배포: resources/.env
+    : path.join(__dirname, "../../.env");       // 🛠️ 개발: 루트 .env
+  
   const envResult = dotenv.config({ path: envPath });
-  console.log("[Main] .env 파일 로드 시도:", envPath);
+  console.log(`[Main] .env 파일 로드 시도 (경로: ${envPath})`);
   if (envResult.error) {
-    console.warn("[Main] .env 파일 로드 실패:", envResult.error.message);
+    console.warn(`[Main] .env 로드 실패 (경로: ${envPath}):`, envResult.error);
     console.warn("[Main] 기본 SERVER_URL을 사용합니다: http://localhost:8000");
   } else {
-    console.log("[Main] .env 파일 로드 성공");
+    console.log(`[Main] .env 로드 성공 (경로: ${envPath})`);
     if (envResult.parsed) {
       console.log("[Main] .env 파일 내용:", Object.keys(envResult.parsed));
     }

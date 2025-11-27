@@ -66,11 +66,16 @@ function ensureEnvLoaded() {
     // 시도할 경로 목록
     const possiblePaths: string[] = [];
     
-    // 1. 개발 모드: 프로젝트 루트 (__dirname 기준)
+    // 1. 배포 환경: process.resourcesPath (extraResources로 복사된 .env 위치)
+    if (app && app.isPackaged && process.resourcesPath) {
+      possiblePaths.push(path.join(process.resourcesPath, ".env"));
+    }
+    
+    // 2. 개발 모드: 프로젝트 루트 (__dirname 기준)
     possiblePaths.push(path.join(__dirname, "../../.env"));
     possiblePaths.push(path.join(__dirname, "../../../.env"));
     
-    // 2. 프로덕션 모드: app.getAppPath() (app이 초기화된 경우)
+    // 3. 프로덕션 모드: app.getAppPath() (fallback)
     if (app && app.isPackaged) {
       try {
         possiblePaths.push(path.join(app.getAppPath(), ".env"));
@@ -79,7 +84,7 @@ function ensureEnvLoaded() {
       }
     }
     
-    // 3. 현재 작업 디렉토리
+    // 4. 현재 작업 디렉토리
     possiblePaths.push(path.join(process.cwd(), ".env"));
     
     let loaded = false;
