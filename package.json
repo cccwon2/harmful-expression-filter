@@ -4,7 +4,7 @@
   "description": "OnVoice - Voice Overlay Application",
   "main": "./dist-electron/main.js",
   "scripts": {
-    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet build",
+    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish --configuration Release --runtime win-x64 --self-contained true --output bin/Publish",
     "copy:dll": "node scripts/copy-dll.js",
     "build:native": "node scripts/build-native.js",
     "copy:native": "node scripts/copy-native-dll.js",
@@ -70,11 +70,11 @@
     },
     "extraResources": [
       {
-        "from": "dist-electron/dotnet",
+        "// 변경됨": "Publish 폴더를 직접 참조하고, 모든 파일(**/*)을 포함",
+        "from": "dotnet/OnVoiceComBridge/bin/Publish",
         "to": "dotnet",
         "filter": [
-          "**/*.dll",
-          "**/*.json"
+          "**/*"
         ]
       },
       {
