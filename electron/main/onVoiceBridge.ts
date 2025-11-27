@@ -21,12 +21,23 @@ function getEdge() {
 
   // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
-    // 2-1. .NET 런타임 경로 (먼저 설정)
-    const dotnetPath = path.join(process.resourcesPath, "dotnet");
-    process.env.EDGE_APP_ROOT = dotnetPath;
-    console.log('[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to:', dotnetPath);
+    // ----------------------------------------------------------------------
+    // [FIX 1] Bootstrap 경로 설정 (이 부분이 누락되어 있었습니다!)
+    // ----------------------------------------------------------------------
+    const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
+    process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+    console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
+    
+    // 파일 존재 확인 (디버깅)
+    if (fs.existsSync(path.join(bootstrapPath, 'bootstrap.dll'))) {
+        console.log('[OnVoiceBridge] ✅ Bootstrap.dll 확인됨');
+    } else {
+        console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다! (package.json extraResources 확인 필요)');
+    }
 
-    // 2-2. EDGE_NATIVE 경로 설정
+    // ----------------------------------------------------------------------
+    // [FIX 2] Native 경로 탐색 (Electron 28 버전 우선 선택)
+    // ----------------------------------------------------------------------
     try {
       const baseNativePath = path.join(
         process.resourcesPath, 
@@ -43,40 +54,41 @@ function getEdge() {
 
       if (fs.existsSync(baseNativePath)) {
         const dirs = fs.readdirSync(baseNativePath);
-        console.log(`[OnVoiceBridge] 📂 발견된 버전 폴더들: ${JSON.stringify(dirs)}`);
+        // console.log(`[OnVoiceBridge] 📂 발견된 버전 폴더들: ${JSON.stringify(dirs)}`);
 
-        // Electron 28 버전 우선 탐색
-        let versionDir = dirs.find(d => d.startsWith('28.'));
+        // 역순 정렬하여 28.0.0이 17.0.0보다 먼저 오도록 함
+        const sortedDirs = dirs.sort().reverse();
+        
+        // 1순위: '28.'로 시작하는 폴더 (Electron 28)
+        let versionDir = sortedDirs.find(d => d.startsWith('28.'));
+        
+        // 2순위: 없다면 가장 높은 버전 숫자
         if (!versionDir) {
-          versionDir = dirs.sort().reverse().find(d => /^\d+\./.test(d));
+           versionDir = sortedDirs.find(d => /^\d+\./.test(d));
         }
 
         if (versionDir) {
           const edgeNativePath = path.join(baseNativePath, versionDir, 'edge_coreclr.node');
-          
-          // ✅ 파일 존재 여부 확인
-          if (fs.existsSync(edgeNativePath)) {
-            process.env.EDGE_NATIVE = edgeNativePath;
-            console.log('[OnVoiceBridge] ✅ EDGE_NATIVE 설정:', edgeNativePath);
-          } else {
-            console.error('[OnVoiceBridge] ❌ edge_coreclr.node 파일 없음:', edgeNativePath);
-          }
-        } else {
-          console.warn('[OnVoiceBridge] ⚠️ 적절한 버전 폴더를 찾지 못했습니다.');
+          process.env.EDGE_NATIVE = edgeNativePath;
+          console.log('[OnVoiceBridge] ✅ EDGE_NATIVE 설정:', edgeNativePath);
         }
-      } else {
-        console.error('[OnVoiceBridge] ❌ Native 경로 없음:', baseNativePath);
       }
     } catch (err) {
-      console.error('[OnVoiceBridge] ❌ EDGE_NATIVE 경로 탐색 오류:', err);
+      console.warn('[OnVoiceBridge] ⚠️ EDGE_NATIVE 경로 탐색 오류:', err);
     }
-    
-    // ⚠️ electron-edge-js v28+에서는 별도 bootstrap 설정이 필요 없음
-    // EDGE_BOOTSTRAP_DIR 설정 제거
+
+    // 2-3. .NET 런타임 경로
+    const dotnetPath = path.join(process.resourcesPath, "dotnet");
+    if (!process.env.EDGE_APP_ROOT) {
+      process.env.EDGE_APP_ROOT = dotnetPath;
+      console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
+    }
   } else {
     // 개발 환경
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
-    process.env.EDGE_APP_ROOT = dotnetPath;
+    if (!process.env.EDGE_APP_ROOT) {
+      process.env.EDGE_APP_ROOT = dotnetPath;
+    }
   }
 
   // 3. 모듈 로드
