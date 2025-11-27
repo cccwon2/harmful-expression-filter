@@ -32,6 +32,26 @@ function errorWithTimestamp(message: string, ...args: any[]): void {
 if (!process.env.EDGE_USE_CORECLR) {
   process.env.EDGE_USE_CORECLR = "1";
 }
+
+// ⚠️ 중요: Self-contained 배포 시 .NET 런타임 경로 설정 (EDGE_APP_ROOT)
+// electron-edge-js가 번들링된 .NET 런타임(hostfxr.dll 등)을 찾을 수 있도록 설정해야 함
+let dotnetPath: string;
+if (app.isPackaged) {
+  // 배포 모드: resources/dotnet 폴더
+  dotnetPath = path.join(process.resourcesPath, "dotnet");
+} else {
+  // 개발 모드: 로컬 빌드 폴더
+  dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
+}
+
+// EDGE_APP_ROOT가 설정되지 않았을 때만 설정
+if (!process.env.EDGE_APP_ROOT) {
+  process.env.EDGE_APP_ROOT = dotnetPath;
+  console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
+} else {
+  console.log(`[OnVoiceBridge] ℹ️ EDGE_APP_ROOT already set: ${process.env.EDGE_APP_ROOT}`);
+}
+
 const edge = require("electron-edge-js");
 
 // .env 파일 로드 (이 모듈이 import될 때 실행)
