@@ -18,6 +18,8 @@ function getEdge() {
 
   // 1. CoreCLR 모드 활성화
   process.env.EDGE_USE_CORECLR = '1';
+  // 디버그 모드 활성화 (로드된 네이티브 모듈 경로 확인용)
+  process.env.EDGE_DEBUG = '1';
 
   // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
@@ -86,8 +88,18 @@ function getEdge() {
     }
     
     // 로드 검증: initializeClrFunc 함수 확인
+    console.log('[OnVoiceBridge] 🔍 Loaded edge instance keys:', Object.keys(edgeInstance || {}));
+    console.log('[OnVoiceBridge] 🔍 EDGE_NATIVE:', process.env.EDGE_NATIVE);
+    console.log('[OnVoiceBridge] 🔍 EDGE_USE_CORECLR:', process.env.EDGE_USE_CORECLR);
+    console.log('[OnVoiceBridge] 🔍 EDGE_BOOTSTRAP_DIR:', process.env.EDGE_BOOTSTRAP_DIR);
+    console.log('[OnVoiceBridge] 🔍 EDGE_APP_ROOT:', process.env.EDGE_APP_ROOT);
+    
     if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
-      console.error('[OnVoiceBridge] ⚠️ WARNING: edge.initializeClrFunc is not a function. This usually means a Native Module ABI mismatch or CoreCLR mode not enabled.');
+      console.error('[OnVoiceBridge] ⚠️ WARNING: edge.initializeClrFunc is not a function.');
+      console.error('[OnVoiceBridge] ⚠️ This usually means:');
+      console.error('[OnVoiceBridge] ⚠️   1. CoreCLR initialization failed during module load');
+      console.error('[OnVoiceBridge] ⚠️   2. Wrong native module was loaded (edge_nativeclr.node instead of edge_coreclr.node)');
+      console.error('[OnVoiceBridge] ⚠️   3. Native module ABI mismatch');
       throw new Error('electron-edge-js loaded but initializeClrFunc is missing. CoreCLR mode may not be enabled.');
     }
     
