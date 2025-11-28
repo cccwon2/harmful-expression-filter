@@ -22,12 +22,12 @@ function getEdge() {
   process.env.EDGE_DEBUG = '1';
   // CoreCLR 호스팅 API 추적 활성화 (초기화 실패 원인 파악용)
   process.env.COREHOST_TRACE = '1';
-  if (app.isPackaged) {
-    // 배포 환경: 로그 파일을 resources 폴더에 저장
-    const traceFile = path.join(process.resourcesPath, 'corehost_trace.txt');
-    process.env.COREHOST_TRACEFILE = traceFile;
-    console.log('[OnVoiceBridge] 🔍 CoreCLR trace file:', traceFile);
-  }
+  // 개발 환경과 배포 환경 모두 trace 파일 생성
+  const traceFile = app.isPackaged 
+    ? path.join(process.resourcesPath, 'corehost_trace.txt')
+    : path.join(__dirname, '../../corehost_trace.txt');
+  process.env.COREHOST_TRACEFILE = traceFile;
+  console.log('[OnVoiceBridge] 🔍 CoreCLR trace file:', traceFile);
 
   // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
