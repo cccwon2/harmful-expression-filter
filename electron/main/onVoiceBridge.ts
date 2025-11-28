@@ -14,237 +14,99 @@ let edgeInstance: any = null;
 function getEdge() {
   if (edgeInstance) {
     console.log('[OnVoiceBridge] ⚡ Using cached edge instance');
-    console.log('[OnVoiceBridge] 🔍 Cached edge instance keys:', Object.keys(edgeInstance || {}));
-    console.log('[OnVoiceBridge] 🔍 Cached edge.initializeClrFunc type:', typeof (edgeInstance as any)?.initializeClrFunc);
     return edgeInstance;
   }
 
   console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (Standard Mode)...');
 
-  // 0. EDGE_BOOTSTRAP_DIR 설정 (bootstrap.dll 위치)
-  // Initialize()는 EDGE_APP_ROOT가 설정되어 있으면 그것을 사용하므로,
-  // EDGE_BOOTSTRAP_DIR은 bootstrap.dll 위치만 지정
-  // EDGE_APP_ROOT는 나중에 설정되므로 여기서는 설정하지 않음
-
-  // 1. CoreCLR 모드 활성화 (모듈 로드 전에 반드시 설정)
   process.env.EDGE_USE_CORECLR = '1';
-  // 디버그 모드 활성화 (로드된 네이티브 모듈 경로 확인용)
   process.env.EDGE_DEBUG = '1';
-  // CoreCLR 호스팅 API 추적 활성화 (초기화 실패 원인 파악용)
   process.env.COREHOST_TRACE = '1';
-  // 개발 환경과 배포 환경 모두 trace 파일 생성 (절대 경로 사용)
-  const traceFile = app.isPackaged 
+
+  const traceFile = app.isPackaged
     ? path.resolve(process.resourcesPath, 'corehost_trace.txt')
     : path.resolve(__dirname, '../../corehost_trace.txt');
   process.env.COREHOST_TRACEFILE = traceFile;
-  // 환경 변수가 제대로 설정되었는지 확인
+
   console.log('[OnVoiceBridge] 🔍 CoreCLR trace file:', traceFile);
-  console.log('[OnVoiceBridge] 🔍 COREHOST_TRACE:', process.env.COREHOST_TRACE);
-  console.log('[OnVoiceBridge] 🔍 COREHOST_TRACEFILE:', process.env.COREHOST_TRACEFILE);
 
-  // 2. 배포 환경 경로 설정
+  // 변수 선언 (스코프 문제 해결)
+  let bootstrapDll = "";
+  let coreclrDll = "";
+  let hostfxrDll = "";
+  let hostpolicyDll = "";
+
   if (app.isPackaged) {
-    // 2-1. Bootstrap 경로 (extraResources로 resources/bootstrap에 복사됨)
+    // [배포 환경]
     const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
-    
     process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-    console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
-    
-    // 파일 존재 확인 로그
-    const bootstrapDllPath = path.join(bootstrapPath, 'bootstrap.dll');
-    if (fs.existsSync(bootstrapDllPath)) {
-      console.log('[OnVoiceBridge] ✅ Bootstrap.dll 확인됨');
-      
-      // bootstrap.runtimeconfig.json 확인
-      const runtimeConfigPath = path.join(bootstrapPath, 'bootstrap.runtimeconfig.json');
-      if (fs.existsSync(runtimeConfigPath)) {
-        console.log('[OnVoiceBridge] ✅ bootstrap.runtimeconfig.json 확인됨');
-      } else {
-        console.warn('[OnVoiceBridge] ⚠️ bootstrap.runtimeconfig.json을 찾을 수 없습니다! 경로:', runtimeConfigPath);
-      }
-    } else {
-      console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다! 경로:', bootstrapDllPath);
-    }
+    bootstrapDll = path.join(bootstrapPath, 'bootstrap.dll');
 
-    // 2-2. Native 경로 설정 (build/Release 우선, 없으면 lib/native 사용)
     const baseUnpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js');
     let baseNativePath = path.join(baseUnpackedPath, 'lib', 'native', 'win32', 'x64');
-    
-    // build/Release 경로 우선 확인
     const buildReleasePath = path.join(baseUnpackedPath, 'build', 'Release', 'edge_coreclr.node');
+
     let nativePath: string | null = null;
-    
     if (fs.existsSync(buildReleasePath)) {
-        nativePath = buildReleasePath;
-        console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to (build/Release):', nativePath);
-    } else {
-        // build/Release가 없으면 lib/native 경로 탐색
-        if (!fs.existsSync(baseNativePath)) {
-            // 혹시 모르니 resources/modules 경로도 대비 (이전 설정 잔재)
-            baseNativePath = path.join(process.resourcesPath, 'modules', 'electron-edge-js', 'lib', 'native', 'win32', 'x64');
-        }
-        
-        try {
-            if (fs.existsSync(baseNativePath)) {
-                const dirs = fs.readdirSync(baseNativePath);
-                const sortedDirs = dirs.sort().reverse();
-                let versionDir = sortedDirs.find(d => d.startsWith('28.'));
-                if (!versionDir) versionDir = sortedDirs.find(d => /^\d+\./.test(d));
-                
-                if (versionDir) {
-                    nativePath = path.join(baseNativePath, versionDir, 'edge_coreclr.node');
-                    if (fs.existsSync(nativePath)) {
-                        console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to (lib/native):', nativePath);
-                    } else {
-                        nativePath = null;
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('[OnVoiceBridge] ⚠️ Native path search failed:', e);
-        }
-    }
-    
-    if (nativePath) {
-        process.env.EDGE_NATIVE = nativePath;
-    } else {
-        console.error('[OnVoiceBridge] ❌ edge_coreclr.node 파일을 찾을 수 없습니다.');
+      nativePath = buildReleasePath;
+    } else if (fs.existsSync(baseNativePath)) {
+      // 버전별 폴더 찾기 로직 생략 (단순화)
+      nativePath = path.join(baseNativePath, '28.0.1', 'edge_coreclr.node'); // 하드코딩 또는 검색
+      if (!fs.existsSync(nativePath)) {
+        // 폴더 검색
+        const dirs = fs.readdirSync(baseNativePath);
+        const versionDir = dirs.find(d => /^\d+\./.test(d));
+        if (versionDir) nativePath = path.join(baseNativePath, versionDir, 'edge_coreclr.node');
+      }
     }
 
-    // 2-3. .NET 런타임 경로
+    if (nativePath) process.env.EDGE_NATIVE = nativePath;
+
     const dotnetPath = path.join(process.resourcesPath, "dotnet");
     process.env.EDGE_APP_ROOT = dotnetPath;
-    console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
-    
-    // ⭐ 핵심: CORECLR_DIR 환경 변수 설정 (coreclr.dll이 있는 폴더)
     process.env.CORECLR_DIR = dotnetPath;
-    console.log('[OnVoiceBridge] 🔧 CORECLR_DIR set to:', dotnetPath);
-    
-    // coreclr.dll 존재 확인
-    const coreclrPath = path.join(dotnetPath, 'coreclr.dll');
-    if (fs.existsSync(coreclrPath)) {
-      console.log('[OnVoiceBridge] ✅ coreclr.dll found at:', coreclrPath);
-    } else {
-      console.error('[OnVoiceBridge] ❌ coreclr.dll NOT found at:', coreclrPath);
-    }
-  } else {
-    // 개발 환경
-    const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
-    process.env.EDGE_APP_ROOT = dotnetPath;
-    console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to (dev): ${dotnetPath}`);
-    
-    // ⭐ 핵심: CORECLR_DIR 환경 변수 설정 (coreclr.dll이 있는 폴더)
-    process.env.CORECLR_DIR = dotnetPath;
-    console.log('[OnVoiceBridge] 🔧 CORECLR_DIR set to (dev):', dotnetPath);
-    
-    // coreclr.dll 존재 확인
-    const coreclrPath = path.join(dotnetPath, 'coreclr.dll');
-    if (fs.existsSync(coreclrPath)) {
-      console.log('[OnVoiceBridge] ✅ coreclr.dll found at (dev):', coreclrPath);
-    } else {
-      console.error('[OnVoiceBridge] ❌ coreclr.dll NOT found at (dev):', coreclrPath);
-    }
-    
-    // 개발 환경: Bootstrap 경로 설정 (bootstrap.dll 위치만 지정)
-    // Initialize()는 EDGE_APP_ROOT가 설정되어 있으면 그것을 사용하므로,
-    // EDGE_BOOTSTRAP_DIR은 bootstrap.dll 위치만 지정
-    const bootstrapPath = path.join(__dirname, "../../node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1");
-    if (fs.existsSync(path.join(bootstrapPath, 'bootstrap.dll'))) {
-      process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-      console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to (dev):', bootstrapPath);
-      console.log('[OnVoiceBridge] 🔧 EDGE_APP_ROOT의 OnVoiceComBridge.deps.json을 사용하여 CoreCLR 경로를 찾습니다');
-    } else {
-      console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다 (dev):', bootstrapPath);
-    }
+    bootstrapDll = path.join(bootstrapPath, 'bootstrap.dll');
+
+    coreclrDll = path.join(dotnetPath, 'coreclr.dll');
+    hostfxrDll = path.join(dotnetPath, 'hostfxr.dll');
+    hostpolicyDll = path.join(dotnetPath, 'hostpolicy.dll');
+
+    console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT (dev): ${dotnetPath}`);
+    console.log(`[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR (dev): ${bootstrapPath}`);
   }
 
-  // 3. 모듈 로드
   try {
     if (app.isPackaged) {
-      // 배포 환경: app.asar.unpacked에서 직접 로드
       const edgeModulePath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib', 'edge.js');
-      console.log('[OnVoiceBridge] 🔧 Loading from unpacked path:', edgeModulePath);
       edgeInstance = require(edgeModulePath);
     } else {
-      // 개발 환경: 일반 require
       edgeInstance = require('electron-edge-js');
     }
-    
-    // 로드 검증: initializeClrFunc 함수 확인
-    console.log('[OnVoiceBridge] 🔍 Loaded edge instance keys:', Object.keys(edgeInstance || {}));
-    console.log('[OnVoiceBridge] 🔍 EDGE_NATIVE:', process.env.EDGE_NATIVE);
-    console.log('[OnVoiceBridge] 🔍 EDGE_USE_CORECLR:', process.env.EDGE_USE_CORECLR);
-    console.log('[OnVoiceBridge] 🔍 EDGE_BOOTSTRAP_DIR:', process.env.EDGE_BOOTSTRAP_DIR);
-    console.log('[OnVoiceBridge] 🔍 EDGE_APP_ROOT:', process.env.EDGE_APP_ROOT);
-    console.log('[OnVoiceBridge] 🔍 COREHOST_TRACE:', process.env.COREHOST_TRACE);
-    console.log('[OnVoiceBridge] 🔍 COREHOST_TRACEFILE:', process.env.COREHOST_TRACEFILE);
-    
-    // edge 인스턴스의 모든 속성 확인
-    if (edgeInstance) {
-      console.log('[OnVoiceBridge] 🔍 edge instance type:', typeof edgeInstance);
-      console.log('[OnVoiceBridge] 🔍 edge.func type:', typeof edgeInstance.func);
-      console.log('[OnVoiceBridge] 🔍 edge.initializeClrFunc type:', typeof (edgeInstance as any).initializeClrFunc);
-    }
-    
+
     if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
-      console.error('[OnVoiceBridge] ⚠️ WARNING: edge.initializeClrFunc is not a function.');
-      console.error('[OnVoiceBridge] ⚠️ This usually means CoreCLR initialization failed during module load.');
-      console.error('[OnVoiceBridge] ⚠️ CoreClrEmbedding::Initialize() failed, so init() returned early.');
-      console.error('[OnVoiceBridge] ⚠️ Possible causes:');
-      console.error('[OnVoiceBridge] ⚠️   1. Bootstrap DLL path incorrect or DLL missing');
-      console.error('[OnVoiceBridge] ⚠️   2. .NET runtime path incorrect or missing coreclr.dll/hostfxr.dll');
-      console.error('[OnVoiceBridge] ⚠️   3. CoreCLR hosting API initialization failure');
-      console.error('[OnVoiceBridge] ⚠️   4. Missing dependencies or incorrect file permissions');
-      
-      // 파일 존재 확인 (개발 환경과 배포 환경 모두)
-      // EDGE_BOOTSTRAP_DIR이 없을 때는 edge.js가 자동으로 찾는 경로 사용
-      let bootstrapDir = process.env.EDGE_BOOTSTRAP_DIR;
-      if (!bootstrapDir) {
-        // edge.js가 자동으로 찾는 경로 (node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1)
-        const edgeModulePath = app.isPackaged
-          ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib')
-          : path.join(__dirname, '../../node_modules/electron-edge-js/lib');
-        bootstrapDir = path.join(edgeModulePath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
-      }
-      
-      const bootstrapDll = path.join(bootstrapDir, 'bootstrap.dll');
-      const coreclrDll = path.join(process.env.EDGE_APP_ROOT || '', 'coreclr.dll');
-      const hostfxrDll = path.join(process.env.EDGE_APP_ROOT || '', 'hostfxr.dll');
-      const hostpolicyDll = path.join(process.env.EDGE_APP_ROOT || '', 'hostpolicy.dll');
-      
-      console.error('[OnVoiceBridge] 🔍 File existence check:');
-      console.error(`[OnVoiceBridge]    Bootstrap DLL (${bootstrapDll}): ${fs.existsSync(bootstrapDll) ? '✅' : '❌'}`);
-      console.error(`[OnVoiceBridge]    CoreCLR DLL (${coreclrDll}): ${fs.existsSync(coreclrDll) ? '✅' : '❌'}`);
-      console.error(`[OnVoiceBridge]    HostFxr DLL (${hostfxrDll}): ${fs.existsSync(hostfxrDll) ? '✅' : '❌'}`);
-      console.error(`[OnVoiceBridge]    HostPolicy DLL (${hostpolicyDll}): ${fs.existsSync(hostpolicyDll) ? '✅' : '❌'}`);
-      
-      // bootstrap.runtimeconfig.json 확인
-      const runtimeConfig = path.join(bootstrapDir, 'bootstrap.runtimeconfig.json');
-      console.error(`[OnVoiceBridge]    bootstrap.runtimeconfig.json (${runtimeConfig}): ${fs.existsSync(runtimeConfig) ? '✅' : '❌'}`);
-      
-      // bootstrap.dll 크기 확인
+      console.error('[OnVoiceBridge] ⚠️ initializeClrFunc missing. Debug info:');
+      console.error(`[OnVoiceBridge]    Bootstrap DLL: ${fs.existsSync(bootstrapDll) ? '✅' : '❌'} (${bootstrapDll})`);
+      console.error(`[OnVoiceBridge]    CoreCLR DLL: ${fs.existsSync(coreclrDll) ? '✅' : '❌'} (${coreclrDll})`);
+      console.error(`[OnVoiceBridge]    HostFxr DLL: ${fs.existsSync(hostfxrDll) ? '✅' : '❌'} (${hostfxrDll})`);
+
+      // Bootstrap 크기 확인 (로그만 남김)
       if (fs.existsSync(bootstrapDll)) {
-        const bootstrapSize = fs.statSync(bootstrapDll).size;
-        console.error(`[OnVoiceBridge]    bootstrap.dll 크기: ${bootstrapSize} bytes ${bootstrapSize < 10000 ? '⚠️ (비정상적으로 작음)' : '✅'}`);
+        console.log(`[OnVoiceBridge]    Bootstrap Size: ${fs.statSync(bootstrapDll).size} bytes`);
       }
-      
-      // edgeInstance를 null로 리셋하여 다음 호출 시 재시도 가능하도록 함
-      console.error('[OnVoiceBridge] 🔄 edgeInstance를 리셋합니다. 다음 호출 시 재초기화를 시도합니다.');
-      edgeInstance = null;
-      
-      throw new Error('electron-edge-js loaded but initializeClrFunc is missing. CoreCLR mode may not be enabled.');
+
+      throw new Error('electron-edge-js loaded but initializeClrFunc is missing.');
     }
-    
-    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료 (initializeClrFunc 확인됨)');
+
+    console.log('[OnVoiceBridge] ✅ electron-edge-js loaded successfully');
     return edgeInstance;
   } catch (e) {
-    console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', e);
+    console.error('[OnVoiceBridge] ❌ Failed to load electron-edge-js:', e);
     throw e;
   }
 }
 
 // ==================================================================================
-// 2. Bridge 함수 및 유틸리티 (나머지는 그대로 유지)
+// 2. Bridge 함수 및 유틸리티
 // ==================================================================================
 
 type EdgeCallback = (error: Error | null, result?: any) => void;
@@ -294,7 +156,7 @@ function ensureEnvLoaded() {
     possiblePaths.push(path.join(__dirname, "../../.env"));
     possiblePaths.push(path.join(__dirname, "../../../.env"));
     possiblePaths.push(path.join(process.cwd(), ".env"));
-    
+
     for (const envPath of possiblePaths) {
       const envResult = dotenv.config({ path: envPath });
       if (!envResult.error && envResult.parsed) {
@@ -337,10 +199,10 @@ function getBridgeFunc(): EdgeFunc {
   }
 
   console.log(`[OnVoiceBridge] Loading .NET DLL from: ${assemblyFile}`);
-  
+
   try {
     bridgeFunc = edge.func({
-      assemblyFile, 
+      assemblyFile,
       typeName: "OnVoiceComBridge.Startup",
       methodName: "Invoke",
     });
@@ -383,7 +245,7 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
       has_violation: boolean;
       ai_analysis: { is_harmful: boolean; confidence: number; } | null;
     }>(`${serverUrl}/analyze`, { text: text.trim() }, { timeout: SERVER_REQUEST_TIMEOUT });
-    
+
     if (response.data.ai_analysis) return { isHarmful: response.data.ai_analysis.is_harmful, confidence: response.data.ai_analysis.confidence };
     return { isHarmful: response.data.has_violation, confidence: response.data.has_violation ? 1.0 : 0.0 };
   } catch (error) { return { isHarmful: false, confidence: 0.0 }; }
@@ -441,13 +303,13 @@ export const onVoiceBridge: OnVoiceBridge = {
       const payload: any = { command: "ocr", imageData: imageBuffer };
       const result = await callBridge(payload);
       if (!result || result.ok === false) return { ok: false, error: result?.error || "OCR 실패" };
-      
+
       const extractedText = result.text || "";
       console.log(`[OnVoiceBridge] 📝 OCR 텍스트: "${extractedText.substring(0, 50)}${extractedText.length > 50 ? "..." : ""}"`);
-      
+
       let analysisResult = { isHarmful: false, confidence: 0.0 };
       if (extractedText.trim().length > 0) analysisResult = await analyzeTextWithServer(extractedText);
-      
+
       return { ok: true, text: extractedText, isHarmful: analysisResult.isHarmful, matchedKeywords: [], confidence: analysisResult.confidence, blurredImage: undefined };
     } catch (error: any) { return { ok: false, error: error.message || "처리 중 오류" }; }
   },
