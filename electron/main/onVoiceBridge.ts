@@ -179,6 +179,16 @@ function getEdge() {
       const runtimeConfig = path.join(process.env.EDGE_BOOTSTRAP_DIR || '', 'bootstrap.runtimeconfig.json');
       console.error(`[OnVoiceBridge]    bootstrap.runtimeconfig.json (${runtimeConfig}): ${fs.existsSync(runtimeConfig) ? '✅' : '❌'}`);
       
+      // bootstrap.dll 크기 확인
+      if (fs.existsSync(bootstrapDll)) {
+        const bootstrapSize = fs.statSync(bootstrapDll).size;
+        console.error(`[OnVoiceBridge]    bootstrap.dll 크기: ${bootstrapSize} bytes ${bootstrapSize < 10000 ? '⚠️ (비정상적으로 작음)' : '✅'}`);
+      }
+      
+      // edgeInstance를 null로 리셋하여 다음 호출 시 재시도 가능하도록 함
+      console.error('[OnVoiceBridge] 🔄 edgeInstance를 리셋합니다. 다음 호출 시 재초기화를 시도합니다.');
+      edgeInstance = null;
+      
       throw new Error('electron-edge-js loaded but initializeClrFunc is missing. CoreCLR mode may not be enabled.');
     }
     
