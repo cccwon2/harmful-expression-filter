@@ -115,10 +115,35 @@ function getEdge() {
     const dotnetPath = path.join(process.resourcesPath, "dotnet");
     process.env.EDGE_APP_ROOT = dotnetPath;
     console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
+    
+    // ⭐ 핵심: CORECLR_DIR 환경 변수 설정 (coreclr.dll이 있는 폴더)
+    process.env.CORECLR_DIR = dotnetPath;
+    console.log('[OnVoiceBridge] 🔧 CORECLR_DIR set to:', dotnetPath);
+    
+    // coreclr.dll 존재 확인
+    const coreclrPath = path.join(dotnetPath, 'coreclr.dll');
+    if (fs.existsSync(coreclrPath)) {
+      console.log('[OnVoiceBridge] ✅ coreclr.dll found at:', coreclrPath);
+    } else {
+      console.error('[OnVoiceBridge] ❌ coreclr.dll NOT found at:', coreclrPath);
+    }
   } else {
     // 개발 환경
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
     process.env.EDGE_APP_ROOT = dotnetPath;
+    console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to (dev): ${dotnetPath}`);
+    
+    // ⭐ 핵심: CORECLR_DIR 환경 변수 설정 (coreclr.dll이 있는 폴더)
+    process.env.CORECLR_DIR = dotnetPath;
+    console.log('[OnVoiceBridge] 🔧 CORECLR_DIR set to (dev):', dotnetPath);
+    
+    // coreclr.dll 존재 확인
+    const coreclrPath = path.join(dotnetPath, 'coreclr.dll');
+    if (fs.existsSync(coreclrPath)) {
+      console.log('[OnVoiceBridge] ✅ coreclr.dll found at (dev):', coreclrPath);
+    } else {
+      console.error('[OnVoiceBridge] ❌ coreclr.dll NOT found at (dev):', coreclrPath);
+    }
     
     // 개발 환경: Bootstrap 경로 설정 (bootstrap.dll 위치만 지정)
     // Initialize()는 EDGE_APP_ROOT가 설정되어 있으면 그것을 사용하므로,
