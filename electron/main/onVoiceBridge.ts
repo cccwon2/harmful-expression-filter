@@ -12,7 +12,12 @@ import * as fs from "fs";
 let edgeInstance: any = null;
 
 function getEdge() {
-  if (edgeInstance) return edgeInstance;
+  if (edgeInstance) {
+    console.log('[OnVoiceBridge] ⚡ Using cached edge instance');
+    console.log('[OnVoiceBridge] 🔍 Cached edge instance keys:', Object.keys(edgeInstance || {}));
+    console.log('[OnVoiceBridge] 🔍 Cached edge.initializeClrFunc type:', typeof (edgeInstance as any)?.initializeClrFunc);
+    return edgeInstance;
+  }
 
   console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (Standard Mode)...');
 
