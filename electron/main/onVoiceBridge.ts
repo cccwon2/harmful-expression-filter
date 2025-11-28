@@ -56,8 +56,23 @@ function getEdge() {
 
   // 3. 모듈 로드
   try {
-    edgeInstance = require('electron-edge-js');
-    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
+    if (app.isPackaged) {
+      // 배포 환경: app.asar.unpacked에서 직접 로드
+      const edgeModulePath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib', 'edge.js');
+      console.log('[OnVoiceBridge] 🔧 Loading from unpacked path:', edgeModulePath);
+      edgeInstance = require(edgeModulePath);
+    } else {
+      // 개발 환경: 일반 require
+      edgeInstance = require('electron-edge-js');
+    }
+    
+    // 로드 검증: initializeClrFunc 함수 확인
+    if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
+      console.error('[OnVoiceBridge] ⚠️ WARNING: edge.initializeClrFunc is not a function. This usually means a Native Module ABI mismatch or CoreCLR mode not enabled.');
+      throw new Error('electron-edge-js loaded but initializeClrFunc is missing. CoreCLR mode may not be enabled.');
+    }
+    
+    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료 (initializeClrFunc 확인됨)');
     return edgeInstance;
   } catch (e) {
     console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', e);

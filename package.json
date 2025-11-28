@@ -64,7 +64,7 @@
     "asar": true,
     "asarUnpack": [
       "**/*.node",
-      "**/electron-edge-js/**"
+      "node_modules/electron-edge-js/**"
     ],
     "directories": {
       "output": "dist"
