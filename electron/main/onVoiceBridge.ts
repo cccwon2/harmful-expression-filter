@@ -96,10 +96,26 @@ function getEdge() {
     
     if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
       console.error('[OnVoiceBridge] ⚠️ WARNING: edge.initializeClrFunc is not a function.');
-      console.error('[OnVoiceBridge] ⚠️ This usually means:');
-      console.error('[OnVoiceBridge] ⚠️   1. CoreCLR initialization failed during module load');
-      console.error('[OnVoiceBridge] ⚠️   2. Wrong native module was loaded (edge_nativeclr.node instead of edge_coreclr.node)');
-      console.error('[OnVoiceBridge] ⚠️   3. Native module ABI mismatch');
+      console.error('[OnVoiceBridge] ⚠️ This usually means CoreCLR initialization failed during module load.');
+      console.error('[OnVoiceBridge] ⚠️ CoreClrEmbedding::Initialize() failed, so init() returned early.');
+      console.error('[OnVoiceBridge] ⚠️ Possible causes:');
+      console.error('[OnVoiceBridge] ⚠️   1. Bootstrap DLL path incorrect or DLL missing');
+      console.error('[OnVoiceBridge] ⚠️   2. .NET runtime path incorrect or missing coreclr.dll/hostfxr.dll');
+      console.error('[OnVoiceBridge] ⚠️   3. CoreCLR hosting API initialization failure');
+      console.error('[OnVoiceBridge] ⚠️   4. Missing dependencies or incorrect file permissions');
+      
+      // 파일 존재 확인
+      if (app.isPackaged) {
+        const bootstrapDll = path.join(process.env.EDGE_BOOTSTRAP_DIR || '', 'bootstrap.dll');
+        const coreclrDll = path.join(process.env.EDGE_APP_ROOT || '', 'coreclr.dll');
+        const hostfxrDll = path.join(process.env.EDGE_APP_ROOT || '', 'hostfxr.dll');
+        
+        console.error('[OnVoiceBridge] 🔍 File existence check:');
+        console.error(`[OnVoiceBridge]    Bootstrap DLL (${bootstrapDll}): ${fs.existsSync(bootstrapDll) ? '✅' : '❌'}`);
+        console.error(`[OnVoiceBridge]    CoreCLR DLL (${coreclrDll}): ${fs.existsSync(coreclrDll) ? '✅' : '❌'}`);
+        console.error(`[OnVoiceBridge]    HostFxr DLL (${hostfxrDll}): ${fs.existsSync(hostfxrDll) ? '✅' : '❌'}`);
+      }
+      
       throw new Error('electron-edge-js loaded but initializeClrFunc is missing. CoreCLR mode may not be enabled.');
     }
     
