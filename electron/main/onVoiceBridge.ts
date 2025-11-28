@@ -28,20 +28,39 @@ function getEdge() {
     process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
     console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
 
-    // 2-2. Native 경로 설정 (28.0.0 폴더 탐색)
-    const nativeBasePath = path.join(baseUnpackedPath, 'lib', 'native', 'win32', 'x64');
-    try {
-        const dirs = fs.readdirSync(nativeBasePath);
-        // 28.0.0 폴더를 우선적으로 찾음
-        const versionDir = dirs.find(d => d.startsWith('28.')) || dirs.find(d => /^\d+\./.test(d));
-        
-        if (versionDir) {
-            const nativePath = path.join(nativeBasePath, versionDir, 'edge_coreclr.node');
-            process.env.EDGE_NATIVE = nativePath;
-            console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to:', nativePath);
+    // 2-2. Native 경로 설정 (build/Release 우선, 없으면 lib/native 사용)
+    const buildReleasePath = path.join(baseUnpackedPath, 'build', 'Release', 'edge_coreclr.node');
+    const libNativeBasePath = path.join(baseUnpackedPath, 'lib', 'native', 'win32', 'x64');
+    
+    let nativePath: string | null = null;
+    
+    // build/Release 경로 우선 확인
+    if (fs.existsSync(buildReleasePath)) {
+        nativePath = buildReleasePath;
+        console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to (build/Release):', nativePath);
+    } else {
+        // build/Release가 없으면 lib/native 경로 탐색
+        try {
+            const dirs = fs.readdirSync(libNativeBasePath);
+            const versionDir = dirs.find(d => d.startsWith('28.')) || dirs.find(d => /^\d+\./.test(d));
+            
+            if (versionDir) {
+                nativePath = path.join(libNativeBasePath, versionDir, 'edge_coreclr.node');
+                if (fs.existsSync(nativePath)) {
+                    console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to (lib/native):', nativePath);
+                } else {
+                    nativePath = null;
+                }
+            }
+        } catch (e) {
+            console.warn('[OnVoiceBridge] ⚠️ Native path search failed:', e);
         }
-    } catch (e) {
-        console.warn('[OnVoiceBridge] ⚠️ Native path search failed:', e);
+    }
+    
+    if (nativePath) {
+        process.env.EDGE_NATIVE = nativePath;
+    } else {
+        console.error('[OnVoiceBridge] ❌ edge_coreclr.node 파일을 찾을 수 없습니다.');
     }
 
     // 2-3. .NET 런타임 경로
