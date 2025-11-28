@@ -19,7 +19,18 @@ function getEdge() {
 
   console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (Standard Mode)...');
 
-  process.env.EDGE_USE_CORECLR = '1';
+  // Check if module is already in cache
+  const edgeModuleId = app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib', 'edge.js')
+    : require.resolve('electron-edge-js');
+
+  if (require.cache[edgeModuleId]) {
+    console.warn('[OnVoiceBridge] ⚠️ electron-edge-js is already in require cache! This suggests double initialization.');
+  }
+
+  if (!process.env.EDGE_USE_CORECLR) {
+    process.env.EDGE_USE_CORECLR = '1';
+  }
   process.env.EDGE_DEBUG = '1';
   process.env.COREHOST_TRACE = '1';
 
@@ -65,6 +76,21 @@ function getEdge() {
     const dotnetPath = path.join(process.resourcesPath, "dotnet");
     process.env.EDGE_APP_ROOT = dotnetPath;
     process.env.CORECLR_DIR = dotnetPath;
+
+    coreclrDll = path.join(dotnetPath, 'coreclr.dll');
+    hostfxrDll = path.join(dotnetPath, 'hostfxr.dll');
+    hostpolicyDll = path.join(dotnetPath, 'hostpolicy.dll');
+
+  } else {
+    // [개발 환경]
+    // C# 앱은 bin/Publish에 있음 (Self-contained)
+    const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
+    process.env.EDGE_APP_ROOT = dotnetPath;
+    process.env.CORECLR_DIR = dotnetPath;
+
+    // Bootstrap은 netcoreapp1.1에 있음 (패키지 기본값)
+    const bootstrapPath = path.join(__dirname, "../../node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1");
+    process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
     bootstrapDll = path.join(bootstrapPath, 'bootstrap.dll');
 
     coreclrDll = path.join(dotnetPath, 'coreclr.dll');
