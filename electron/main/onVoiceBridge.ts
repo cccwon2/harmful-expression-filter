@@ -115,11 +115,14 @@ function getEdge() {
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
     process.env.EDGE_APP_ROOT = dotnetPath;
     
-    // 개발 환경: Bootstrap 경로 설정
+    // 개발 환경: Bootstrap 경로 설정 (주석 처리 - EDGE_APP_ROOT만 사용)
+    // EDGE_BOOTSTRAP_DIR을 설정하지 않으면 Initialize()가 EDGE_APP_ROOT의 deps.json을 사용합니다
     const bootstrapPath = path.join(__dirname, "../../node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1");
     if (fs.existsSync(path.join(bootstrapPath, 'bootstrap.dll'))) {
-      process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-      console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to (dev):', bootstrapPath);
+      // EDGE_BOOTSTRAP_DIR을 설정하지 않음 - EDGE_APP_ROOT의 deps.json 사용
+      // process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+      console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR 설정 안 함 (EDGE_APP_ROOT 사용):', bootstrapPath);
+      console.log('[OnVoiceBridge] 🔧 EDGE_APP_ROOT의 deps.json을 사용하여 CoreCLR 경로를 찾습니다');
     } else {
       console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다 (dev):', bootstrapPath);
     }
