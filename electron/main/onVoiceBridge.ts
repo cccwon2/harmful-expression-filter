@@ -318,8 +318,15 @@ let initialized = false;
 function getBridgeFunc(): EdgeFunc {
   if (bridgeFunc) return bridgeFunc;
 
-  const edge = getEdge();
-  if (!edge) throw new Error('electron-edge-js 모듈 로드 실패');
+  let edge;
+  try {
+    edge = getEdge();
+    if (!edge) throw new Error('electron-edge-js 모듈 로드 실패: edge 인스턴스가 null입니다');
+  } catch (error: any) {
+    const errorMsg = error?.message || '알 수 없는 오류';
+    console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', errorMsg);
+    throw new Error(`electron-edge-js 모듈 로드 실패: ${errorMsg}. OCR 및 오디오 기능이 작동하지 않습니다.`);
+  }
 
   let assemblyFile: string;
   if (app.isPackaged) {
