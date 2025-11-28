@@ -106,6 +106,15 @@ function getEdge() {
     // 개발 환경
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
     process.env.EDGE_APP_ROOT = dotnetPath;
+    
+    // 개발 환경: Bootstrap 경로 설정
+    const bootstrapPath = path.join(__dirname, "../../node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1");
+    if (fs.existsSync(path.join(bootstrapPath, 'bootstrap.dll'))) {
+      process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+      console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to (dev):', bootstrapPath);
+    } else {
+      console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다 (dev):', bootstrapPath);
+    }
   }
 
   // 3. 모듈 로드

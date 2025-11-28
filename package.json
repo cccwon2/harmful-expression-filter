@@ -51,7 +51,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
-    "electron": "^28.0.0",
+    "electron": "^28.3.3",
     "electron-builder": "^26.0.12",
     "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
@@ -110,7 +110,9 @@
       {
         "from": "node_modules/electron-edge-js/lib/bootstrap",
         "to": "bootstrap",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   }
