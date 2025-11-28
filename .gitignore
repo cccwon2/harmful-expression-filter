@@ -92,3 +92,6 @@ native/*
 
 # 서브모듈 내부의 빌드 산출물은 서브모듈의 .gitignore에서 관리됨
 # (native/OnVoiceAudioBridge/.gitignore 참조)
+
+# Debug files
+debug~.txt
