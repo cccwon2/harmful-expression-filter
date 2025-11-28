@@ -4,7 +4,7 @@
   "description": "OnVoice - Voice Overlay Application",
   "main": "./dist-electron/main.js",
   "scripts": {
-    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false --output bin/Publish",
+    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false --output bin/Publish && cd ../../.. && node scripts/fix-deps-json.js",
     "build:bootstrap": "cd node_modules/electron-edge-js/lib/bootstrap && dotnet build --configuration Release && cd ../../../../..",
     "copy:dll": "node scripts/copy-dll.js",
     "build:native": "node scripts/build-native.js",
