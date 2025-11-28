@@ -63,9 +63,8 @@
     "appId": "com.onvoice.app",
     "asar": true,
     "asarUnpack": [
-      "node_modules/electron-edge-js/lib/native/**/*",
-      "node_modules/electron-edge-js/lib/bootstrap/**/*",
-      "node_modules/electron-edge-js/**/*"
+      "**/*.node",
+      "**/electron-edge-js/**"
     ],
     "directories": {
       "output": "dist"
@@ -76,10 +75,8 @@
     },
     "files": [
       "dist-electron/**/*",
-      "!dist-electron/dotnet/**/*",
       "dist/renderer/**/*",
       "package.json",
-      "!**/node_modules/electron-edge-js/**/*",
       "!server/**/*",
       "!dotnet/**/*",
       "!native/**/*",
@@ -87,18 +84,9 @@
       "!**/*.map",
       "!**/*.ts",
       "!**/*.tsx",
-      "!vite.config.ts",
-      "!**/node_modules/sharp/vendor/**/linux-x64/**/*",
-      "!**/node_modules/sharp/vendor/**/darwin-x64/**/*"
+      "!vite.config.ts"
     ],
     "extraResources": [
-      {
-        "from": "node_modules/electron-edge-js",
-        "to": "modules/electron-edge-js",
-        "filter": [
-          "**/*"
-        ]
-      },
       {
         "from": "dotnet/OnVoiceComBridge/bin/Publish",
         "to": "dotnet",
@@ -108,15 +96,15 @@
         ]
       },
       {
-        "from": ".env.production",
-        "to": ".env"
-      },
-      {
         "from": "native/OnVoiceAudioBridge.dll",
         "to": "native",
         "filter": [
           "*.dll"
         ]
+      },
+      {
+        "from": ".env.production",
+        "to": ".env"
       }
     ]
   }

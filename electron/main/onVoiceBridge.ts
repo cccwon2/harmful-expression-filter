@@ -14,54 +14,50 @@ let edgeInstance: any = null;
 function getEdge() {
   if (edgeInstance) return edgeInstance;
 
-  console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (External Mode)...');
+  console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (Standard Mode)...');
 
-  // 1. CoreCLR 모드 활성화 (필수)
+  // 1. CoreCLR 모드 활성화
   process.env.EDGE_USE_CORECLR = '1';
 
-  let edgePath = 'electron-edge-js'; // 개발 환경 기본값
-
+  // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
-    // 2. 배포 환경 설정
-    // package.json의 extraResources로 복사된 외부 모듈 경로를 직접 지정
-    const externalModulePath = path.join(process.resourcesPath, 'modules', 'electron-edge-js');
+    // 2-1. Bootstrap 경로 (asarUnpack으로 인해 app.asar.unpacked 내부에 존재)
+    const baseUnpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js');
+    const bootstrapPath = path.join(baseUnpackedPath, 'lib', 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
     
-    // 모듈 진입점 (lib/edge.js)
-    edgePath = path.join(externalModulePath, 'lib', 'edge.js');
-    
-    console.log(`[OnVoiceBridge] 🔧 Target Module Path: ${edgePath}`);
-    
-    // Bootstrap 경로도 외부 모듈 내부로 지정
-    // (electron-edge-js 폴더 구조가 그대로 복사되었으므로 내부 경로 사용)
-    const bootstrapPath = path.join(externalModulePath, 'lib', 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
     process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
-    console.log(`[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to: ${bootstrapPath}`);
-    
-    // .NET 런타임 경로
+    console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
+
+    // 2-2. Native 경로 설정 (28.0.0 폴더 탐색)
+    const nativeBasePath = path.join(baseUnpackedPath, 'lib', 'native', 'win32', 'x64');
+    try {
+        const dirs = fs.readdirSync(nativeBasePath);
+        // 28.0.0 폴더를 우선적으로 찾음
+        const versionDir = dirs.find(d => d.startsWith('28.')) || dirs.find(d => /^\d+\./.test(d));
+        
+        if (versionDir) {
+            const nativePath = path.join(nativeBasePath, versionDir, 'edge_coreclr.node');
+            process.env.EDGE_NATIVE = nativePath;
+            console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to:', nativePath);
+        }
+    } catch (e) {
+        console.warn('[OnVoiceBridge] ⚠️ Native path search failed:', e);
+    }
+
+    // 2-3. .NET 런타임 경로
     const dotnetPath = path.join(process.resourcesPath, "dotnet");
     process.env.EDGE_APP_ROOT = dotnetPath;
     console.log(`[OnVoiceBridge] 🔧 EDGE_APP_ROOT set to: ${dotnetPath}`);
   } else {
-    // 개발 환경: .NET 빌드 경로
+    // 개발 환경
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
     process.env.EDGE_APP_ROOT = dotnetPath;
   }
 
-  // 3. 모듈 로드 (절대 경로 require)
+  // 3. 모듈 로드
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    edgeInstance = require(edgePath);
-    
-    // 로드 검증
-    if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
-      // func는 있는데 initializeClrFunc가 없으면 ABI 불일치
-      if (typeof edgeInstance.func === 'function') {
-        console.error('[OnVoiceBridge] ⚠️ WARNING: edge.func exists but initializeClrFunc is missing. This usually means a Native Module ABI mismatch.');
-      }
-      throw new Error('electron-edge-js loaded but initializeClrFunc is missing.');
-    }
-    
-    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 및 검증 완료');
+    edgeInstance = require('electron-edge-js');
+    console.log('[OnVoiceBridge] ✅ electron-edge-js 로드 완료');
     return edgeInstance;
   } catch (e) {
     console.error('[OnVoiceBridge] ❌ electron-edge-js 로드 실패:', e);
