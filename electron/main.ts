@@ -92,7 +92,7 @@ app.whenReady().then(async () => {
   // 🔍 개발 환경에서는 프로젝트 루트 사용
   const envPath = app.isPackaged
     ? path.join(process.resourcesPath, ".env")  // ✅ 배포: resources/.env
-    : path.join(__dirname, "../../.env");       // 🛠️ 개발: 루트 .env
+    : path.join(__dirname, "../.env");          // 🛠️ 개발: 루트 .env
 
   const envResult = dotenv.config({ path: envPath });
   console.log(`[Main] .env 파일 로드 시도 (경로: ${envPath})`);
