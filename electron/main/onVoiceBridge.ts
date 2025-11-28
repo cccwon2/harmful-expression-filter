@@ -41,6 +41,14 @@ function getEdge() {
     const bootstrapDllPath = path.join(bootstrapPath, 'bootstrap.dll');
     if (fs.existsSync(bootstrapDllPath)) {
       console.log('[OnVoiceBridge] ✅ Bootstrap.dll 확인됨');
+      
+      // bootstrap.runtimeconfig.json 확인
+      const runtimeConfigPath = path.join(bootstrapPath, 'bootstrap.runtimeconfig.json');
+      if (fs.existsSync(runtimeConfigPath)) {
+        console.log('[OnVoiceBridge] ✅ bootstrap.runtimeconfig.json 확인됨');
+      } else {
+        console.warn('[OnVoiceBridge] ⚠️ bootstrap.runtimeconfig.json을 찾을 수 없습니다! 경로:', runtimeConfigPath);
+      }
     } else {
       console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다! 경로:', bootstrapDllPath);
     }
@@ -134,11 +142,13 @@ function getEdge() {
         const bootstrapDll = path.join(process.env.EDGE_BOOTSTRAP_DIR || '', 'bootstrap.dll');
         const coreclrDll = path.join(process.env.EDGE_APP_ROOT || '', 'coreclr.dll');
         const hostfxrDll = path.join(process.env.EDGE_APP_ROOT || '', 'hostfxr.dll');
+        const hostpolicyDll = path.join(process.env.EDGE_APP_ROOT || '', 'hostpolicy.dll');
         
         console.error('[OnVoiceBridge] 🔍 File existence check:');
         console.error(`[OnVoiceBridge]    Bootstrap DLL (${bootstrapDll}): ${fs.existsSync(bootstrapDll) ? '✅' : '❌'}`);
         console.error(`[OnVoiceBridge]    CoreCLR DLL (${coreclrDll}): ${fs.existsSync(coreclrDll) ? '✅' : '❌'}`);
         console.error(`[OnVoiceBridge]    HostFxr DLL (${hostfxrDll}): ${fs.existsSync(hostfxrDll) ? '✅' : '❌'}`);
+        console.error(`[OnVoiceBridge]    HostPolicy DLL (${hostpolicyDll}): ${fs.existsSync(hostpolicyDll) ? '✅' : '❌'}`);
       }
       
       throw new Error('electron-edge-js loaded but initializeClrFunc is missing. CoreCLR mode may not be enabled.');
