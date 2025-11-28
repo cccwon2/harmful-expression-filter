@@ -16,18 +16,21 @@ function getEdge() {
 
   console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (Standard Mode)...');
 
-  // 1. CoreCLR 모드 활성화
+  // 1. CoreCLR 모드 활성화 (모듈 로드 전에 반드시 설정)
   process.env.EDGE_USE_CORECLR = '1';
   // 디버그 모드 활성화 (로드된 네이티브 모듈 경로 확인용)
   process.env.EDGE_DEBUG = '1';
   // CoreCLR 호스팅 API 추적 활성화 (초기화 실패 원인 파악용)
   process.env.COREHOST_TRACE = '1';
-  // 개발 환경과 배포 환경 모두 trace 파일 생성
+  // 개발 환경과 배포 환경 모두 trace 파일 생성 (절대 경로 사용)
   const traceFile = app.isPackaged 
-    ? path.join(process.resourcesPath, 'corehost_trace.txt')
-    : path.join(__dirname, '../../corehost_trace.txt');
+    ? path.resolve(process.resourcesPath, 'corehost_trace.txt')
+    : path.resolve(__dirname, '../../corehost_trace.txt');
   process.env.COREHOST_TRACEFILE = traceFile;
+  // 환경 변수가 제대로 설정되었는지 확인
   console.log('[OnVoiceBridge] 🔍 CoreCLR trace file:', traceFile);
+  console.log('[OnVoiceBridge] 🔍 COREHOST_TRACE:', process.env.COREHOST_TRACE);
+  console.log('[OnVoiceBridge] 🔍 COREHOST_TRACEFILE:', process.env.COREHOST_TRACEFILE);
 
   // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
@@ -135,6 +138,15 @@ function getEdge() {
     console.log('[OnVoiceBridge] 🔍 EDGE_USE_CORECLR:', process.env.EDGE_USE_CORECLR);
     console.log('[OnVoiceBridge] 🔍 EDGE_BOOTSTRAP_DIR:', process.env.EDGE_BOOTSTRAP_DIR);
     console.log('[OnVoiceBridge] 🔍 EDGE_APP_ROOT:', process.env.EDGE_APP_ROOT);
+    console.log('[OnVoiceBridge] 🔍 COREHOST_TRACE:', process.env.COREHOST_TRACE);
+    console.log('[OnVoiceBridge] 🔍 COREHOST_TRACEFILE:', process.env.COREHOST_TRACEFILE);
+    
+    // edge 인스턴스의 모든 속성 확인
+    if (edgeInstance) {
+      console.log('[OnVoiceBridge] 🔍 edge instance type:', typeof edgeInstance);
+      console.log('[OnVoiceBridge] 🔍 edge.func type:', typeof edgeInstance.func);
+      console.log('[OnVoiceBridge] 🔍 edge.initializeClrFunc type:', typeof (edgeInstance as any).initializeClrFunc);
+    }
     
     if (typeof (edgeInstance as any).initializeClrFunc !== 'function') {
       console.error('[OnVoiceBridge] ⚠️ WARNING: edge.initializeClrFunc is not a function.');

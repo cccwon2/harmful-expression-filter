@@ -1,6 +1,8 @@
 // ⚠️ 반드시 파일의 최상단(import 문보다 위)에 작성해야 합니다.
 // electron-edge-js가 .NET Framework 대신 .NET 6 CoreCLR을 사용하도록 강제
 process.env.EDGE_USE_CORECLR = '1';
+// CoreCLR 호스팅 API 추적 활성화 (초기화 실패 원인 파악용)
+process.env.COREHOST_TRACE = '1';
 
 import { app, BrowserWindow, Menu, ipcMain, globalShortcut, desktopCapturer, screen } from "electron";
 import { createOverlayWindow, setExitEditModeAndHideHandler } from "./windows/createOverlayWindow";
