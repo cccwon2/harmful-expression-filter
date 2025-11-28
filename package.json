@@ -5,11 +5,12 @@
   "main": "./dist-electron/main.js",
   "scripts": {
     "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false --output bin/Publish",
+    "build:bootstrap": "cd node_modules/electron-edge-js/lib/bootstrap && dotnet build --configuration Release && cd ../../../../..",
     "copy:dll": "node scripts/copy-dll.js",
     "build:native": "node scripts/build-native.js",
     "copy:native": "node scripts/copy-native-dll.js",
     "build:main": "tsc -p electron/tsconfig.json",
-    "build:all": "npm run build:dotnet && npm run build:native && npm run copy:dll && npm run copy:native && npm run build:main",
+    "build:all": "npm run build:dotnet && npm run build:bootstrap && npm run build:native && npm run copy:dll && npm run copy:native && npm run build:main",
     "dev:main": "tsc -w -p electron/tsconfig.json",
     "dev:renderer": "vite",
     "dev": "cross-env EDGE_USE_CORECLR=1 concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
@@ -105,6 +106,11 @@
       {
         "from": ".env.production",
         "to": ".env"
+      },
+      {
+        "from": "node_modules/electron-edge-js/lib/bootstrap",
+        "to": "bootstrap",
+        "filter": ["**/*"]
       }
     ]
   }

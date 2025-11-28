@@ -25,35 +25,52 @@ function getEdge() {
 
   // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
-    // 2-1. Bootstrap 경로 (asarUnpack으로 인해 app.asar.unpacked 내부에 존재)
-    const baseUnpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js');
-    const bootstrapPath = path.join(baseUnpackedPath, 'lib', 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
+    // 2-1. Bootstrap 경로 (extraResources로 resources/bootstrap에 복사됨)
+    const bootstrapPath = path.join(process.resourcesPath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
     
     process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
     console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to:', bootstrapPath);
+    
+    // 파일 존재 확인 로그
+    const bootstrapDllPath = path.join(bootstrapPath, 'bootstrap.dll');
+    if (fs.existsSync(bootstrapDllPath)) {
+      console.log('[OnVoiceBridge] ✅ Bootstrap.dll 확인됨');
+    } else {
+      console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다! 경로:', bootstrapDllPath);
+    }
 
     // 2-2. Native 경로 설정 (build/Release 우선, 없으면 lib/native 사용)
-    const buildReleasePath = path.join(baseUnpackedPath, 'build', 'Release', 'edge_coreclr.node');
-    const libNativeBasePath = path.join(baseUnpackedPath, 'lib', 'native', 'win32', 'x64');
-    
-    let nativePath: string | null = null;
+    const baseUnpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js');
+    let baseNativePath = path.join(baseUnpackedPath, 'lib', 'native', 'win32', 'x64');
     
     // build/Release 경로 우선 확인
+    const buildReleasePath = path.join(baseUnpackedPath, 'build', 'Release', 'edge_coreclr.node');
+    let nativePath: string | null = null;
+    
     if (fs.existsSync(buildReleasePath)) {
         nativePath = buildReleasePath;
         console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to (build/Release):', nativePath);
     } else {
         // build/Release가 없으면 lib/native 경로 탐색
+        if (!fs.existsSync(baseNativePath)) {
+            // 혹시 모르니 resources/modules 경로도 대비 (이전 설정 잔재)
+            baseNativePath = path.join(process.resourcesPath, 'modules', 'electron-edge-js', 'lib', 'native', 'win32', 'x64');
+        }
+        
         try {
-            const dirs = fs.readdirSync(libNativeBasePath);
-            const versionDir = dirs.find(d => d.startsWith('28.')) || dirs.find(d => /^\d+\./.test(d));
-            
-            if (versionDir) {
-                nativePath = path.join(libNativeBasePath, versionDir, 'edge_coreclr.node');
-                if (fs.existsSync(nativePath)) {
-                    console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to (lib/native):', nativePath);
-                } else {
-                    nativePath = null;
+            if (fs.existsSync(baseNativePath)) {
+                const dirs = fs.readdirSync(baseNativePath);
+                const sortedDirs = dirs.sort().reverse();
+                let versionDir = sortedDirs.find(d => d.startsWith('28.'));
+                if (!versionDir) versionDir = sortedDirs.find(d => /^\d+\./.test(d));
+                
+                if (versionDir) {
+                    nativePath = path.join(baseNativePath, versionDir, 'edge_coreclr.node');
+                    if (fs.existsSync(nativePath)) {
+                        console.log('[OnVoiceBridge] ✅ EDGE_NATIVE set to (lib/native):', nativePath);
+                    } else {
+                        nativePath = null;
+                    }
                 }
             }
         } catch (e) {
