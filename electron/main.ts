@@ -21,6 +21,7 @@ import { setTrayAudioUpdateCallback } from "./tray";
 import AudioManager from "./main/AudioManager";
 // 🔥 중요: onVoiceBridge를 최상단에서 정적 import 하여 중복 로드 방지
 import { onVoiceBridge } from "./main/onVoiceBridge";
+import { registerComDll, checkComDllRegistered } from "./main/registerComDll";
 
 // 🧩 패키지 환경에서 NODE_ENV 보정
 // electron-builder로 생성된 exe는 NODE_ENV가 비어 있는 경우가 많아서
@@ -109,6 +110,24 @@ app.whenReady().then(async () => {
   console.log("[Main] NODE_ENV:", process.env.NODE_ENV || "(설정 안 됨)");
 
   registerServerHandlers();
+
+  // COM DLL 등록 확인 및 자동 등록 시도 (포터블 방식 지원)
+  const isRegistered = await checkComDllRegistered();
+  if (!isRegistered) {
+    console.log("[Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...");
+    await registerComDll();
+    
+    // 등록 후 다시 확인
+    const isNowRegistered = await checkComDllRegistered();
+    if (!isNowRegistered) {
+      console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다. 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.");
+      console.warn(`[Main] 💡 수동 등록: regsvr32.exe "${path.join(process.resourcesPath || __dirname, "native", "OnVoiceAudioBridge.dll")}"`);
+    } else {
+      console.log("[Main] ✅ COM DLL 등록 확인됨");
+    }
+  } else {
+    console.log("[Main] ✅ COM DLL이 이미 등록되어 있습니다.");
+  }
 
   const serverReady = await checkServerConnection();
   if (!serverReady) {
