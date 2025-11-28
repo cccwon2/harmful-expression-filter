@@ -21,12 +21,10 @@ function getEdge() {
 
   console.log('[OnVoiceBridge] 🔄 Initializing electron-edge-js (Standard Mode)...');
 
-  // 0. EDGE_BOOTSTRAP_DIR 제거 (EDGE_APP_ROOT만 사용하도록)
-  // edge.js가 자동으로 설정하는 것을 방지하기 위해 명시적으로 제거
-  if (process.env.EDGE_BOOTSTRAP_DIR) {
-    delete process.env.EDGE_BOOTSTRAP_DIR;
-    console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR 제거됨 (EDGE_APP_ROOT만 사용)');
-  }
+  // 0. EDGE_BOOTSTRAP_DIR 설정 (bootstrap.dll 위치)
+  // Initialize()는 EDGE_APP_ROOT가 설정되어 있으면 그것을 사용하므로,
+  // EDGE_BOOTSTRAP_DIR은 bootstrap.dll 위치만 지정
+  // EDGE_APP_ROOT는 나중에 설정되므로 여기서는 설정하지 않음
 
   // 1. CoreCLR 모드 활성화 (모듈 로드 전에 반드시 설정)
   process.env.EDGE_USE_CORECLR = '1';
@@ -122,8 +120,17 @@ function getEdge() {
     const dotnetPath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish");
     process.env.EDGE_APP_ROOT = dotnetPath;
     
-    // 개발 환경: EDGE_BOOTSTRAP_DIR은 이미 위에서 제거됨
-    console.log('[OnVoiceBridge] 🔧 EDGE_APP_ROOT의 OnVoiceComBridge.deps.json을 사용하여 CoreCLR 경로를 찾습니다');
+    // 개발 환경: Bootstrap 경로 설정 (bootstrap.dll 위치만 지정)
+    // Initialize()는 EDGE_APP_ROOT가 설정되어 있으면 그것을 사용하므로,
+    // EDGE_BOOTSTRAP_DIR은 bootstrap.dll 위치만 지정
+    const bootstrapPath = path.join(__dirname, "../../node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1");
+    if (fs.existsSync(path.join(bootstrapPath, 'bootstrap.dll'))) {
+      process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
+      console.log('[OnVoiceBridge] 🔧 EDGE_BOOTSTRAP_DIR set to (dev):', bootstrapPath);
+      console.log('[OnVoiceBridge] 🔧 EDGE_APP_ROOT의 OnVoiceComBridge.deps.json을 사용하여 CoreCLR 경로를 찾습니다');
+    } else {
+      console.warn('[OnVoiceBridge] ⚠️ Bootstrap.dll을 찾을 수 없습니다 (dev):', bootstrapPath);
+    }
   }
 
   // 3. 모듈 로드
@@ -165,7 +172,17 @@ function getEdge() {
       console.error('[OnVoiceBridge] ⚠️   4. Missing dependencies or incorrect file permissions');
       
       // 파일 존재 확인 (개발 환경과 배포 환경 모두)
-      const bootstrapDll = path.join(process.env.EDGE_BOOTSTRAP_DIR || '', 'bootstrap.dll');
+      // EDGE_BOOTSTRAP_DIR이 없을 때는 edge.js가 자동으로 찾는 경로 사용
+      let bootstrapDir = process.env.EDGE_BOOTSTRAP_DIR;
+      if (!bootstrapDir) {
+        // edge.js가 자동으로 찾는 경로 (node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1)
+        const edgeModulePath = app.isPackaged
+          ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'electron-edge-js', 'lib')
+          : path.join(__dirname, '../../node_modules/electron-edge-js/lib');
+        bootstrapDir = path.join(edgeModulePath, 'bootstrap', 'bin', 'Release', 'netcoreapp1.1');
+      }
+      
+      const bootstrapDll = path.join(bootstrapDir, 'bootstrap.dll');
       const coreclrDll = path.join(process.env.EDGE_APP_ROOT || '', 'coreclr.dll');
       const hostfxrDll = path.join(process.env.EDGE_APP_ROOT || '', 'hostfxr.dll');
       const hostpolicyDll = path.join(process.env.EDGE_APP_ROOT || '', 'hostpolicy.dll');
@@ -177,7 +194,7 @@ function getEdge() {
       console.error(`[OnVoiceBridge]    HostPolicy DLL (${hostpolicyDll}): ${fs.existsSync(hostpolicyDll) ? '✅' : '❌'}`);
       
       // bootstrap.runtimeconfig.json 확인
-      const runtimeConfig = path.join(process.env.EDGE_BOOTSTRAP_DIR || '', 'bootstrap.runtimeconfig.json');
+      const runtimeConfig = path.join(bootstrapDir, 'bootstrap.runtimeconfig.json');
       console.error(`[OnVoiceBridge]    bootstrap.runtimeconfig.json (${runtimeConfig}): ${fs.existsSync(runtimeConfig) ? '✅' : '❌'}`);
       
       // bootstrap.dll 크기 확인
