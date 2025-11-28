@@ -4,22 +4,19 @@
   "description": "OnVoice - Voice Overlay Application",
   "main": "./dist-electron/entry.js",
   "scripts": {
-    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false --output bin/Publish && cd ../.. && node scripts/fix-deps-json.js",
-    "build:bootstrap": "cd node_modules/electron-edge-js/lib/bootstrap && dotnet build --configuration Release && cd ../../../../..",
+    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false --output bin/Publish",
     "copy:dll": "node scripts/copy-dll.js",
     "build:native": "node scripts/build-native.js",
     "copy:native": "node scripts/copy-native-dll.js",
     "build:main": "tsc -p electron/tsconfig.json",
-    "build:all": "npm run build:dotnet && npm run build:bootstrap && npm run build:native && npm run copy:dll && npm run copy:native && npm run build:main",
+    "build:all": "npm run build:dotnet && npm run build:native && npm run copy:dll && npm run copy:native && npm run build:main",
     "dev:main": "tsc -w -p electron/tsconfig.json",
     "dev:renderer": "vite",
     "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
     "typecheck": "tsc --noEmit",
     "start": "cross-env NODE_ENV=production DOTNET_ROOT=\"C:\\Program Files\\dotnet\" electron .",
     "build:renderer": "vite build",
-    "rebuild": "electron-rebuild -f -w electron-edge-js -v 28.3.3",
-    "prebuild:electron": "npm run copy:native && npm run rebuild && node scripts/protect-edge-module.js",
-    "build:electron": "npm run prebuild:electron && electron-builder --config.npmRebuild=false && node scripts/restore-edge-module.js && node scripts/fix-packaged-edge-module.js",
+    "build:electron": "electron-builder",
     "build": "npm run build:all && npm run build:renderer && npm run build:electron",
     "build:win": "npm run build",
     "postinstall": ""
@@ -36,10 +33,10 @@
   "dependencies": {
     "axios": "^1.13.2",
     "dotenv": "^16.3.1",
-    "electron-edge-js": "^28.0.1",
     "form-data": "^4.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "uuid": "^9.0.1",
     "ws": "^8.14.2"
   },
   "devDependencies": {
@@ -47,6 +44,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
+    "@types/uuid": "^9.0.8",
     "@types/ws": "^8.5.8",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
@@ -63,10 +61,6 @@
     "productName": "OnVoice",
     "appId": "com.onvoice.app",
     "asar": true,
-    "asarUnpack": [
-      "**/*.node",
-      "node_modules/electron-edge-js/**"
-    ],
     "directories": {
       "output": "dist"
     },
@@ -106,13 +100,6 @@
       {
         "from": ".env.production",
         "to": ".env"
-      },
-      {
-        "from": "node_modules/electron-edge-js/lib/bootstrap",
-        "to": "bootstrap",
-        "filter": [
-          "**/*"
-        ]
       }
     ]
   }

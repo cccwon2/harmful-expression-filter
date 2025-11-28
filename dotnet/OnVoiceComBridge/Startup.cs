@@ -30,11 +30,10 @@ namespace OnVoiceComBridge
         private static IConnectionPoint? _connectionPoint;
         private static OnVoiceCaptureEventSink? _eventSink;
         
-        private static Func<object, Task<object>>? _audioCallback;
-        private static SynchronizationContext? _mainThreadContext;
-        private static int _mainThreadId = -1;
-        
         private static OcrEngine? _ocrEngine;
+
+        // Stdio Event
+        public static event Action<object>? OnAudioDataReceived;
         
         static Startup()
         {
@@ -43,10 +42,7 @@ namespace OnVoiceComBridge
             {
                 Console.OutputEncoding = Encoding.UTF8;
             }
-            catch
-            {
-                // 콘솔 인코딩 설정 실패 시 무시 (일부 환경에서 지원하지 않을 수 있음)
-            }
+            catch { }
             
             // Windows SDK 런타임 DLL 로드를 위한 AssemblyResolve 이벤트 핸들러
             AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
@@ -110,12 +106,7 @@ namespace OnVoiceComBridge
             switch (command)
             {
                 case "init":
-                    _audioCallback = (Func<object, Task<object>>)input.onAudioData;
-                    _mainThreadContext = SynchronizationContext.Current ?? new SynchronizationContext();
-                    if (SynchronizationContext.Current == null) SynchronizationContext.SetSynchronizationContext(_mainThreadContext);
-                    _mainThreadId = Thread.CurrentThread.ManagedThreadId;
-                    
-                    Console.WriteLine($"[OnVoiceComBridge] 초기화 완료 (MainThreadId={_mainThreadId})");
+                    Console.WriteLine($"[OnVoiceComBridge] 초기화 완료");
                     EnsureComObject();
                     SubscribeComEvents();
                     return new { ok = true, source = "OnVoiceComBridge", action = "init" };
@@ -220,9 +211,6 @@ namespace OnVoiceComBridge
                 case "ocrAndBlur":
                     try
                     {
-                        // Node.js에서 유해 표현 분석을 수행하므로, 이 메서드는
-                        // OCR 텍스트만 반환하고 blur는 별도 "blur" 명령에서 처리합니다.
-                        
                         byte[] imageBytes = (byte[])input.imageData;
                         
                         SoftwareBitmap? softwareBitmap = await ConvertBytesToSoftwareBitmap(imageBytes);
@@ -231,16 +219,14 @@ namespace OnVoiceComBridge
                         string recognizedText = await RecognizeTextFromSoftwareBitmap(softwareBitmap);
                         var texts = SplitTextToLines(recognizedText);
                         
-                        // 서버 분석 제거됨
-                        
                         return new { 
                             ok = true, 
                             texts = texts,
                             text = recognizedText,
-                            is_harmful = false, // Node.js에서 판단
+                            is_harmful = false, 
                             harmful_words = new string[0],
                             confidence = 0.0,
-                            blurredImage = (byte[]?)null // 블러 처리는 Node.js 요청 시 수행하거나 별도 명령으로 이동
+                            blurredImage = (byte[]?)null 
                         };
                     }
                     catch (Exception ex)
@@ -249,7 +235,6 @@ namespace OnVoiceComBridge
                         return new { ok = false, error = ex.Message };
                     }
                 
-                // 블러 처리 전용 명령 추가 (필요 시 Node.js에서 호출)
                 case "blur":
                     try 
                     {
@@ -302,21 +287,18 @@ namespace OnVoiceComBridge
             return result.Text; 
         }
 
-        // ✅ [핵심 수정] DataWriter를 사용하여 AsBuffer() 없이 구현
         private static async Task<SoftwareBitmap?> ConvertBytesToSoftwareBitmap(byte[] imageBytes)
         {
             try
             {
                 using (var stream = new InMemoryRandomAccessStream())
                 {
-                    // DataWriter를 사용하여 byte[]를 WinRT 스트림에 씁니다.
                     using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
                     {
                         writer.WriteBytes(imageBytes);
                         await writer.StoreAsync();
                     }
 
-                    // 스트림을 다시 디코딩
                     var decoder = await BitmapDecoder.CreateAsync(stream);
                     return await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
                 }
@@ -385,27 +367,12 @@ namespace OnVoiceComBridge
 
         internal static void OnAudioData(byte[] buffer)
         {
-            if (buffer == null || _audioCallback == null) return;
+            if (buffer == null) return;
             
-            // [DEBUG] 오디오 데이터 수신 시각 로깅
-            // Console.WriteLine($"[OnVoiceComBridge] Audio Data Recv: {buffer.Length} bytes at {DateTime.UtcNow:HH:mm:ss.fff}");
-
-            var cb = _audioCallback;
-            var ctx = _mainThreadContext;
-
-            if (Thread.CurrentThread.ManagedThreadId != _mainThreadId && ctx != null)
-                ctx.Post(_ => InvokeJs(cb, buffer), null);
-            else
-                InvokeJs(cb, buffer);
-        }
-        
-        private static void InvokeJs(Func<object, Task<object>> cb, byte[] buffer)
-        {
-             try { 
-                // 타임스탬프 추가 (Unix Milliseconds)
-                long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                cb(new { type = "audio", data = buffer, timestamp = timestamp }); 
-             } catch { }
+            long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var data = new { type = "audio", data = buffer, timestamp = timestamp };
+            
+            OnAudioDataReceived?.Invoke(data);
         }
 
         private static async Task<byte[]> BlurROI(byte[] imageBytes, int x, int y, int width, int height)
@@ -489,7 +456,6 @@ namespace OnVoiceComBridge
                         session.SimpleAudioVolume.Volume = volume;
                         found = true;
                         Console.WriteLine($"[OnVoiceComBridge] ✅ 볼륨 조절 성공: PID={targetPid}, Volume={volume:F2}");
-                        // 첫 번째 일치하는 세션만 조절 (일반적으로 하나의 프로세스는 하나의 세션을 가짐)
                         break;
                     }
                 }
