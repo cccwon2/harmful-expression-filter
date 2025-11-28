@@ -5,10 +5,24 @@ import { spawn, ChildProcess } from "child_process";
 import * as readline from "readline";
 import axios from "axios";
 import * as dotenv from "dotenv";
-return path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.exe");
+import { v4 as uuidv4 } from 'uuid';
+
+// ==================================================================================
+// 1. Separate Process Bridge Management
+// ==================================================================================
+
+let bridgeProcess: ChildProcess | null = null;
+let bridgeReadline: readline.Interface | null = null;
+const pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason?: any) => void; timer: NodeJS.Timeout }>();
+const BRIDGE_TIMEOUT_MS = 10000; // Increased timeout for process startup
+const SERVER_REQUEST_TIMEOUT = 5000;
+
+function getBridgePath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.exe");
   } else {
-  return path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish/OnVoiceComBridge.exe");
-}
+    return path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish/OnVoiceComBridge.exe");
+  }
 }
 
 function spawnBridge() {
@@ -34,6 +48,25 @@ function spawnBridge() {
       bridgeReadline = null;
       // Reject all pending requests
       for (const [id, req] of pendingRequests) {
+        clearTimeout(req.timer);
+        req.reject(new Error("Bridge process exited"));
+      }
+      pendingRequests.clear();
+    });
+
+    if (!bridgeProcess.stdout) {
+      throw new Error("Failed to spawn bridge: stdout is null");
+    }
+
+    // Setup Readline for line-by-line JSON parsing
+    bridgeReadline = readline.createInterface({
+      input: bridgeProcess.stdout,
+      terminal: false
+    });
+
+    bridgeReadline.on('line', (line) => {
+      if (!line || !line.trim()) return;
+      try {
         const msg = JSON.parse(line);
         handleBridgeMessage(msg);
       } catch (e) {
@@ -223,18 +256,7 @@ export const onVoiceBridge: OnVoiceBridge = {
     try {
       // Buffer to Base64 for JSON transport
       const imageBase64 = imageBuffer.toString('base64');
-      const result = await callBridge('ocr', { imageData: imageBase64 }); // Note: C# expects byte[] which JsonDeserializer handles from Base64 string automatically? 
-      // Wait, standard System.Text.Json deserializes Base64 string to byte[] if property type is byte[].
-      // But I'm using dynamic/JObject in C#. 
-      // Actually, in Program.cs I used: dynamic input = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(line)!;
-      // Newtonsoft.Json automatically converts Base64 string to byte[] if the target type is byte[].
-      // But here 'input' is dynamic. So input.imageData will be a string (Base64).
-      // In Startup.cs: byte[] imageBytes = (byte[])input.imageData;
-      // This cast might fail if input.imageData is a JValue(string).
-      // I need to check if Newtonsoft.Json dynamic cast handles this.
-      // Usually (byte[])token works if token is Bytes. But if it's String...
-      // Let's assume for now it might need explicit conversion in C#.
-      // Or I send it as base64 string and C# converts it.
+      const result = await callBridge('ocr', { imageData: imageBase64 });
 
       if (!result || result.ok === false) return { ok: false, error: result?.error || "OCR 실패" };
 
