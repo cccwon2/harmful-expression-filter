@@ -113,8 +113,11 @@ npm run build:portable
 
 **포터블 버전 특징**:
 - 설치 과정 없이 바로 실행 가능
-- `dist/win-portable/` 폴더에 생성됨
+- `dist/OnVoice-portable/` 폴더에 생성됨
+- `OnVoice.exe`를 직접 실행하여 사용
 - 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+
+**참고**: `build:portable` 스크립트는 `electron-builder --win dir`로 빌드한 후 `win-unpacked` 폴더를 `OnVoice-portable`로 이름을 변경합니다.
 
 ### 통합 빌드 스크립트 (권장)
 `package.json`에 다음 스크립트를 추가할 수 있습니다:
@@ -203,7 +206,7 @@ dist/
 #### 포터블 버전
 ```
 dist/
-├── win-portable/
+├── OnVoice-portable/
 │   ├── OnVoice.exe           # 포터블 실행 파일
 │   ├── resources/
 │   │   ├── app.asar
