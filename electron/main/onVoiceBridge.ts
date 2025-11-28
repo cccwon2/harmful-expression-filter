@@ -19,9 +19,11 @@ const SERVER_REQUEST_TIMEOUT = 5000;
 
 function getBridgePath(): string {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.exe");
+    // [배포 모드] resources/bin/OnVoiceComBridge.exe
+    return path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe");
   } else {
-    return path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Publish/OnVoiceComBridge.exe");
+    // [개발 모드] dotnet publish 출력 경로
+    return path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe");
   }
 }
 
