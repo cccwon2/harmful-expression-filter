@@ -2,7 +2,7 @@
   "name": "harmful-expression-filter",
   "version": "1.0.0",
   "description": "OnVoice - Voice Overlay Application",
-  "main": "./dist-electron/main.js",
+  "main": "./dist-electron/entry.js",
   "scripts": {
     "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false --output bin/Publish && cd ../.. && node scripts/fix-deps-json.js",
     "build:bootstrap": "cd node_modules/electron-edge-js/lib/bootstrap && dotnet build --configuration Release && cd ../../../../..",

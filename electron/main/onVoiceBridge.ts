@@ -88,8 +88,9 @@ function getEdge() {
     process.env.EDGE_APP_ROOT = dotnetPath;
     process.env.CORECLR_DIR = dotnetPath;
 
-    // Bootstrap은 netcoreapp1.1에 있음 (패키지 기본값)
-    const bootstrapPath = path.join(__dirname, "../../node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1");
+    // Bootstrap은 net6.0에 있음 (수동 빌드 후 bin/Publish로 복사됨)
+    // const bootstrapPath = path.join(__dirname, "../../node_modules/electron-edge-js/lib/bootstrap/bin/Release/net6.0");
+    const bootstrapPath = dotnetPath; // bin/Publish 사용
     process.env.EDGE_BOOTSTRAP_DIR = bootstrapPath;
     bootstrapDll = path.join(bootstrapPath, 'bootstrap.dll');
 
