@@ -32,7 +32,7 @@
 - **Task 39**: C# 기반 PID 볼륨 제어 통합 (native-sound-mixer 완전 제거, C# Bridge로 통합)
 - **Task 40**: C++ Core Audio 구현 상세 (Application Loopback 내부 구현 원리 문서화)
 - **Task 41**: 파인튜닝된 KoElectra 분류기 연동 (로컬 모델 로드, 정확도 향상)
-- **Task 42**: Electron 앱 배포 (Windows NSIS 인스톨러 생성, C# 및 C++ DLL 포함, electron-builder 통합, 오버레이 창 배포 모드 문제 해결)
+- **Task 42**: Electron 앱 배포 (Windows NSIS 인스톨러 생성, C# 및 C++ DLL 포함, electron-builder 통합, 오버레이 창 배포 모드 문제 해결, 포터블 버전 지원, COM DLL 자동 등록)
 
 ### 주요 기술 스택
 
@@ -346,7 +346,8 @@ npm run copy:native     # C++ DLL 복사
 
 # 프로덕션 빌드 및 패키징
 npm run build:renderer  # 렌더러 빌드 (Vite)
-npm run build:electron  # Electron 패키지 생성
+npm run build:electron  # Electron 패키지 생성 (NSIS 인스톨러)
+npm run build:portable  # 포터블 버전 생성 (설치 없이 실행 가능)
 npm run build           # 전체 빌드 + 패키징
 
 # 프로덕션 실행
@@ -358,6 +359,10 @@ npm start
 - 자세한 배포 가이드는 [docs/42-electron-app-deployment.md](./docs/42-electron-app-deployment.md) 참조
 - C++ COM DLL은 상대 경로(`../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge`)에서 자동 탐색
 - 빌드된 DLL은 `native/OnVoiceAudioBridge.dll`로 복사되어 electron-builder에 포함됨
+- **포터블 버전**: `npm run build:portable`로 설치 없이 실행 가능한 버전 생성
+  - 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+- **설치 버전**: `npm run build:electron`로 NSIS 인스톨러 생성
+  - 설치 시 자동으로 COM DLL 등록 (`build/installer.nsh`)
 
 ## 📖 프로젝트 구조
 

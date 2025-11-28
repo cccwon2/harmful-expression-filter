@@ -30,25 +30,36 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
     },
     "win": {
       "target": "nsis",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "extraResources": [
       {
-        "from": "dotnet/OnVoiceComBridge/bin/Debug/net6.0",
-        "to": "dotnet",
-        "filter": [
-          "**/*.dll",
-          "**/*.json"
-        ]
+        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe",
+        "to": "bin/OnVoiceComBridge.exe"
+      },
+      {
+        "from": "native/OnVoiceAudioBridge.dll",
+        "to": "native/OnVoiceAudioBridge.dll"
+      },
+      {
+        "from": ".env.production",
+        "to": ".env"
       }
     ]
   }
 }
 ```
 
+**주요 변경사항**:
+- `build:dotnet` 스크립트에 `--output` 옵션 추가하여 일관된 경로(`bin/Release/net6.0/win-x64/publish`)에 출력
+- `extraResources`에서 `.exe` 파일을 `bin/OnVoiceComBridge.exe`로 정확히 복사
+- C++ COM DLL을 `native/OnVoiceAudioBridge.dll`로 포함
+
 ### 빌드 프로세스
 
-1. **C# DLL 빌드**: `.NET 6` 프로젝트를 빌드하여 DLL 생성
+1. **C# Bridge 빌드**: `.NET 6` 프로젝트를 빌드하여 실행 파일(`.exe`) 생성
+   - `build:dotnet` 스크립트에 `--output` 옵션으로 일관된 경로(`bin/Release/net6.0/win-x64/publish`)에 출력
+   - `--self-contained true -p:PublishSingleFile=true` 옵션으로 단일 실행 파일 생성
 2. **C++ COM DLL 빌드** (선택): C++ COM DLL을 **Release 모드**로 빌드하거나 기존 Release DLL 사용
    - ⚠️ **중요**: 배포 시에는 반드시 **Release 빌드**를 사용해야 합니다
    - Debug 빌드는 Debug Runtime 라이브러리에 의존하여 일반 사용자 PC에서 실행되지 않습니다
@@ -57,6 +68,8 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 5. **렌더러 빌드**: Vite를 사용하여 React 앱 빌드
    - ⚠️ **중요**: `vite.config.ts`에서 `base: './'` 설정 필요 (배포 모드에서 `file://` 프로토콜 지원)
 6. **패키징**: electron-builder로 설치 패키지 생성
+   - **설치 버전**: `npm run build:electron` (NSIS 인스톨러)
+   - **포터블 버전**: `npm run build:portable` (설치 없이 실행 가능)
 
 ## 의존성
 
@@ -73,6 +86,8 @@ npm run build:all
 ```
 
 ### 프로덕션 빌드
+
+#### 설치 버전 (NSIS 인스톨러)
 ```bash
 # 1. 전체 소스 빌드
 npm run build:all
@@ -80,9 +95,26 @@ npm run build:all
 # 2. 렌더러 빌드 (Vite)
 npm run build:renderer
 
-# 3. Electron 패키지 생성 (electron-builder)
+# 3. Electron 패키지 생성 (NSIS 인스톨러)
 npm run build:electron
 ```
+
+#### 포터블 버전 (설치 없이 실행 가능)
+```bash
+# 1. 전체 소스 빌드
+npm run build:all
+
+# 2. 렌더러 빌드 (Vite)
+npm run build:renderer
+
+# 3. 포터블 버전 생성 (설치 없이 실행 가능)
+npm run build:portable
+```
+
+**포터블 버전 특징**:
+- 설치 과정 없이 바로 실행 가능
+- `dist/win-portable/` 폴더에 생성됨
+- 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
 
 ### 통합 빌드 스크립트 (권장)
 `package.json`에 다음 스크립트를 추가할 수 있습니다:
@@ -152,6 +184,7 @@ npx electron-builder
 
 빌드가 완료되면 `dist/` 폴더에 다음 파일들이 생성됩니다:
 
+#### 설치 버전 (NSIS)
 ```
 dist/
 ├── OnVoice Setup 1.0.0.exe    # NSIS 인스톨러
@@ -159,10 +192,33 @@ dist/
 │   ├── OnVoice.exe
 │   ├── resources/
 │   │   ├── app.asar          # 패키지된 앱 코드
-│   │   └── dotnet/            # C# DLL 포함
+│   │   ├── bin/
+│   │   │   └── OnVoiceComBridge.exe  # C# Bridge 실행 파일
+│   │   └── native/
+│   │       └── OnVoiceAudioBridge.dll  # C++ COM DLL
 │   └── ...
 └── builder-debug.yml          # 빌드 로그
 ```
+
+#### 포터블 버전
+```
+dist/
+├── win-portable/
+│   ├── OnVoice.exe           # 포터블 실행 파일
+│   ├── resources/
+│   │   ├── app.asar
+│   │   ├── bin/
+│   │   │   └── OnVoiceComBridge.exe
+│   │   └── native/
+│   │       └── OnVoiceAudioBridge.dll
+│   └── ...
+└── builder-debug.yml
+```
+
+**포터블 버전 사용 시**:
+- 설치 과정 없이 `OnVoice.exe`를 직접 실행
+- 앱 시작 시 자동으로 COM DLL 등록 시도
+- 관리자 권한이 없으면 등록 실패 가능 (수동 등록 필요)
 
 ## 빌드 설정 상세
 
@@ -439,41 +495,42 @@ Section Uninstall
 SectionEnd
 ```
 
-**4. 대안: 설치 후 스크립트로 등록**
+**4. 포터블 방식: 앱 시작 시 자동 등록 (구현됨)**
 
-관리자 권한 없이 설치하는 경우, 앱 시작 시 자동 등록:
+포터블 방식(설치 없이 실행)에서는 설치 스크립트가 실행되지 않으므로, 앱 시작 시 자동으로 COM DLL 등록을 시도합니다.
 
+**구현된 기능**:
+- `electron/main/registerComDll.ts`: COM DLL 등록 및 확인 유틸리티
+- `electron/main.ts`: 앱 시작 시 자동 등록 로직 통합
+
+**동작 방식**:
+1. 앱 시작 시 COM DLL 등록 상태 확인 (`checkComDllRegistered()`)
+2. 미등록 시 자동으로 `regsvr32.exe`를 사용하여 등록 시도 (`registerComDll()`)
+3. 등록 실패 시 콘솔에 수동 등록 방법 안내
+
+**코드 구조**:
 ```typescript
+// electron/main/registerComDll.ts
+export async function registerComDll(): Promise<boolean>
+export async function checkComDllRegistered(): Promise<boolean>
+
 // electron/main.ts
-import { exec } from 'child_process';
-import path from 'path';
-
-function registerComDll() {
-  const dllPath = path.join(
-    process.resourcesPath,
-    'native',
-    'OnVoiceAudioBridge.dll'
-  );
-  
-  exec(`regsvr32.exe /s "${dllPath}"`, (error) => {
-    if (error) {
-      console.error('[COM Registration] Failed:', error);
-    } else {
-      console.log('[COM Registration] Success');
-    }
-  });
-}
-
-// 앱 시작 시 한 번만 실행
-app.whenReady().then(() => {
-  registerComDll();
+app.whenReady().then(async () => {
+  // COM DLL 등록 확인 및 자동 등록 시도
+  const isRegistered = await checkComDllRegistered();
+  if (!isRegistered) {
+    console.log("[Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...");
+    await registerComDll();
+    // ...
+  }
 });
 ```
 
 **주의사항**:
 - COM 등록은 관리자 권한이 필요할 수 있습니다.
-- 사용자가 관리자 권한을 거부하면 COM 객체를 사용할 수 없습니다.
-- 설치 시 자동 등록이 가장 안정적입니다.
+- 포터블 방식에서 관리자 권한 없이 실행하면 등록이 실패할 수 있습니다.
+- 등록 실패 시 콘솔에 수동 등록 방법이 안내됩니다.
+- 설치 방식(NSIS 인스톨러)에서는 `build/installer.nsh`의 등록 로직이 실행되어 더 안정적입니다.
 
 ## 코드 서명 (선택사항)
 
@@ -718,9 +775,10 @@ regsvr32.exe /u "C:\path\to\OnVoiceAudioBridge.dll"
 
 **해결 방법**:
 1. C++ COM DLL이 `resources/native/`에 포함되었는지 확인
-2. 설치 후 COM 등록이 실행되었는지 확인
-3. 관리자 권한으로 설치했는지 확인
-4. 앱 시작 시 자동 등록 스크립트가 실행되었는지 확인
+2. **설치 버전**: 설치 후 COM 등록이 실행되었는지 확인 (`build/installer.nsh`의 `RegDLL` 명령)
+3. **포터블 버전**: 앱 시작 시 자동 등록이 시도되었는지 확인 (콘솔 로그 확인)
+4. 관리자 권한으로 설치/실행했는지 확인
+5. 수동 등록: `regsvr32.exe "경로\resources\native\OnVoiceAudioBridge.dll"` (관리자 권한 필요)
 
 #### Debug Runtime 라이브러리 오류 (일반 사용자 PC에서 실행 실패)
 
@@ -957,14 +1015,18 @@ electron-builder는 자동으로 캐시를 사용합니다. 캐시 위치:
 ## 관련 파일
 
 - `package.json`: 빌드 설정 및 스크립트
+  - `build:dotnet`: C# 프로젝트 빌드 (일관된 출력 경로 설정)
+  - `build:portable`: 포터블 버전 빌드
 - `electron/tsconfig.json`: 메인 프로세스 TypeScript 설정
 - `vite.config.ts`: 렌더러 빌드 설정 (⚠️ `base: './'` 설정 필수 - 배포 모드에서 file:// 프로토콜 지원)
 - `electron/windows/createOverlayWindow.ts`: 오버레이 창 생성 및 로드 경로 관리
+- `electron/main/registerComDll.ts`: COM DLL 자동 등록 유틸리티 (포터블 방식 지원)
+- `electron/main.ts`: 앱 초기화 및 COM DLL 자동 등록 로직
 - `scripts/copy-dll.js`: C# DLL 복사 스크립트
 - `scripts/copy-native-dll.js`: C++ COM DLL 복사 스크립트
 - `dotnet/OnVoiceComBridge/OnVoiceComBridge.csproj`: C# 프로젝트 설정
 - `native/OnVoiceAudioBridge/`: C++ COM DLL 소스 코드 (서브모듈 또는 직접 포함)
-- `build/installer.nsh`: NSIS 설치 스크립트 (COM 등록)
+- `build/installer.nsh`: NSIS 설치 스크립트 (설치 시 COM 등록)
 
 ## 다음 작업
 
