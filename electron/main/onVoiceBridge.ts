@@ -20,6 +20,8 @@ function getEdge() {
   process.env.EDGE_USE_CORECLR = '1';
   // 디버그 모드 활성화 (로드된 네이티브 모듈 경로 확인용)
   process.env.EDGE_DEBUG = '1';
+  // CoreCLR 호스팅 API 추적 활성화 (초기화 실패 원인 파악용)
+  process.env.COREHOST_TRACE = '1';
 
   // 2. 배포 환경 경로 설정
   if (app.isPackaged) {
