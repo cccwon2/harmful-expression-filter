@@ -127,6 +127,96 @@ function spawnBridge() {
   try {
 ```
 
+## ⚠️ 포터블 버전의 런타임 시나리오
+
+### COM DLL 등록 시나리오
+
+포터블 버전은 설치 과정 없이 바로 실행되므로, **최초 실행 시 COM DLL 자동 등록**을 시도합니다.
+
+#### 동작 흐름
+
+1. **앱 시작 시** (`main.ts`):
+   ```typescript
+   // COM DLL 등록 상태 확인
+   const isRegistered = await checkComDllRegistered();
+   if (!isRegistered) {
+     // 자동 등록 시도
+     await registerComDll();
+     // 등록 후 다시 확인
+     const isNowRegistered = await checkComDllRegistered();
+     if (!isNowRegistered) {
+       // ⚠️ 등록 실패 시 콘솔 경고만 출력
+       console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다...");
+     }
+   }
+   ```
+
+2. **등록 실패 가능성**:
+   - ❌ **관리자 권한 없이 실행**: `regsvr32.exe` 실행 실패
+   - ❌ **레지스트리 권한 부족**: COM 등록에 필요한 레지스트리 권한 없음
+   - ❌ **바이러스 백신 차단**: 일부 보안 소프트웨어가 COM 등록을 차단
+
+#### 현재 구현된 사용자 안내
+
+**현재 상태**: COM DLL 등록 실패 시 **콘솔 로그만 출력**되고 UI 알림은 없습니다.
+
+```114:130:electron/main.ts
+  // COM DLL 등록 확인 및 자동 등록 시도 (포터블 방식 지원)
+  const isRegistered = await checkComDllRegistered();
+  if (!isRegistered) {
+    console.log("[Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...");
+    await registerComDll();
+    
+    // 등록 후 다시 확인
+    const isNowRegistered = await checkComDllRegistered();
+    if (!isNowRegistered) {
+      console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다. 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.");
+      console.warn(`[Main] 💡 수동 등록: regsvr32.exe "${path.join(process.resourcesPath || __dirname, "native", "OnVoiceAudioBridge.dll")}"`);
+    } else {
+      console.log("[Main] ✅ COM DLL 등록 확인됨");
+    }
+  } else {
+    console.log("[Main] ✅ COM DLL이 이미 등록되어 있습니다.");
+  }
+```
+
+#### 💡 권장 개선사항
+
+**포터블 버전 사용자 안내 강화**:
+
+1. **UI 알림 추가** (선택사항):
+   - COM DLL 등록 실패 시 사용자에게 명확한 메시지 표시
+   - "관리자 권한으로 실행해주세요" 또는 "수동 등록 필요" 안내
+
+2. **최초 실행 가이드**:
+   - README 또는 사용자 가이드에 포터블 버전 사용 방법 추가
+   - 관리자 권한으로 실행하는 방법 안내
+
+3. **자동 재시도** (선택사항):
+   - 관리자 권한 요청 다이얼로그 표시
+   - UAC 승인 후 자동으로 재등록 시도
+
+#### 포터블 버전 사용 가이드
+
+**최초 실행 시**:
+1. **관리자 권한으로 실행** (권장):
+   - `OnVoice.exe` 우클릭 → "관리자 권한으로 실행"
+   - 또는 작업 관리자에서 관리자 권한으로 실행
+   - COM DLL이 자동으로 등록됨
+
+2. **일반 사용자 권한으로 실행**:
+   - COM DLL 등록이 실패할 수 있음
+   - 오디오 캡처 기능이 동작하지 않을 수 있음
+   - 수동 등록 필요:
+     ```bash
+     # 관리자 권한으로 PowerShell/CMD 실행 후
+     regsvr32.exe "C:\path\to\OnVoice-portable\resources\native\OnVoiceAudioBridge.dll"
+     ```
+
+**이후 실행 시**:
+- COM DLL이 이미 등록되어 있다면 일반 사용자 권한으로도 실행 가능
+- 한 번 등록하면 시스템 전역에서 유효 (다른 사용자도 사용 가능)
+
 ## ✅ 결론
 
 포터블 배포가 정상적으로 동작하도록 구현되어 있습니다:
@@ -135,6 +225,12 @@ function spawnBridge() {
 2. ✅ **빌드 설정**: `extraResources`가 올바르게 설정되어 모든 파일이 포함됨
 3. ✅ **파일 검증**: 파일 존재 확인 로직으로 조기 오류 감지
 4. ✅ **에러 로깅**: 디버깅을 위한 상세한 경로 로그
+5. ✅ **COM DLL 자동 등록**: 포터블 버전에서도 앱 시작 시 자동 등록 시도
+
+**주의사항**:
+- 포터블 버전 최초 실행 시 COM DLL 등록을 위해 **관리자 권한이 필요할 수 있습니다**
+- 등록 실패 시 콘솔 로그에 상세한 안내 메시지가 출력됩니다
+- 한 번 등록하면 이후에는 일반 사용자 권한으로도 실행 가능합니다
 
 포터블 배포는 이전 브랜치와 동일하게 정상적으로 동작할 것으로 예상됩니다.
 
@@ -158,4 +254,26 @@ function spawnBridge() {
      ```
      [OnVoiceBridge] 🚀 Spawning Bridge Process: {경로}/resources/bin/OnVoiceComBridge.exe
      ```
+
+4. **COM DLL 등록 확인**:
+   - 최초 실행 시 콘솔에서 다음 메시지 확인:
+     ```
+     [Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...
+     [COM Registration] COM DLL 등록 시도: {경로}/resources/native/OnVoiceAudioBridge.dll
+     ```
+   - 등록 성공:
+     ```
+     [COM Registration] ✅ COM DLL 등록 성공
+     [Main] ✅ COM DLL 등록 확인됨
+     ```
+   - 등록 실패 (관리자 권한 필요):
+     ```
+     [Main] ⚠️ COM DLL 자동 등록에 실패했습니다. 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.
+     [Main] 💡 수동 등록: regsvr32.exe "{경로}/resources/native/OnVoiceAudioBridge.dll"
+     ```
+
+5. **기능 테스트** (COM DLL 등록 후):
+   - 오디오 모니터링 기능 동작 확인
+   - OCR 기능 동작 확인
+   - 볼륨 제어 기능 동작 확인
 
