@@ -188,10 +188,10 @@ else:
 
 
 async def save_detection_log(
-    text: str, 
-    confidence: float, 
-    threshold: float, 
-    model: str, 
+    text: str,
+    confidence: float,
+    threshold: float,
+    model: str,
     is_harmful: bool,
     user_id: str = None
 ):
@@ -201,7 +201,7 @@ async def save_detection_log(
     """
     if not supabase:
         return
-    
+
     try:
         data = {
             "text_content": text,
@@ -222,7 +222,7 @@ def get_app_setting(key: str, default: str = None) -> str:
     """DB에서 특정 설정값을 가져옵니다."""
     if not supabase:
         return default
-    
+
     try:
         response = supabase.table("app_settings").select("value").eq("key", key).execute()
         if response.data and len(response.data) > 0:
@@ -274,24 +274,24 @@ from db.supabase_client import save_detection_log, get_app_setting, supabase
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ... 기존 모델 로드 로직 ...
-    
+
     # [Task 46] Supabase에서 Threshold 설정 로드
     if supabase:
         LOGGER.info("[Init] 🔄 Fetching settings from Supabase...")
         db_threshold = None
-        
+
         if model_type_env == "koelectra":
             db_threshold = get_app_setting("threshold_koelectra")
         else:
             db_threshold = get_app_setting("threshold_kanana")
-            
+
         if db_threshold:
             try:
                 target_threshold = float(db_threshold)
                 LOGGER.info(f"[Init] 🔧 Threshold updated from DB: {target_threshold}")
             except ValueError:
                 LOGGER.warning(f"[Init] ⚠️ Invalid threshold value in DB: {db_threshold}")
-    
+
     # ... 기존 Classifier 초기화 로직 (target_threshold 사용) ...
 ```
 
@@ -316,12 +316,12 @@ async def analyze_text(request: AnalyzeRequest):
 ```python
 @app.post("/analyze")
 async def analyze_text(
-    request: AnalyzeRequest, 
+    request: AnalyzeRequest,
     background_tasks: BackgroundTasks  # BackgroundTasks 주입
 ):
     # ... 기존 분석 수행 ...
     result = classifier.predict(request.text)
-    
+
     # [Task 46] 유해 표현 감지 시 또는 모든 요청에 대해 로그 저장
     # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
     if result.is_harmful:
@@ -334,7 +334,7 @@ async def analyze_text(
             is_harmful=True,
             user_id=None  # 추후 Auth 연동 시 추가
         )
-    
+
     return result
 ```
 
@@ -367,24 +367,24 @@ async def sync_settings(payload: SettingUpdate):
     """
     관리자 대시보드에서 DB 값을 변경한 후, 이 API를 호출하여
     서버 메모리의 설정값(Threshold 등)을 즉시 동기화합니다.
-    
+
     (실제 구현 시에는 Admin Token 검증이 필요합니다)
     """
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not available")
-    
+
     # 1. DB에서 최신 값 확인
     db_value = get_app_setting(payload.key)
     if db_value is None:
         raise HTTPException(status_code=404, detail=f"Setting key '{payload.key}' not found")
-    
+
     # 2. 서버 메모리 값 갱신
     # 예: app.state.classifier.threshold = float(db_value)
     # 주의: app 객체에 접근하려면 router에 app을 주입하거나 전역 상태 사용
-    
+
     return {
-        "status": "updated", 
-        "key": payload.key, 
+        "status": "updated",
+        "key": payload.key,
         "new_value": db_value
     }
 ```
@@ -419,6 +419,99 @@ mkdir -p server/routers
 - `app.state`를 통한 동적 설정 갱신 로직 구현
 - 설정 변경 이력 테이블 추가
 
+### 5. 로그 조회 API (Admin Only)
+
+관리자 대시보드에서 감지 로그를 조회할 수 있는 엔드포인트를 추가합니다.
+
+**`server/routers/admin.py`에 추가**:
+
+```python
+@router.get("/logs")
+async def get_detection_logs(
+    limit: int = Query(20, ge=1, le=100, description="가져올 로그 개수 (1-100)"),
+    offset: int = Query(0, ge=0, description="시작 위치 (페이징용)"),
+    only_harmful: bool = Query(False, description="유해한 것만 조회")
+):
+    """
+    Supabase에서 감지 로그를 최신순으로 가져옵니다.
+
+    - **limit**: 가져올 로그 개수 (기본값: 20, 최대: 100)
+    - **offset**: 시작 위치 (페이징용, 기본값: 0)
+    - **only_harmful**: true인 경우 유해한 로그만 조회 (기본값: false)
+
+    **주의**: 현재는 인증이 없어서 누구나 로그를 볼 수 있습니다.
+    Task 47(로그인) 완료 후 관리자만 접근 가능하도록 보안 강화 예정입니다.
+    """
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database connection failed")
+
+    try:
+        # 1. 쿼리 생성: detection_logs 테이블 선택
+        query = supabase.table("detection_logs").select("*")
+
+        # 2. 필터 적용: 유해한 것만 보고 싶은 경우
+        if only_harmful:
+            query = query.eq("is_harmful", True)
+
+        # 3. 정렬 및 페이징: 최신순 정렬, 개수 제한
+        # range(start, end)를 사용하여 페이징 처리
+        response = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+
+        return {
+            "count": len(response.data),
+            "logs": response.data
+        }
+
+    except Exception as e:
+        LOGGER.error(f"❌ Failed to fetch logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+**사용 예시**:
+
+```bash
+# 최근 10개 로그 조회
+curl -X 'GET' \
+  'http://127.0.0.1:8000/admin/logs?limit=10' \
+  -H 'accept: application/json'
+
+# 유해한 로그만 조회 (최근 20개)
+curl -X 'GET' \
+  'http://127.0.0.1:8000/admin/logs?limit=20&only_harmful=true' \
+  -H 'accept: application/json'
+
+# 페이징 (21번째부터 10개)
+curl -X 'GET' \
+  'http://127.0.0.1:8000/admin/logs?limit=10&offset=20' \
+  -H 'accept: application/json'
+```
+
+**응답 예시**:
+
+```json
+{
+  "count": 1,
+  "logs": [
+    {
+      "id": 15,
+      "created_at": "2025-01-29T12:34:56+00:00",
+      "text_content": "욕설",
+      "confidence": 0.5114,
+      "threshold_used": 0.5,
+      "model_version": "KoElectra",
+      "is_harmful": true,
+      "user_id": null,
+      "metadata": {}
+    }
+  ]
+}
+```
+
+**참고**:
+
+- Swagger UI에서도 테스트 가능: `http://127.0.0.1:8000/docs` → `/admin/logs` 엔드포인트
+- 이 API를 통해 관리자 대시보드(Task 44)에서 데이터를 가져와서 표(Table) 형태로 보여줄 수 있습니다
+
 ## ✅ 검증 체크리스트
 
 ### 1. DB 연결 확인
@@ -426,6 +519,7 @@ mkdir -p server/routers
 **확인 방법**:
 
 1. 서버 시작 시 로그 확인:
+
    ```
    ✅ Supabase Client Initialized
    ```
@@ -441,6 +535,7 @@ mkdir -p server/routers
 **확인 방법**:
 
 1. 서버 시작 시 로그 확인:
+
    ```
    [Init] 🔄 Fetching settings from Supabase...
    [Init] 🔧 Threshold updated from DB: 0.5
@@ -454,6 +549,7 @@ mkdir -p server/routers
 **테스트 절차**:
 
 1. `/analyze` 엔드포인트에 유해 텍스트 요청:
+
    ```bash
    curl -X POST http://localhost:8000/analyze \
      -H "Content-Type: application/json" \
@@ -495,6 +591,57 @@ mkdir -p server/routers
    }
    ```
 
+### 6. 로그 조회 API 확인
+
+**테스트 절차**:
+
+1. 먼저 `/analyze` 엔드포인트로 유해 텍스트를 몇 개 전송하여 로그 생성:
+
+   ```bash
+   curl -X POST http://localhost:8000/analyze \
+     -H "Content-Type: application/json" \
+     -d '{"text": "욕설"}'
+   ```
+
+2. `/admin/logs` 엔드포인트로 로그 조회:
+
+   ```bash
+   curl -X 'GET' \
+     'http://127.0.0.1:8000/admin/logs?limit=10' \
+     -H 'accept: application/json'
+   ```
+
+3. 응답 확인:
+
+   - `count` 필드에 반환된 로그 개수 확인
+   - `logs` 배열에 최신순으로 정렬된 로그 데이터 확인
+   - 각 로그에 `text_content`, `confidence`, `threshold_used`, `model_version`, `is_harmful` 등 필드 확인
+
+4. 필터링 테스트 (유해한 것만):
+
+   ```bash
+   curl -X 'GET' \
+     'http://127.0.0.1:8000/admin/logs?limit=10&only_harmful=true' \
+     -H 'accept: application/json'
+   ```
+
+   - `is_harmful: true`인 로그만 반환되는지 확인
+
+5. 페이징 테스트:
+   ```bash
+   curl -X 'GET' \
+     'http://127.0.0.1:8000/admin/logs?limit=5&offset=5' \
+     -H 'accept: application/json'
+   ```
+   - 6번째부터 10번째 로그가 반환되는지 확인
+
+**Swagger UI 테스트**:
+
+- `http://127.0.0.1:8000/docs` 접속
+- `/admin/logs` 엔드포인트 클릭
+- "Try it out" 버튼 클릭
+- 파라미터 조정 후 "Execute" 클릭하여 테스트
+
 ## 📝 파일 변경 요약
 
 ### 신규 파일
@@ -505,24 +652,29 @@ mkdir -p server/routers
 
 ### 수정 파일
 
-1. `server/requirements.txt` - `supabase>=2.0.0`, `gotrue>=1.0.0` 추가
+1. `server/requirements.txt` - `supabase>=2.0.0`, `gotrue>=1.0.0` 추가, `websockets>=13.0` 업그레이드
 2. `server/.env` - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` 추가
 3. `server/main.py`:
    - Import 추가: `BackgroundTasks`, `save_detection_log`, `get_app_setting`, `supabase`
    - `lifespan` 함수에 DB 설정 로드 로직 추가
    - `/analyze` 엔드포인트에 `BackgroundTasks` 주입 및 로그 저장 로직 추가
    - `admin.router` 등록
+4. `server/routers/admin.py`:
+   - `/admin/sync-settings` 엔드포인트 (설정 동기화)
+   - `/admin/logs` 엔드포인트 (로그 조회) 추가
 
 ## ⚠️ 주의사항
 
 ### 보안
 
 1. **Service Role Key 보호**:
+
    - `SUPABASE_SERVICE_KEY`는 절대 클라이언트 코드에 포함하지 않음
    - Git에 커밋하지 않음 (`.env`는 `.gitignore`에 포함)
    - 환경 변수로만 관리
 
 2. **RLS 정책**:
+
    - Service Role Key는 RLS를 우회하므로 서버 사이드에서만 사용
    - 클라이언트(Next.js 대시보드)는 Anon Key 사용 + 인증된 사용자만 접근
 
@@ -533,6 +685,7 @@ mkdir -p server/routers
 ### 성능
 
 1. **Background Tasks**:
+
    - 로그 저장은 비동기로 처리되어 요청 응답 시간에 영향 없음
    - 대량 요청 시 DB 부하 고려 (배치 처리 또는 Rate Limiting 고려)
 
@@ -543,6 +696,7 @@ mkdir -p server/routers
 ### 데이터 관리
 
 1. **로그 보관 정책**:
+
    - `detection_logs` 테이블이 계속 증가하므로 주기적 정리 필요
    - Supabase에서 자동 삭제 정책 설정 또는 별도 스크립트로 오래된 로그 삭제
 
@@ -564,14 +718,17 @@ mkdir -p server/routers
 ### 향후 개선사항
 
 1. **인증 시스템**:
+
    - Task 47: Electron 앱 로그인 기능 구현
    - `user_id` 컬럼을 활용한 사용자별 로그 추적
 
 2. **실시간 동기화**:
+
    - Supabase Realtime을 활용하여 설정 변경 시 서버에 즉시 알림
    - WebSocket을 통한 실시간 로그 스트리밍
 
 3. **통계 및 분석**:
+
    - 일별/주별 유해 표현 감지 통계
    - 모델별 성능 비교 대시보드
    - False Positive/False Negative 분석
@@ -579,4 +736,3 @@ mkdir -p server/routers
 4. **알림 시스템**:
    - 특정 임계값 이상의 유해 표현 감지 시 알림
    - 이메일 또는 Slack 연동
-

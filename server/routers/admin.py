@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from db.supabase_client import supabase, get_app_setting
+import logging
+
+LOGGER = logging.getLogger("harmful-filter")
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -35,4 +38,45 @@ async def sync_settings(payload: SettingUpdate):
         "key": payload.key, 
         "new_value": db_value
     }
+
+
+@router.get("/logs")
+async def get_detection_logs(
+    limit: int = Query(20, ge=1, le=100, description="가져올 로그 개수 (1-100)"),
+    offset: int = Query(0, ge=0, description="시작 위치 (페이징용)"),
+    only_harmful: bool = Query(False, description="유해한 것만 조회")
+):
+    """
+    Supabase에서 감지 로그를 최신순으로 가져옵니다.
+    
+    - **limit**: 가져올 로그 개수 (기본값: 20, 최대: 100)
+    - **offset**: 시작 위치 (페이징용, 기본값: 0)
+    - **only_harmful**: true인 경우 유해한 로그만 조회 (기본값: false)
+    
+    **주의**: 현재는 인증이 없어서 누구나 로그를 볼 수 있습니다.
+    Task 47(로그인) 완료 후 관리자만 접근 가능하도록 보안 강화 예정입니다.
+    """
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database connection failed")
+    
+    try:
+        # 1. 쿼리 생성: detection_logs 테이블 선택
+        query = supabase.table("detection_logs").select("*")
+        
+        # 2. 필터 적용: 유해한 것만 보고 싶은 경우
+        if only_harmful:
+            query = query.eq("is_harmful", True)
+        
+        # 3. 정렬 및 페이징: 최신순 정렬, 개수 제한
+        # range(start, end)를 사용하여 페이징 처리
+        response = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        
+        return {
+            "count": len(response.data),
+            "logs": response.data
+        }
+        
+    except Exception as e:
+        LOGGER.error(f"❌ Failed to fetch logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
