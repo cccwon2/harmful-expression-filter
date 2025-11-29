@@ -15,14 +15,14 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~42**까지 진행 중입니다:
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~45**까지 진행 중입니다 (Task 43, 44 포함):
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
 - **Task 24~27**: 음성 STT API, Electron 오디오 연동, Deepgram STT 통합
 - **Task 28**: PaddleOCR 서버 연동 및 Tesseract.js 대체 (현재는 Windows SDK OCR로 대체됨)
 - **Task 29**: OnVoice COM Bridge 통합 (프로세스별 오디오 캡처)
-- **Task 30~32**: electron-edge-js 마이그레이션 (winax → electron-edge-js + C#)
+- **Task 30~32**: electron-edge-js 마이그레이션 (⚠️ Deprecated - Task 45로 대체됨)
 - **Task 33**: AudioManager 트레이 통합 (보안 강화, 시스템 트레이 직접 제어)
 - **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
@@ -33,6 +33,9 @@
 - **Task 40**: C++ Core Audio 구현 상세 (Application Loopback 내부 구현 원리 문서화)
 - **Task 41**: 파인튜닝된 KoElectra 분류기 연동 (로컬 모델 로드, 정확도 향상)
 - **Task 42**: Electron 앱 배포 (Windows NSIS 인스톨러 생성, C# 및 C++ DLL 포함, electron-builder 통합, 오버레이 창 배포 모드 문제 해결, 포터블 버전 지원, COM DLL 자동 등록)
+- **Task 43**: Threshold(임계값) 설정 및 최적화 (모델별 기본값 설정, 환경 변수 지원, API를 통한 동적 조정, Electron 트레이 연동)
+- **Task 44**: Vercel 관리자 대시보드 구축 가이드 (Next.js 기반 대시보드, FastAPI 서버 연동, 실시간 모니터링)
+- **Task 45**: Spawn 방식 Bridge 마이그레이션 (electron-edge-js → child_process.spawn, 프로세스 분리 및 안정성 향상)
 
 ### 주요 기술 스택
 
@@ -57,6 +60,10 @@
 - **볼륨 제어**: C# Bridge (NAudio.Wasapi) - Windows Core Audio API 직접 사용
   - PID 기반 앱별 볼륨 조절
   - 오디오 세션 목록 조회 (C# Bridge 통합)
+- **C# Bridge 통신**: `child_process.spawn` 방식 (Out-of-Process)
+  - 별도 프로세스로 실행하여 안정성 향상 (Fault Isolation)
+  - JSON over stdio 통신 프로토콜
+  - Electron 버전 종속성 제거, 배포 안정성 향상
 - **백엔드**: FastAPI (Python 3.12, venv312 환경)
 
 ## ⚙️ 환경 변수 설정
@@ -95,6 +102,13 @@ USE_QUANTIZATION=false
 # BASE_MODEL_NAME=kakaocorp/kanana-nano-2.1b-instruct
 # MODEL_PATH=models/kanana-lora-v1
 # USE_QUANTIZATION=false
+
+# ==========================================
+# Threshold 설정 (선택사항)
+# ==========================================
+# CLASSIFIER_THRESHOLD=0.5  # 0.0 ~ 1.0 (기본값: KoElectra=0.5, Kanana=0.22)
+# 환경 변수를 설정하지 않으면 모델별 기본값이 사용됩니다.
+# 자세한 내용은 docs/43-threshold-configuration.md 참조
 ```
 
 **참고**:
@@ -111,6 +125,11 @@ USE_QUANTIZATION=false
     - `MODEL_TYPE=kanana`로 설정
     - `MODEL_PATH`를 설정하면 LoRA 어댑터 사용 가능 (더 정확한 유해성 판별)
     - `USE_QUANTIZATION=false` (CPU 사용 시 자동으로 비활성화됨)
+- **Threshold 설정** (선택사항):
+  - `CLASSIFIER_THRESHOLD`: 유해 표현 판단 임계값 (0.0 ~ 1.0)
+  - 설정하지 않으면 모델별 기본값 사용 (KoElectra: 0.5, Kanana: 0.22)
+  - Electron 트레이 메뉴에서도 동적으로 조정 가능
+  - 자세한 내용은 [docs/43-threshold-configuration.md](./docs/43-threshold-configuration.md) 참조
 
 ## 🚀 빠른 시작
 
@@ -357,12 +376,17 @@ npm start
 **배포 관련**:
 
 - 자세한 배포 가이드는 [docs/42-electron-app-deployment.md](./docs/42-electron-app-deployment.md) 참조
+- 포터블 빌드 검증: [docs/PORTABLE_BUILD_VERIFICATION.md](./docs/PORTABLE_BUILD_VERIFICATION.md) 참조
 - C++ COM DLL은 상대 경로(`../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge`)에서 자동 탐색
 - 빌드된 DLL은 `native/OnVoiceAudioBridge.dll`로 복사되어 electron-builder에 포함됨
 - **포터블 버전**: `npm run build:portable`로 설치 없이 실행 가능한 버전 생성
   - 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+  - NSIS 설치 버전과 동일한 경로 구조 (`process.resourcesPath` 사용)
 - **설치 버전**: `npm run build:electron`로 NSIS 인스톨러 생성
   - 설치 시 자동으로 COM DLL 등록 (`build/installer.nsh`)
+- **C# Bridge**: `child_process.spawn` 방식으로 별도 프로세스 실행 (Task 45)
+  - Self-contained `.exe` 파일로 배포 (`.NET 런타임 포함`)
+  - Electron 버전과 무관하게 동작, 배포 안정성 향상
 
 ## 📖 프로젝트 구조
 
@@ -430,7 +454,8 @@ harmful-expression-filter/
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
 - `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
 - `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
-- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (spawn 방식, Windows SDK OCR 포함)
+- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (spawn 방식, Windows SDK OCR 포함, Task 45)
+- `electron/main/registerComDll.ts` – COM DLL 자동 등록 유틸리티 (포터블 방식 지원)
 - `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합, 폴백 로직 포함)
 - `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
@@ -442,6 +467,10 @@ harmful-expression-filter/
 - `scripts/build-native.js` – C++ COM DLL 빌드 스크립트 (MSBuild 자동 탐색, .slnx 지원)
 - `scripts/copy-native-dll.js` – C++ COM DLL 복사 스크립트 (상대 경로 자동 탐색)
 - `package.json` – electron-builder 설정 (Windows NSIS 인스톨러, C# 및 C++ DLL 포함)
+- `docs/43-threshold-configuration.md` – Threshold 설정 및 최적화 문서 (Task 43)
+- `docs/44-vercel-admin-dashboard.md` – Vercel 관리자 대시보드 구축 가이드 (Task 44)
+- `docs/45-spawn-bridge-migration.md` – Spawn 방식 마이그레이션 문서 (Task 45)
+- `docs/PORTABLE_BUILD_VERIFICATION.md` – 포터블 빌드 검증 문서
 
 자세한 내용은 [docs/INTERFACES.md](./docs/INTERFACES.md)와 각 Task 문서를 참조하세요.
 

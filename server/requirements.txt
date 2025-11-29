@@ -3,10 +3,14 @@ fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.10.4
 python-multipart>=0.0.6
-websockets==12.0
+websockets>=13.0
 
 # Env
 python-dotenv
+
+# Database
+supabase>=2.0.0
+gotrue>=1.0.0
 
 # AI Models (CPU Optimized)
 transformers>=4.38.0

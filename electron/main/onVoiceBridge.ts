@@ -6,6 +6,7 @@ import * as readline from "readline";
 import axios from "axios";
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from 'uuid';
+import { existsSync } from "fs";
 
 // ==================================================================================
 // 1. Separate Process Bridge Management
@@ -20,6 +21,9 @@ const SERVER_REQUEST_TIMEOUT = 5000;
 function getBridgePath(): string {
   if (app.isPackaged) {
     // [배포 모드] resources/bin/OnVoiceComBridge.exe
+    // NSIS 설치 버전과 포터블 버전 모두 동일하게 process.resourcesPath 사용
+    // - NSIS: {설치경로}/resources
+    // - 포터블 (dir): {실행파일경로}/resources
     return path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe");
   } else {
     // [개발 모드] dotnet publish 출력 경로
@@ -32,6 +36,17 @@ function spawnBridge() {
 
   const exePath = getBridgePath();
   console.log(`[OnVoiceBridge] 🚀 Spawning Bridge Process: ${exePath}`);
+
+  // 파일 존재 여부 확인 (포터블 배포 포함)
+  if (!existsSync(exePath)) {
+    const errorMsg = `[OnVoiceBridge] ❌ Bridge executable not found: ${exePath}`;
+    console.error(errorMsg);
+    if (app.isPackaged) {
+      console.error(`[OnVoiceBridge] 💡 배포 모드: process.resourcesPath = ${process.resourcesPath}`);
+      console.error(`[OnVoiceBridge] 💡 예상 경로: ${path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe")}`);
+    }
+    throw new Error(errorMsg);
+  }
 
   try {
     bridgeProcess = spawn(exePath, [], {

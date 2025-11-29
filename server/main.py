@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -19,6 +19,9 @@ from websockets.legacy.client import connect as ws_connect
 
 # NLP Classifier
 from nlp.harmful_classifier import HarmfulTextClassifier
+
+# Database
+from db.supabase_client import save_detection_log, get_app_setting, supabase
 
 # 로깅 설정
 LOGGER = logging.getLogger("harmful-filter")
@@ -417,7 +420,7 @@ async def lifespan(app: FastAPI):
             
             LOGGER.info("[Init] 🚀 Kanana 모델 선택됨")
 
-        # 2. Threshold 설정 (환경 변수 우선, 없으면 모델별 기본값)
+        # 2. Threshold 설정 (환경 변수 우선, 없으면 DB, 없으면 모델별 기본값)
         threshold_env = os.getenv("CLASSIFIER_THRESHOLD", "").strip()
         if threshold_env:
             try:
@@ -426,14 +429,39 @@ async def lifespan(app: FastAPI):
                     raise ValueError("Threshold must be between 0.0 and 1.0")
                 LOGGER.info(f"[Init] 🔧 환경 변수에서 Threshold 설정: {target_threshold}")
             except ValueError as e:
-                LOGGER.warning(f"[Init] ⚠️ 잘못된 CLASSIFIER_THRESHOLD 값: {threshold_env}. 기본값 사용. ({e})")
-                # 모델별 기본값으로 폴백
+                LOGGER.warning(f"[Init] ⚠️ 잘못된 CLASSIFIER_THRESHOLD 값: {threshold_env}. DB 또는 기본값 사용. ({e})")
+                threshold_env = ""  # 잘못된 값이므로 DB에서 가져오도록 함
+        
+        # [Task 46] 환경 변수가 없으면 Supabase에서 Threshold 설정 로드
+        if not threshold_env and supabase:
+            LOGGER.info("[Init] 🔄 Fetching settings from Supabase...")
+            db_threshold = None
+            
+            if model_type_env == "koelectra":
+                db_threshold = get_app_setting("threshold_koelectra")
+            else:
+                db_threshold = get_app_setting("threshold_kanana")
+                
+            if db_threshold:
+                try:
+                    target_threshold = float(db_threshold)
+                    LOGGER.info(f"[Init] 🔧 Threshold updated from DB: {target_threshold}")
+                except ValueError:
+                    LOGGER.warning(f"[Init] ⚠️ Invalid threshold value in DB: {db_threshold}")
+                    # 모델별 기본값으로 폴백
+                    if model_type_env == "koelectra":
+                        target_threshold = 0.5
+                    else:
+                        target_threshold = 0.22
+            else:
+                # DB에서 가져올 수 없으면 모델별 기본값 사용
                 if model_type_env == "koelectra":
-                    target_threshold = 0.5
+                    target_threshold = 0.5  # KoElectra threshold
                 else:
-                    target_threshold = 0.22
-        else:
-            # 모델별 기본값 사용
+                    target_threshold = 0.22  # Kanana threshold
+                LOGGER.info(f"[Init] 💡 Threshold 기본값 사용 (모델 타입: {model_type_env})")
+        elif not threshold_env:
+            # Supabase가 없거나 환경 변수가 없으면 모델별 기본값 사용
             if model_type_env == "koelectra":
                 target_threshold = 0.5  # KoElectra threshold
             else:
@@ -482,6 +510,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# [Task 46] Admin Router 등록
+from routers import admin
+app.include_router(admin.router)
 
 
 # ============== 엔드포인트 복원 ==============
@@ -629,6 +661,7 @@ async def update_threshold(request: ThresholdUpdateRequest):
 @app.post("/analyze")
 async def analyze_text(
     request: AnalyzeRequest,
+    background_tasks: BackgroundTasks,  # [Task 46] BackgroundTasks 주입
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0). If not provided, uses server's default threshold.")
 ):
     # 요청 로그
@@ -700,6 +733,20 @@ async def analyze_text(
         response["has_violation"],
         "있음" if response["ai_analysis"] else "없음"
     )
+    
+    # [Task 46] 유해 표현 감지 시 또는 모든 요청에 대해 로그 저장
+    # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
+    if is_harmful_ai and classifier:
+        model_display = getattr(app.state, "model_type_display", "Unknown")
+        background_tasks.add_task(
+            save_detection_log,
+            text=request.text,
+            confidence=ai_confidence,
+            threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
+            model=model_display,
+            is_harmful=True,
+            user_id=None  # 추후 Auth 연동 시 추가
+        )
     
     return response
 
