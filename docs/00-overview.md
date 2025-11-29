@@ -50,6 +50,9 @@
 40. **[C++ Core Audio 구현 상세](./40-cpp-core-audio-implementation.md)** ✅ 완료
 41. **[파인튜닝된 KoElectra 분류기 연동](./41-koelectra-classifier-integration.md)** ✅ 완료
 42. **[Electron 앱 배포](./42-electron-app-deployment.md)** ✅ 완료
+43. **[Threshold(임계값) 설정 및 최적화](./43-threshold-configuration.md)** ✅ 완료
+44. **[Vercel 관리자 대시보드 구축 가이드](./44-vercel-admin-dashboard.md)** 📝 계획 단계
+45. **[Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -121,8 +124,19 @@
 42-electron-app-deployment
     ├─ 01-electron-setup
     ├─ 30-electron-edge-js-migration (Deprecated)
-    ├─ 45-spawn-bridge-migration
-    └─ 39-csharp-volume-control
+    ├─ 39-csharp-volume-control
+    └─ 45-spawn-bridge-migration
+43-threshold-configuration
+    ├─ 21-text-analysis-api
+    └─ 41-koelectra-classifier-integration
+44-vercel-admin-dashboard
+    ├─ 20-fastapi-setup
+    ├─ 21-text-analysis-api
+    └─ 43-threshold-configuration
+45-spawn-bridge-migration
+    ├─ 29-onvoice-com-bridge-integration
+    ├─ 39-csharp-volume-control
+    └─ 42-electron-app-deployment
 ```
 
 ## 작업 상태
@@ -168,6 +182,9 @@
 | C++ Core Audio 구현 상세 | ✅ 완료      | 100%   | Low      |
 | 파인튜닝된 KoElectra 분류기 연동 | ✅ 완료      | 100%   | High     |
 | Electron 앱 배포 | ✅ 완료      | 100%   | Medium   |
+| Threshold 설정 및 최적화 | ✅ 완료      | 100%   | Medium   |
+| Vercel 관리자 대시보드 | 📝 계획 단계  | 0%     | Low      |
+| Spawn 방식 Bridge 마이그레이션 | ✅ 완료      | 100%   | High     |
 
 ## 최근 변경 사항 (2025-11-26)
 
@@ -226,3 +243,22 @@
   - 볼륨 조절 단계별 시간 측정 로그 추가 (세션 조회, 앱 찾기, C# Bridge 호출 등)
   - 타임스탬프(ISO 8601) 추가로 정밀한 지연 시간 분석 가능
   - C# 로그 인코딩 수정 (UTF-8)으로 한글 로그 정상 출력
+- **Task 43: Threshold 설정 및 최적화 완료**
+  - 모델별 기본 Threshold 설정 (KoElectra: 0.5, Kanana: 0.22)
+  - 환경 변수 `CLASSIFIER_THRESHOLD` 지원
+  - API를 통한 동적 Threshold 조정 (`/analyze?threshold=0.5`)
+  - 서버 재시작 없이 Threshold 변경 API (`POST /settings/threshold`)
+  - Electron 트레이 메뉴 민감도 설정 연동
+  - `/health` 엔드포인트에 Threshold 정보 포함
+- **Task 44: Vercel 관리자 대시보드 구축 가이드 작성**
+  - Next.js 기반 관리자 대시보드 가이드
+  - FastAPI 서버 연동 방법
+  - Vercel 배포 설정 가이드
+  - 실시간 모니터링 및 설정 관리 기능 제안
+- **Task 45: Spawn 방식 Bridge 마이그레이션 완료**
+  - electron-edge-js → child_process.spawn 방식으로 전환
+  - 프로세스 분리 및 안정성 향상 (Fault Isolation)
+  - Electron 버전 종속성 제거, 배포 안정성 향상
+  - Self-contained `.exe` 파일로 배포 (.NET 런타임 포함)
+  - JSON over stdio 통신 프로토콜 사용
+  - 포터블 빌드 검증 문서 추가: `docs/PORTABLE_BUILD_VERIFICATION.md`
