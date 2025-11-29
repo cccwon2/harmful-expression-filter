@@ -120,7 +120,8 @@
     └─ 35-deepgram-realtime-streaming
 42-electron-app-deployment
     ├─ 01-electron-setup
-    ├─ 30-electron-edge-js-migration
+    ├─ 30-electron-edge-js-migration (Deprecated)
+    ├─ 45-spawn-bridge-migration
     └─ 39-csharp-volume-control
 ```
 

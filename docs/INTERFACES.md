@@ -300,7 +300,7 @@ export function registerOnVoiceHandlers(window: BrowserWindow) {
 **관련 파일**:
 - `electron/audio/onVoiceService.ts` - OnVoice 서비스 클래스
 - `electron/audio/onVoiceBridgeAdapter.ts` - OnVoice 브리지 어댑터
-- `electron/main/onVoiceBridge.ts` - OnVoice Bridge 모듈 (electron-edge-js 기반)
+- `electron/main/onVoiceBridge.ts` - OnVoice Bridge 모듈 (spawn 방식)
 - `electron/utils/harmfulAnalysisClient.ts` - 유해 표현 분석 클라이언트
 
 ---

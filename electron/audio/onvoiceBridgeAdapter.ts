@@ -1,7 +1,7 @@
 /**
  * OnVoice Bridge Adapter
  *
- * electron-edge-js + C# COM wrapper 기반의 OnVoice bridge를 사용하는 어댑터
+ * Spawn 방식으로 실행되는 C# COM wrapper 기반의 OnVoice bridge를 사용하는 어댑터
  * 기존 코드와의 호환성을 유지하는 인터페이스를 제공합니다.
  */
 

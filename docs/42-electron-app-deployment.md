@@ -74,7 +74,8 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 ## 의존성
 
 - [작업 1: 기본 Electron 앱 설정](./01-electron-setup.md)
-- [작업 30: electron-edge-js 마이그레이션](./30-electron-edge-js-migration.md)
+- [작업 30: electron-edge-js 마이그레이션](./30-electron-edge-js-migration.md) (Deprecated)
+- [작업 45: Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)
 - [작업 39: C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)
 
 ## 빌드 스크립트
@@ -803,15 +804,24 @@ npm run copy:native
 
 **예방**: 배포 전에 항상 Release 빌드를 사용하고, `npm run copy:native` 실행 시 경고 메시지를 확인하세요.
 
-#### electron-edge-js 오류
-```bash
-# 환경 변수 확인
-echo %EDGE_USE_CORECLR%
-echo %DOTNET_ROOT%
+#### C# Bridge 프로세스 오류
 
-# 재빌드
+**증상**: OnVoiceComBridge.exe 프로세스가 시작되지 않거나 통신 실패
+
+**해결 방법**:
+```bash
+# C# 프로젝트 재빌드
+npm run build:dotnet
+
+# 전체 재빌드
 npm run build:all
+
+# 실행 파일 경로 확인
+# 개발 모드: dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe
+# 배포 모드: resources/bin/OnVoiceComBridge.exe
 ```
+
+**참고**: 이전의 electron-edge-js 방식은 Task 45에서 spawn 방식으로 변경되었습니다.
 
 #### 오버레이 창이 배포 파일에서 표시되지 않음
 
@@ -1044,6 +1054,7 @@ electron-builder는 자동으로 캐시를 사용합니다. 캐시 위치:
 - [electron-builder 공식 문서](https://www.electron.build/)
 - [NSIS 인스톨러 가이드](https://www.electron.build/configuration/nsis)
 - [작업 1: 기본 Electron 앱 설정](./01-electron-setup.md)
-- [작업 30: electron-edge-js 마이그레이션](./30-electron-edge-js-migration.md)
+- [작업 30: electron-edge-js 마이그레이션](./30-electron-edge-js-migration.md) (Deprecated)
+- [작업 45: Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)
 - [작업 39: C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)
 

@@ -430,7 +430,7 @@ harmful-expression-filter/
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
 - `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
 - `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
-- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (electron-edge-js 기반, Windows SDK OCR 포함)
+- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (spawn 방식, Windows SDK OCR 포함)
 - `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합, 폴백 로직 포함)
 - `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트

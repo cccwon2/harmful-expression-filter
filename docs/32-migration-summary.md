@@ -1,5 +1,11 @@
 # electron-edge-js 마이그레이션 완료 요약
 
+## ⚠️ 상태: Deprecated
+
+**이 문서는 더 이상 사용되지 않는 electron-edge-js 방식에 대한 문서입니다.**
+
+**현재 구현**: [Task 45: Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)
+
 ## 완료된 작업
 
 ### 1. 빌드 시스템 ✅
