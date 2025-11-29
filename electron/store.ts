@@ -9,6 +9,7 @@ export interface StoreData {
   roi: ROI | null;
   mode: OverlayMode;
   volumeLevel?: number; // 1~9 (1 = 10%, 9 = 90%), 기본값: 1 (10%)
+  threshold?: number; // 0.0 ~ 1.0, 민감도 설정 (threshold)
 }
 
 const getStorePath = () => {
@@ -89,4 +90,29 @@ export function setVolumeLevel(level: number): void {
   // 1~9 범위로 제한 (무소음 0% 제외)
   data.volumeLevel = Math.max(1, Math.min(9, Math.round(level)));
   saveData(data);
+}
+
+/**
+ * Threshold 값 가져오기
+ * @returns Threshold 값 (0.0 ~ 1.0), 설정되지 않았으면 null
+ */
+export function getThreshold(): number | null {
+  const data = loadData();
+  if (data.threshold !== undefined && data.threshold !== null) {
+    // 0.0 ~ 1.0 범위로 제한하고 0.1 단위로 반올림
+    return Math.round(Math.max(0.0, Math.min(1.0, data.threshold)) * 10) / 10;
+  }
+  return null;
+}
+
+/**
+ * Threshold 값 설정
+ * @param threshold Threshold 값 (0.0 ~ 1.0), 0.1 단위로 자동 반올림
+ */
+export function setThreshold(threshold: number): void {
+  const data = loadData();
+  // 0.0 ~ 1.0 범위로 제한하고 0.1 단위로 반올림
+  data.threshold = Math.round(Math.max(0.0, Math.min(1.0, threshold)) * 10) / 10;
+  saveData(data);
+  console.log(`[Store] Threshold 설정: ${data.threshold}`);
 }

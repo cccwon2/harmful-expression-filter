@@ -9,9 +9,10 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 
 # ✅ websockets: legacy asyncio API 사용
 from websockets.legacy.client import connect as ws_connect
@@ -416,11 +417,28 @@ async def lifespan(app: FastAPI):
             
             LOGGER.info("[Init] 🚀 Kanana 모델 선택됨")
 
-        # 2. 모델 타입에 따른 threshold 설정
-        if model_type_env == "koelectra":
-            target_threshold = 0.5  # KoElectra threshold
+        # 2. Threshold 설정 (환경 변수 우선, 없으면 모델별 기본값)
+        threshold_env = os.getenv("CLASSIFIER_THRESHOLD", "").strip()
+        if threshold_env:
+            try:
+                target_threshold = float(threshold_env)
+                if target_threshold < 0.0 or target_threshold > 1.0:
+                    raise ValueError("Threshold must be between 0.0 and 1.0")
+                LOGGER.info(f"[Init] 🔧 환경 변수에서 Threshold 설정: {target_threshold}")
+            except ValueError as e:
+                LOGGER.warning(f"[Init] ⚠️ 잘못된 CLASSIFIER_THRESHOLD 값: {threshold_env}. 기본값 사용. ({e})")
+                # 모델별 기본값으로 폴백
+                if model_type_env == "koelectra":
+                    target_threshold = 0.5
+                else:
+                    target_threshold = 0.22
         else:
-            target_threshold = 0.22  # Kanana threshold
+            # 모델별 기본값 사용
+            if model_type_env == "koelectra":
+                target_threshold = 0.5  # KoElectra threshold
+            else:
+                target_threshold = 0.22  # Kanana threshold
+            LOGGER.info(f"[Init] 💡 Threshold 기본값 사용 (모델 타입: {model_type_env})")
 
         # 3. Classifier 초기화
         LOGGER.info(f" - Base Model: {target_base_model}")
@@ -436,6 +454,7 @@ async def lifespan(app: FastAPI):
         )
         
         app.state.model_type_display = "KoElectra" if model_type_env == "koelectra" else ("Kanana-LoRA" if target_model_path else "Kanana-Base")
+        app.state.threshold = target_threshold  # Threshold 값을 app.state에 저장
         LOGGER.info(f"[Init] ✅ {app.state.model_type_display} 모델 로드 완료!")
 
     except Exception as e:
@@ -526,12 +545,43 @@ async def health_check():
     # app.state에 저장된 모델 정보 활용
     model_display = getattr(app.state, "model_type_display", "Not Loaded")
     
-    return {
+    # Classifier 인스턴스에서 실제 threshold 값 가져오기 (가장 정확함)
+    threshold_value = None
+    threshold_source = "unknown"
+    
+    if classifier is not None:
+        if hasattr(classifier, 'threshold'):
+            threshold_value = classifier.threshold
+            threshold_source = "classifier_instance"
+            LOGGER.debug(f"[Health] ✅ Classifier 인스턴스에서 threshold 가져옴: {threshold_value}")
+        else:
+            LOGGER.warning("[Health] ⚠️ Classifier 인스턴스에 threshold 속성이 없습니다.")
+    else:
+        LOGGER.warning("[Health] ⚠️ Classifier가 초기화되지 않았습니다. app.state에서 threshold 확인")
+    
+    # Classifier가 없거나 threshold를 가져올 수 없는 경우 app.state에서 가져오기
+    if threshold_value is None:
+        threshold_value = getattr(app.state, "threshold", None)
+        if threshold_value is not None:
+            threshold_source = "app_state"
+            LOGGER.debug(f"[Health] ✅ app.state에서 threshold 가져옴: {threshold_value}")
+    
+    response = {
         "status": "ok",
         "stt_service": "Deepgram (nova-2)",
         "ai_model": model_display,
         "mode": "Integrated Filter"
     }
+    
+    # Threshold 정보 추가
+    if threshold_value is not None:
+        response["threshold"] = threshold_value
+        response["threshold_source"] = threshold_source  # 디버깅용
+        LOGGER.info(f"[Health] 📊 Threshold 값 반환: {threshold_value} (출처: {threshold_source})")
+    else:
+        LOGGER.warning("[Health] ⚠️ Threshold 값을 가져올 수 없습니다.")
+    
+    return response
 
 
 @app.get("/keywords")
@@ -544,14 +594,51 @@ class AnalyzeRequest(BaseModel):
     text: str
 
 
+class ThresholdUpdateRequest(BaseModel):
+    threshold: float
+
+
+@app.post("/settings/threshold")
+async def update_threshold(request: ThresholdUpdateRequest):
+    """
+    실시간으로 Threshold 값을 변경합니다.
+    """
+    target_threshold = request.threshold
+    
+    if target_threshold < 0.0 or target_threshold > 1.0:
+        LOGGER.warning(f"[Settings] ⚠️ 잘못된 Threshold 값: {target_threshold}")
+        return {"status": "error", "message": "Threshold must be between 0.0 and 1.0"}
+    
+    # 1. app.state 업데이트
+    app.state.threshold = target_threshold
+    
+    # 2. Classifier 인스턴스 업데이트
+    if classifier:
+        classifier.threshold = target_threshold
+        LOGGER.info(f"[Settings] 🔧 Threshold 업데이트 완료: {target_threshold}")
+    else:
+        LOGGER.warning("[Settings] ⚠️ Classifier가 초기화되지 않아 app.state만 업데이트했습니다.")
+    
+    return {
+        "status": "ok", 
+        "threshold": target_threshold,
+        "message": "Threshold updated successfully"
+    }
+
+
 @app.post("/analyze")
-async def analyze_text(request: AnalyzeRequest):
+async def analyze_text(
+    request: AnalyzeRequest,
+    threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0). If not provided, uses server's default threshold.")
+):
     # 요청 로그
     text_preview = request.text[:50] + "..." if len(request.text) > 50 else request.text
-    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"", len(request.text), text_preview)
+    threshold_log = f", threshold={threshold}" if threshold is not None else ""
+    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s", len(request.text), text_preview, threshold_log)
     
     is_harmful_ai = False
     ai_confidence = 0.0
+    used_threshold = threshold  # 사용된 threshold 추적
     
     if not classifier:
         LOGGER.warning("[Analyze] ⚠️ Classifier가 초기화되지 않았습니다. 분석을 건너뜁니다.")
@@ -570,15 +657,31 @@ async def analyze_text(request: AnalyzeRequest):
             )
             
             elapsed_time = time.time() - start_time
-            is_harmful_ai = result.is_harmful
             ai_confidence = result.confidence
             
+            # Threshold 적용 (쿼리 파라미터가 있으면 사용, 없으면 서버 기본값)
+            if threshold is not None:
+                if threshold < 0.0 or threshold > 1.0:
+                    LOGGER.warning("[Analyze] ⚠️ 잘못된 threshold 값: %.2f (0.0-1.0 범위). 서버 기본값 사용.", threshold)
+                    threshold = None
+            
+            if threshold is not None:
+                # API에서 제공된 threshold로 재판단
+                is_harmful_ai = ai_confidence >= threshold
+                used_threshold = threshold
+                LOGGER.info("[Analyze] 🔧 API threshold 적용: %.4f >= %.4f = %s", ai_confidence, threshold, is_harmful_ai)
+            else:
+                # 서버 기본 threshold 사용 (이미 classifier.predict()에서 적용됨)
+                is_harmful_ai = result.is_harmful
+                used_threshold = classifier.threshold if classifier else None
+            
             LOGGER.info(
-                "[Analyze] ✅ 분석 완료 (%.3f초): is_harmful=%s, confidence=%.4f (%.1f%%)",
+                "[Analyze] ✅ 분석 완료 (%.3f초): is_harmful=%s, confidence=%.4f (%.1f%%), threshold=%.4f",
                 elapsed_time,
                 is_harmful_ai,
                 ai_confidence,
-                ai_confidence * 100
+                ai_confidence * 100,
+                used_threshold if used_threshold is not None else 0.0
             )
         except Exception as e:
             LOGGER.error("[Analyze] ❌ AI 분석 실패: %s", e, exc_info=True)
@@ -587,7 +690,8 @@ async def analyze_text(request: AnalyzeRequest):
         "has_violation": is_harmful_ai,
         "ai_analysis": {
             "is_harmful": is_harmful_ai,
-            "confidence": ai_confidence
+            "confidence": ai_confidence,
+            "threshold_used": used_threshold
         } if classifier else None
     }
     

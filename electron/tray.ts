@@ -5,7 +5,7 @@ import { getEditModeState, setEditModeState } from './state/editMode';
 import { IPC_CHANNELS } from './ipc/channels';
 import AudioManager from './main/AudioManager';
 import { getOnVoiceService } from './audio/onVoiceService';
-import { getVolumeLevel, setVolumeLevel } from './store';
+import { getVolumeLevel, setVolumeLevel, getThreshold, setThreshold } from './store';
 
 let tray: Tray | null = null;
 let trayUpdateCallback: (() => void) | null = null;
@@ -34,14 +34,14 @@ function createTrayIcon(isMonitoring: boolean = false): NativeImage {
   const size = 32;
   const bytesPerPixel = 4; // RGBA
   const buffer = Buffer.alloc(size * size * bytesPerPixel);
-  
+
   // 모니터링 중이면 초록색 배경 (#10b981), 중지면 파란색 배경 (#2563eb)
   const bgR = isMonitoring ? 0x10 : 0x25;
   const bgG = isMonitoring ? 0xb9 : 0x63;
   const bgB = isMonitoring ? 0x81 : 0xeb;
   // 흰색 텍스트
   const textR = 255, textG = 255, textB = 255;
-  
+
   // "H" 글자 그리기 (32x32 픽셀 중앙에 배치)
   const hWidth = 12;  // H 글자 너비
   const hHeight = 18; // H 글자 높이
@@ -49,31 +49,31 @@ function createTrayIcon(isMonitoring: boolean = false): NativeImage {
   const hStartX = Math.floor((size - hWidth) / 2);
   const hStartY = Math.floor((size - hHeight) / 2);
   const hMiddleRow = Math.floor(hHeight / 2); // 가로 막대의 중간 행 위치 (상대 좌표)
-  
+
   // 배경 채우기 및 H 글자 그리기
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const offset = (y * size + x) * bytesPerPixel;
-      
+
       // H 글자 영역인지 확인
-      const inHArea = x >= hStartX && x < hStartX + hWidth && 
-                      y >= hStartY && y < hStartY + hHeight;
-      
+      const inHArea = x >= hStartX && x < hStartX + hWidth &&
+        y >= hStartY && y < hStartY + hHeight;
+
       let isText = false;
       if (inHArea) {
         const relX = x - hStartX;
         const relY = y - hStartY;
-        
+
         // 왼쪽 세로 막대
         const leftBar = relX < hThickness;
         // 오른쪽 세로 막대
         const rightBar = relX >= hWidth - hThickness;
         // 중간 가로 막대 (중간 행 주변)
         const middleBar = relY >= hMiddleRow - 1 && relY <= hMiddleRow + 1;
-        
+
         isText = leftBar || rightBar || (middleBar && relX >= hThickness && relX < hWidth - hThickness);
       }
-      
+
       if (isText) {
         // 흰색 텍스트
         buffer[offset] = textR;
@@ -89,10 +89,10 @@ function createTrayIcon(isMonitoring: boolean = false): NativeImage {
       }
     }
   }
-  
+
   // nativeImage 생성
   const icon = nativeImage.createFromBuffer(buffer, { width: size, height: size });
-  
+
   // 시스템 트레이 크기에 맞게 리사이즈 (Windows는 보통 16x16, 고해상도는 20x20)
   // @2x 리소스도 생성 (고해상도 디스플레이용)
   return icon;
@@ -101,9 +101,9 @@ function createTrayIcon(isMonitoring: boolean = false): NativeImage {
 export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers): Tray {
   // 트레이 아이콘 생성 (초기에는 모니터링 중지 상태)
   const icon = createTrayIcon(false);
-  
+
   tray = new Tray(icon);
-  
+
   // tray는 위에서 초기화되었으므로 null이 아님을 보장
   const trayInstance = tray;
 
@@ -111,7 +111,7 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
   const updateContextMenu = () => {
     const isOverlayVisible = overlayWindow.isVisible();
     const isEditMode = getEditModeState();
-    
+
     // AudioManager 상태 가져오기
     const audioManager = AudioManager.getInstance();
     const audioStatus = audioManager.getStatus();
@@ -121,13 +121,16 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
     // 트레이 아이콘 업데이트 (스트리밍 상태에 따라 색상 변경)
     const newIcon = createTrayIcon(isStreaming);
     trayInstance.setImage(newIcon);
-    
+
     // 트레이 툴팁 업데이트
-    const tooltip = isStreaming 
+    const tooltip = isStreaming
       ? `Harmful Expression Filter - 스트리밍 중 (${currentTarget || 'Unknown'})`
       : 'Harmful Expression Filter - 대기 중';
     trayInstance.setToolTip(tooltip);
-    
+
+    // 현재 Threshold 값 가져오기 (로컬 스토어에서)
+    const currentThreshold = getCurrentThresholdSync();
+
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '영역 지정 (Select Region)',
@@ -245,11 +248,11 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
               // detach 모드로 열어서 완전히 독립된 창으로 표시 (이동 가능)
               overlayWindow.webContents.openDevTools({ mode: 'detach' });
               console.log('[Tray] DevTools opened in detach mode - window should be movable');
-              
+
               // 개발자 도구가 열릴 때 오버레이 창의 키보드 포커스 해제
               // 개발자 도구가 키보드 입력을 받을 수 있도록
               overlayWindow.blur();
-              
+
               // 개발자 도구가 열릴 때 renderer에 테스트 로그 출력 요청 (콘솔 확인용)
               setTimeout(() => {
                 if (overlayWindow && overlayWindow.webContents.isDevToolsOpened()) {
@@ -269,7 +272,7 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
                   });
                 }
               }, 500);
-              
+
               // 개발자 도구가 열려 있을 때도 Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
               // (ROI 선택을 시작할 수 있도록)
               const { getEditModeState } = require('./state/editMode');
@@ -494,6 +497,141 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'separator',
       },
       {
+        label: '--- 민감도 설정 (Sensitivity) ---',
+        enabled: false,
+      },
+      {
+        label: `현재 민감도: ${getCurrentThresholdSync().toFixed(1)}`,
+        enabled: false,
+      },
+      {
+        label: '◀ 민감도 낮추기 (-0.1)',
+        enabled: getCurrentThresholdSync() > 0.0,
+        click: async () => {
+          const current = getCurrentThresholdSync();
+          const newThreshold = Math.max(0.0, current - 0.1);
+          await setTrayThreshold(newThreshold);
+          updateContextMenu();
+        },
+      },
+      {
+        label: '▶ 민감도 높이기 (+0.1)',
+        enabled: getCurrentThresholdSync() < 1.0,
+        click: async () => {
+          const current = getCurrentThresholdSync();
+          const newThreshold = Math.min(1.0, current + 0.1);
+          await setTrayThreshold(newThreshold);
+          updateContextMenu();
+        },
+      },
+      {
+        label: '민감도 설정',
+        submenu: [
+          {
+            label: '0.0 (가장 낮음)',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.0) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.0);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.1',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.1) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.1);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.2',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.2) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.2);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.3',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.3) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.3);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.4',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.4) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.4);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.5',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.5) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.5);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.6',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.6) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.6);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.7',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.7) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.7);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.8',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.8) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.8);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '0.9',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 0.9) < 0.01,
+            click: async () => {
+              await setTrayThreshold(0.9);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '1.0 (가장 높음)',
+            type: 'radio',
+            checked: Math.abs(getCurrentThresholdSync() - 1.0) < 0.01,
+            click: async () => {
+              await setTrayThreshold(1.0);
+              updateContextMenu();
+            },
+          },
+        ],
+      },
+      {
+        type: 'separator',
+      },
+      {
         label: 'Quit',
         type: 'normal',
         click: () => {
@@ -551,6 +689,54 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
   (trayInstance as any).updateContextMenu = updateContextMenu;
 
   return tray;
+}
+
+/**
+ * 현재 Threshold 값 가져오기 (서버 또는 로컬 스토어)
+ */
+/**
+ * 현재 Threshold 값 가져오기 (동기 - 로컬 스토어에서)
+ */
+function getCurrentThresholdSync(): number {
+  // 로컬 스토어에서 가져오기
+  const storedThreshold = getThreshold();
+  if (storedThreshold !== null) {
+    return storedThreshold;
+  }
+
+  // 로컬 스토어에 없으면 기본값 반환
+  // 실제 서버 threshold는 서버 시작 시 모델 타입에 따라 설정됨 (KoElectra: 0.5, Kanana: 0.22)
+  return 0.5; // 기본값
+}
+
+/**
+ * 트레이 메뉴에서 Threshold 설정
+ */
+async function setTrayThreshold(threshold: number): Promise<void> {
+  try {
+    // 0.0 ~ 1.0 범위로 제한하고 0.1 단위로 반올림
+    const clampedThreshold = Math.round(Math.max(0.0, Math.min(1.0, threshold)) * 10) / 10;
+
+    // 로컬 스토어에 저장
+    setThreshold(clampedThreshold);
+
+    console.log(`[Tray] Threshold 설정: ${clampedThreshold}`);
+
+    // 서버에 동적으로 설정 요청
+    try {
+      const axios = (await import('axios')).default;
+      const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:8000";
+      await axios.post(`${serverUrl}/settings/threshold`, {
+        threshold: clampedThreshold
+      });
+      console.log(`[Tray] ✅ 서버 Threshold 업데이트 성공: ${clampedThreshold}`);
+    } catch (serverErr: any) {
+      console.warn(`[Tray] ⚠️ 서버 Threshold 업데이트 실패 (서버가 꺼져있을 수 있음): ${serverErr?.message || serverErr}`);
+    }
+
+  } catch (err) {
+    console.error('[Tray] Failed to set threshold:', err);
+  }
 }
 
 /**

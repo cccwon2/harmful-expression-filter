@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import axios, { AxiosError } from "axios";
 import { SERVER_CHANNELS } from "./channels";
+import { getThreshold } from "../store";
 
 // SERVER_URL은 main.ts에서 dotenv로 로드된 환경 변수 사용
 const REQUEST_TIMEOUT = 5000;
@@ -11,9 +12,13 @@ function getServerUrl(): string {
 
 interface HealthResponse {
   status: string;
-  keywords_loaded: number;
-  stt_loaded: boolean;
-  ai_model_loaded: boolean;
+  keywords_loaded?: number;
+  stt_loaded?: boolean;
+  ai_model_loaded?: boolean;
+  stt_service?: string;
+  ai_model?: string;
+  mode?: string;
+  threshold?: number;
 }
 
 interface AnalyzeResponse {
@@ -116,9 +121,16 @@ export function registerServerHandlers(): void {
         }
 
         const serverUrl = getServerUrl();
+        
+        // 저장된 threshold 값 가져오기
+        const threshold = getThreshold();
+        const url = threshold !== null
+          ? `${serverUrl}/analyze?threshold=${threshold}`
+          : `${serverUrl}/analyze`;
+        
         const response = await axios.post<AnalyzeResponse>(
-          `${serverUrl}/analyze`,
-          { text, use_ai: false },
+          url,
+          { text },
           {
             timeout: REQUEST_TIMEOUT,
             headers: { "Content-Type": "application/json" },
@@ -148,6 +160,42 @@ export function registerServerHandlers(): void {
       return response.data;
     } catch (error) {
       return handleServerError(error, "Get Keywords");
+    }
+  });
+
+  // Threshold 값 가져오기 (서버의 /health 엔드포인트에서 threshold 값 추출)
+  ipcMain.handle(SERVER_CHANNELS.GET_THRESHOLD, async (): Promise<number | ErrorResponse> => {
+    try {
+      const serverUrl = getServerUrl();
+      const response = await axios.get<HealthResponse>(`${serverUrl}/health`, {
+        timeout: REQUEST_TIMEOUT,
+      });
+      
+      // 서버에서 threshold 값 가져오기
+      if (response.data.threshold !== undefined && response.data.threshold !== null) {
+        const serverThreshold = response.data.threshold;
+        console.log(`[IPC] 서버 Threshold 값: ${serverThreshold}`);
+        return serverThreshold;
+      }
+      
+      // 서버에 threshold 값이 없으면 로컬 스토어에서 가져오기
+      const localThreshold = getThreshold();
+      if (localThreshold !== null) {
+        console.log(`[IPC] 로컬 Threshold 값: ${localThreshold}`);
+        return localThreshold;
+      }
+      
+      // 둘 다 없으면 기본값 반환
+      console.log(`[IPC] Threshold 값 없음, 기본값 0.5 반환`);
+      return 0.5;
+    } catch (error) {
+      console.error("[IPC] Threshold 가져오기 실패:", error);
+      // 에러가 발생하면 로컬 스토어에서 가져오기 시도
+      const localThreshold = getThreshold();
+      if (localThreshold !== null) {
+        return localThreshold;
+      }
+      return handleServerError(error, "Get Threshold");
     }
   });
 
