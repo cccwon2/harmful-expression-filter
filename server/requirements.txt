@@ -8,6 +8,10 @@ websockets==12.0
 # Env
 python-dotenv
 
+# Database
+supabase>=2.0.0
+gotrue>=1.0.0
+
 # AI Models (CPU Optimized)
 transformers>=4.38.0
 accelerate
