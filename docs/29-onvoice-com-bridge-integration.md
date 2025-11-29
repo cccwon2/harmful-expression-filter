@@ -23,7 +23,7 @@ Windows에서 **프로세스별 오디오 캡처**를 위해 C++ COM DLL(`OnVoic
 ### 1. OnVoice Bridge 모듈
 **파일**: `electron/main/onVoiceBridge.ts`
 
-`electron-edge-js`를 사용하여 C# COM DLL과 통신하는 브리지 모듈입니다.
+`child_process.spawn`을 사용하여 C# COM Bridge 프로세스와 통신하는 브리지 모듈입니다.
 
 ```typescript
 export const onVoiceBridge: OnVoiceBridge = {
@@ -36,7 +36,8 @@ export const onVoiceBridge: OnVoiceBridge = {
 ```
 
 **주요 기능**:
-- C# DLL (`OnVoiceComBridge.dll`) 로드 및 호출
+- C# 프로세스 (`OnVoiceComBridge.exe`) spawn 및 통신
+- JSON over stdio를 통한 프로세스 간 통신
 - 오디오 데이터 콜백 및 이벤트 방식 지원
 - 프로세스 찾기 (Chrome, Edge, Discord)
 - 오디오 캡처 시작/중지
@@ -116,8 +117,9 @@ export const ONVOICE_CHANNELS = {
 
 ## 🔧 기술 스택
 
-- **C# COM Bridge**: `electron-edge-js` (v28.0.0)
-- **C# DLL**: `OnVoiceComBridge.dll` (C# .NET 6.0)
+- **C# COM Bridge**: `child_process.spawn` (Node.js 표준)
+- **C# 실행 파일**: `OnVoiceComBridge.exe` (C# .NET 6.0, self-contained)
+- **통신 프로토콜**: JSON over stdio
 - **WebSocket**: `ws` (v8.14.2)
 - **STT**: Deepgram WebSocket 또는 서버 WebSocket
 - **분석**: FastAPI `/analyze` 엔드포인트
@@ -206,13 +208,13 @@ encoding=linear16&sample_rate=16000&language=ko
 
 ## ⚠️ 주의사항
 
-1. **C# DLL 필요**
-   - `OnVoiceComBridge.dll`이 프로젝트에 포함되어 있어야 합니다.
-   - 개발 모드: `dist-electron/dotnet/OnVoiceComBridge.dll`
-   - 프로덕션 모드: `resources/dotnet/OnVoiceComBridge.dll`
+1. **C# 실행 파일 필요**
+   - `OnVoiceComBridge.exe`가 프로젝트에 포함되어 있어야 합니다.
+   - 개발 모드: `dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe`
+   - 프로덕션 모드: `resources/bin/OnVoiceComBridge.exe`
 
 2. **Windows 전용**
-   - `electron-edge-js`는 Windows 전용 라이브러리입니다.
+   - COM 인터페이스를 사용하므로 Windows에서만 동작합니다.
    - 다른 OS에서는 동작하지 않습니다.
 
 3. **프로세스 찾기**
@@ -222,6 +224,10 @@ encoding=linear16&sample_rate=16000&language=ko
 4. **파일명 규칙**
    - 모든 OnVoice 관련 파일은 `onVoice` (대문자 V) 네이밍 규칙을 따릅니다.
    - `onVoiceBridge.ts`, `onVoiceService.ts`, `onVoiceBridgeAdapter.ts` 등
+
+5. **프로세스 통신**
+   - JSON over stdio를 통한 프로세스 간 통신
+   - 프로세스가 종료되면 자동으로 재시작하지 않으므로 오류 처리 필요
 
 ## 📊 테스트
 
@@ -249,8 +255,10 @@ node examples/deepgram_onvoice_client.js
 - **Task 24**: 음성 STT API (서버 WebSocket 기반)
 - **Task 25**: 음성 Electron 연동
 - **Task 27**: Deepgram STT 통합
+- **Task 30**: electron-edge-js 마이그레이션 (Deprecated)
 - **Task 34**: Windows OCR 성능 최적화 (이 모듈의 OCR 기능 최적화)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거)
+- **Task 45**: Spawn 방식 Bridge 마이그레이션 (현재 구현)
 
 ## 📝 다음 단계
 

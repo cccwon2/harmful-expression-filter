@@ -1,7 +1,7 @@
 /**
  * OnVoice Bridge 테스트 스크립트
  * 
- * 새로운 electron-edge-js + C# COM bridge를 테스트합니다.
+ * Spawn 방식으로 실행되는 C# COM bridge를 테스트합니다.
  * 
  * 실행 방법:
  *   npx tsx electron/test/test_onvoice_bridge.ts

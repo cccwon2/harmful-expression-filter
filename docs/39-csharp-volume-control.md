@@ -418,8 +418,8 @@ npm uninstall native-sound-mixer
 
 ## 🔧 기술 스택
 
-- **C# COM Bridge**: `electron-edge-js` (기존)
-- **C# DLL**: `OnVoiceComBridge.dll` (기존)
+- **C# COM Bridge**: `child_process.spawn` (현재)
+- **C# 실행 파일**: `OnVoiceComBridge.exe` (현재, self-contained)
 - **Windows Audio API**: `NAudio.Wasapi` (v2.2.1) - **신규 추가**
 - **제거**: `native-sound-mixer` - **제거 예정**
 

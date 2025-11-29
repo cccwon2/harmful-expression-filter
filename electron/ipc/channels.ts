@@ -26,6 +26,7 @@ export const SERVER_CHANNELS = {
   HEALTH_CHECK: 'server:health-check',
   ANALYZE_TEXT: 'server:analyze-text',
   GET_KEYWORDS: 'server:get-keywords',
+  GET_THRESHOLD: 'server:get-threshold',      // 🆕 Threshold 값 가져오기
   OCR_IMAGE: 'server:ocr-image',              // 🆕 OCR만
   OCR_AND_ANALYZE: 'server:ocr-and-analyze',  // 🆕 OCR + 분석
 } as const;

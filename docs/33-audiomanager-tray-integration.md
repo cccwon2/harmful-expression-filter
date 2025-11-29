@@ -65,7 +65,7 @@ class AudioManager {
 
 ## 🔧 기술 스택
 
-- **OnVoice Bridge**: `electron/main/onVoiceBridge.ts` (electron-edge-js 기반)
+- **OnVoice Bridge**: `electron/main/onVoiceBridge.ts` (spawn 방식)
 - **WebSocket**: `ws` (v8.14.2)
 - **STT**: Python FastAPI 서버 (`ws://localhost:8000/ws/audio`)
 - **아키텍처**: Singleton 패턴

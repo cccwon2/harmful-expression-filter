@@ -10,7 +10,7 @@ import { setupROIHandlers, type ROI } from "./ipc/roi";
 import { IPC_CHANNELS } from "./ipc/channels";
 import { SERVER_CHANNELS } from "./ipc/channels";
 import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from "./state/editMode";
-import { getROI, getMode, setMode } from "./store";
+import { getROI, getMode, setMode, getThreshold, setThreshold } from "./store";
 import * as fs from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
@@ -134,6 +134,27 @@ app.whenReady().then(async () => {
     console.warn("[Main] FastAPI server가 실행 중이 아닙니다. `server` 폴더에서 `python main.py`를 실행하세요.");
   } else {
     console.log("[Main] FastAPI server 연결이 확인되었습니다.");
+    
+    // 서버에서 초기 threshold 값 가져와서 로컬 스토어에 저장 (없는 경우에만)
+    try {
+      const axios = (await import('axios')).default;
+      const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:8000";
+      const response = await axios.get(`${serverUrl}/health`, { timeout: 3000 });
+      const serverThreshold = response.data?.threshold;
+      
+      if (serverThreshold !== undefined && serverThreshold !== null) {
+        // 로컬 스토어에 threshold가 없으면 서버 값 저장
+        const localThreshold = getThreshold();
+        if (localThreshold === null) {
+          setThreshold(serverThreshold);
+          console.log(`[Main] 서버에서 threshold 값 가져와서 저장: ${serverThreshold}`);
+        } else {
+          console.log(`[Main] 로컬 threshold 값 사용: ${localThreshold} (서버: ${serverThreshold})`);
+        }
+      }
+    } catch (error: any) {
+      console.warn('[Main] 서버에서 threshold 가져오기 실패 (무시):', error?.message || error);
+    }
   }
 
   // AudioManager 초기화
