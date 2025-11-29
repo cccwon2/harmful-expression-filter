@@ -317,21 +317,25 @@ async def analyze_text(request: AnalyzeRequest):
 @app.post("/analyze")
 async def analyze_text(
     request: AnalyzeRequest,
-    background_tasks: BackgroundTasks  # BackgroundTasks 주입
+    background_tasks: BackgroundTasks,  # [Task 46] BackgroundTasks 주입
+    threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0). If not provided, uses server's default threshold.")
 ):
     # ... 기존 분석 수행 ...
     result = classifier.predict(request.text)
 
     # [Task 46] 유해 표현 감지 시 또는 모든 요청에 대해 로그 저장
     # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
-    if result.is_harmful:
+    # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
+    if classifier:
+        model_display = getattr(app.state, "model_type_display", "Unknown")
+        # 실제 판단 결과를 저장 (is_harmful_ai 값 사용)
         background_tasks.add_task(
             save_detection_log,
             text=request.text,
-            confidence=result.confidence,
-            threshold=result.ai_analysis['threshold_used'],  # 실제 사용된 threshold
-            model=app.state.model_type_display,
-            is_harmful=True,
+            confidence=ai_confidence,
+            threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
+            model=model_display,
+            is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
             user_id=None  # 추후 Auth 연동 시 추가
         )
 
@@ -340,8 +344,10 @@ async def analyze_text(
 
 **참고**:
 
-- `result.ai_analysis['threshold_used']`가 없다면 `app.state.classifier.threshold` 사용
-- 모든 요청을 로깅하려면 `if result.is_harmful:` 조건 제거
+- `is_harmful_ai`는 실제 모델의 판단 결과를 사용합니다 (하드코딩된 `True` 값이 아님)
+- `used_threshold`는 API 파라미터로 제공된 threshold 또는 서버 기본 threshold를 사용합니다
+- 현재는 `classifier`가 있을 때 모든 요청을 저장합니다 (정상/유해 구분 없이)
+- 유해한 경우만 저장하려면 조건을 `if is_harmful_ai and classifier:`로 변경
 
 ### 4. 설정 업데이트 API (Admin Only)
 
@@ -548,19 +554,26 @@ curl -X 'GET' \
 
 **테스트 절차**:
 
-1. `/analyze` 엔드포인트에 유해 텍스트 요청:
+1. `/analyze` 엔드포인트에 텍스트 요청 (유해/정상 모두 테스트):
 
    ```bash
+   # 유해 텍스트 테스트
    curl -X POST http://localhost:8000/analyze \
      -H "Content-Type: application/json" \
      -d '{"text": "욕설"}'
+
+   # 정상 텍스트 테스트
+   curl -X POST http://localhost:8000/analyze \
+     -H "Content-Type: application/json" \
+     -d '{"text": "안녕하세요"}'
    ```
 
 2. 응답이 지연 없이 즉시 오는지 확인 (Background Task 동작 확인)
 
 3. Supabase 대시보드에서 `detection_logs` 테이블 확인:
    - 새 행이 추가되었는지 확인
-   - `text_content`, `confidence`, `threshold_used`, `model_version` 값 확인
+   - `text_content`, `confidence`, `threshold_used`, `model_version`, `is_harmful` 값 확인
+   - **중요**: `is_harmful` 값이 실제 모델 판단 결과와 일치하는지 확인 (하드코딩된 `True`가 아닌 실제 값)
 
 ### 4. 예외 처리 확인
 
@@ -658,6 +671,7 @@ curl -X 'GET' \
    - Import 추가: `BackgroundTasks`, `save_detection_log`, `get_app_setting`, `supabase`
    - `lifespan` 함수에 DB 설정 로드 로직 추가
    - `/analyze` 엔드포인트에 `BackgroundTasks` 주입 및 로그 저장 로직 추가
+   - 로그 저장 시 실제 `is_harmful_ai` 값 사용 (하드코딩된 `True` 제거)
    - `admin.router` 등록
 4. `server/routers/admin.py`:
    - `/admin/sync-settings` 엔드포인트 (설정 동기화)
@@ -706,6 +720,20 @@ curl -X 'GET' \
    create index idx_detection_logs_created_at on public.detection_logs(created_at desc);
    create index idx_detection_logs_is_harmful on public.detection_logs(is_harmful);
    ```
+
+### 버그 수정 및 주의사항
+
+1. **`is_harmful` 값 저장**:
+
+   - ⚠️ **중요**: 로그 저장 시 `is_harmful=True`로 하드코딩하지 말고, 실제 모델 판단 결과(`is_harmful_ai`)를 사용해야 합니다
+   - 잘못된 예: `is_harmful=True` (하드코딩)
+   - 올바른 예: `is_harmful=is_harmful_ai` (실제 판단 결과)
+   - 이렇게 해야 DB에 저장된 데이터가 실제 모델의 판단과 일치합니다
+
+2. **모델 학습 상태 확인**:
+   - KoElectra Base 모델은 학습되지 않아 모든 텍스트를 유사한 확률(0.5~0.6)로 예측할 수 있습니다
+   - 학습된 로컬 모델(`server/models/koelectra-classifier-v1/`)을 사용하거나 Threshold를 조정하세요
+   - Threshold가 너무 낮으면(예: 0.5) 정상 텍스트도 유해로 판단될 수 있습니다
 
 ## ⏭️ 다음 단계 (Next Steps)
 
