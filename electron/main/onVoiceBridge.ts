@@ -108,9 +108,15 @@ function spawnBridge(): void {
     // spawn 시도 (기본 방법)
     // spawn은 동기적으로 에러를 throw할 수 있으므로 try-catch로 감싸야 함
     try {
+      // Bridge 실행 파일이 있는 디렉토리를 작업 디렉토리로 설정
+      // 이렇게 하면 COM DLL과 매니페스트 파일을 찾을 수 있습니다
+      const bridgeDir = path.dirname(absolutePath);
+      console.log(`[OnVoiceBridge] 📁 Bridge 작업 디렉토리: ${bridgeDir}`);
+      
       bridgeProcess = spawn(absolutePath, [], {
         stdio: ["pipe", "pipe", "inherit"], // stdin, stdout, stderr (inherit for debug)
         windowsHide: true,
+        cwd: bridgeDir, // 작업 디렉토리를 Bridge 실행 파일이 있는 폴더로 설정
         // Windows에서 실행 권한 문제를 피하기 위해 shell 옵션은 사용하지 않음
         // (shell: true는 보안상 권장되지 않음)
       });

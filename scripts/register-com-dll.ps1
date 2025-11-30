@@ -6,11 +6,10 @@
 
 $dllPath = Join-Path $PSScriptRoot "..\native\OnVoiceAudioBridge.dll"
 
-Write-Host "=" -NoNewline
-Write-Host ("=" * 79)
+$separator = "=" * 80
+Write-Host $separator
 Write-Host "COM DLL 등록"
-Write-Host "=" -NoNewline
-Write-Host ("=" * 79)
+Write-Host $separator
 Write-Host ""
 
 if (-not (Test-Path $dllPath)) {
@@ -109,9 +108,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 Write-Host ""
-Write-Host "=" -NoNewline
-Write-Host ("=" * 79)
+Write-Host $separator
 Write-Host "등록 완료"
-Write-Host "=" -NoNewline
-Write-Host ("=" * 79)
+Write-Host $separator
 

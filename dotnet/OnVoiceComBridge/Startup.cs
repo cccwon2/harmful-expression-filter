@@ -106,7 +106,7 @@ namespace OnVoiceComBridge
             switch (command)
             {
                 case "init":
-                    Console.WriteLine($"[OnVoiceComBridge] 초기화 완료");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] 초기화 완료");
                     EnsureComObject();
                     SubscribeComEvents();
                     return new { ok = true, source = "OnVoiceComBridge", action = "init" };
@@ -118,20 +118,20 @@ namespace OnVoiceComBridge
                     int pid = 0;
                     try { pid = Convert.ToInt32(input.pid); } catch { throw new ArgumentException("PID 변환 실패"); }
                     
-                    Console.WriteLine($"[OnVoiceComBridge] StartCapture 호출 시도: PID={pid}");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] StartCapture 호출 시도: PID={pid}");
                     
                     try 
                     {
+                        // 정의된 인터페이스를 사용하여 COM 메서드 호출
+                        // 정의된 인터페이스를 사용하여 COM 메서드 호출
                         var capturer = (IOnVoiceCapture)_capture;
                         capturer.StartCapture(pid);
-                        Console.WriteLine($"[OnVoiceComBridge] ✅ StartCapture 성공");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] ✅ StartCapture 성공");
                     }
                     catch (Exception ex)
                     {
                          Console.Error.WriteLine($"[OnVoiceComBridge] ❌ StartCapture 오류: {ex.Message}");
-                         try {
-                            _capture.GetType().InvokeMember("StartCapture", BindingFlags.InvokeMethod, null, _capture, new object[] { pid });
-                         } catch { throw; }
+                         throw;
                     }
                     return new { ok = true, pid };
 
@@ -140,40 +140,76 @@ namespace OnVoiceComBridge
                     {
                         try
                         {
+                            // 정의된 인터페이스를 사용하여 COM 메서드 호출
+                            // 정의된 인터페이스를 사용하여 COM 메서드 호출
                             var capturer = (IOnVoiceCapture)_capture;
                             capturer.StopCapture();
-                            Console.WriteLine($"[OnVoiceComBridge] ✅ StopCapture 성공");
+                            Console.Error.WriteLine($"[OnVoiceComBridge] ✅ StopCapture 성공");
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"[OnVoiceComBridge] ⚠️ StopCapture 오류 (무시): {ex.Message}");
+                        }
                     }
                     return new { ok = true };
 
                 case "find":
-                    EnsureComObject();
-                    if (_capture == null) throw new InvalidOperationException("COM object not initialized");
-                    
-                    string target = (string)input.target;
-                    
-                    int foundPid = 0;
                     try
                     {
-                        var capturer = (IOnVoiceCapture)_capture;
-                        switch (target?.ToLower())
+                        EnsureComObject();
+                        if (_capture == null) 
                         {
-                            case "chrome": foundPid = capturer.FindChromeProcess(); break;
-                            case "edge": foundPid = capturer.FindEdgeProcess(); break;
-                            case "discord": foundPid = capturer.FindDiscordProcess(); break;
-                            default: return new { ok = false, error = $"Unknown target: {target}" };
+                            Console.Error.WriteLine($"[OnVoiceComBridge] ❌ COM 객체가 초기화되지 않았습니다.");
+                            return new { ok = false, error = "COM object not initialized" };
                         }
                         
-                        if (foundPid <= 0) return new { ok = false, error = $"프로세스를 찾을 수 없습니다: {target}" };
+                        string target = (string)input.target;
+                        Console.Error.WriteLine($"[OnVoiceComBridge] 🔍 프로세스 찾기 시도: {target}");
                         
-                        Console.WriteLine($"[OnVoiceComBridge] ✅ {target} 찾기 성공: PID={foundPid}");
-                        return new { ok = true, pid = foundPid };
+                        int foundPid = 0;
+                        try
+                        {
+                            // 정의된 인터페이스를 사용하여 COM 메서드 호출
+                            // Marshal.GetObjectForIUnknown을 사용하여 인터페이스로 변환
+                            // 정의된 인터페이스를 사용하여 COM 메서드 호출
+                            // Marshal.GetObjectForIUnknown을 사용하여 인터페이스로 변환
+                            var capturer = (IOnVoiceCapture)_capture;
+                            
+                            switch (target?.ToLower())
+                            {
+                                case "chrome": 
+                                    foundPid = capturer.FindChromeProcess(); 
+                                    break;
+                                case "edge": 
+                                    foundPid = capturer.FindEdgeProcess(); 
+                                    break;
+                                case "discord": 
+                                    foundPid = capturer.FindDiscordProcess(); 
+                                    break;
+                                default: 
+                                    return new { ok = false, error = $"Unknown target: {target}" };
+                            }
+                            
+                            if (foundPid <= 0) 
+                            {
+                                Console.Error.WriteLine($"[OnVoiceComBridge] ⚠️ 프로세스를 찾을 수 없습니다: {target}");
+                                return new { ok = false, error = $"프로세스를 찾을 수 없습니다: {target}" };
+                            }
+                            
+                            Console.Error.WriteLine($"[OnVoiceComBridge] ✅ {target} 찾기 성공: PID={foundPid}");
+                            return new { ok = true, pid = foundPid };
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"[OnVoiceComBridge] ❌ 프로세스 찾기 오류: {ex.Message}");
+                            Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
+                            return new { ok = false, error = ex.Message };
+                        }
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"[OnVoiceComBridge] ❌ 프로세스 찾기 오류: {ex.Message}");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] ❌ find 명령 실행 오류: {ex.Message}");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
                         return new { ok = false, error = ex.Message };
                     }
 
@@ -190,7 +226,7 @@ namespace OnVoiceComBridge
                         var ocrEndTime = DateTime.UtcNow;
                         var ocrTime = (ocrEndTime - ocrStartTime).TotalSeconds;
                         
-                        Console.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText.Length}자 추출 ({ocrTime:F3}초)");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] OCR 완료: {recognizedText.Length}자 추출 ({ocrTime:F3}초)");
                         
                         var texts = SplitTextToLines(recognizedText);
                         
@@ -326,9 +362,54 @@ namespace OnVoiceComBridge
         private static void EnsureComObject()
         {
             if (_capture != null) return;
-            const string progId = "OnVoiceAudioBridge.OnVoiceCapture"; 
-            Type t = Type.GetTypeFromProgID(progId, throwOnError: true) ?? throw new InvalidOperationException($"COM ProgID not found: {progId}");
-            _capture = Activator.CreateInstance(t) ?? throw new InvalidOperationException($"Failed to create instance: {progId}");
+            const string progId = "OnVoiceAudioBridge.OnVoiceCapture";
+            // CLSID from manifest: {fe3c62ec-02f2-4c63-8266-d538a86fd7f9}
+            var clsid = new Guid("fe3c62ec-02f2-4c63-8266-d538a86fd7f9");
+            
+            try
+            {
+                // 먼저 ProgID로 시도
+                Type? t = Type.GetTypeFromProgID(progId, throwOnError: false);
+                
+                // ProgID로 실패하면 CLSID로 시도
+                if (t == null)
+                {
+                    Console.Error.WriteLine($"[OnVoiceComBridge] ⚠️ ProgID로 COM 타입을 찾을 수 없습니다: {progId}");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] 🔍 CLSID로 시도: {clsid}");
+                    
+                    t = Type.GetTypeFromCLSID(clsid, throwOnError: false);
+                }
+                
+                if (t == null)
+                {
+                    // Registration-Free COM 또는 레지스트리 등록 문제
+                    string currentDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
+                    string dllPath = Path.Combine(currentDir, "OnVoiceAudioBridge.dll");
+                    string manifestPath = Path.Combine(currentDir, "OnVoiceAudioBridge.dll.manifest");
+                    
+                    Console.Error.WriteLine($"[OnVoiceComBridge] ⚠️ COM 타입을 찾을 수 없습니다 (ProgID: {progId}, CLSID: {clsid})");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] 현재 디렉토리: {currentDir}");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] DLL 경로: {dllPath} (존재: {File.Exists(dllPath)})");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] 매니페스트 경로: {manifestPath} (존재: {File.Exists(manifestPath)})");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] 💡 해결 방법: npm run register:com 실행");
+                    
+                    throw new InvalidOperationException($"COM type not found: ProgID={progId}, CLSID={clsid}. DLL: {File.Exists(dllPath)}, Manifest: {File.Exists(manifestPath)}");
+                }
+                
+                _capture = Activator.CreateInstance(t);
+                if (_capture == null)
+                {
+                    throw new InvalidOperationException($"Failed to create COM instance: {progId}");
+                }
+                
+                Console.Error.WriteLine($"[OnVoiceComBridge] ✅ COM 객체 생성 성공: {progId} (Type: {t.FullName})");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[OnVoiceComBridge] ❌ COM 객체 생성 실패: {ex.Message}");
+                Console.Error.WriteLine($"[OnVoiceComBridge] 스택 트레이스: {ex.StackTrace}");
+                throw;
+            }
         }
 
         private static void SubscribeComEvents()
@@ -338,12 +419,18 @@ namespace OnVoiceComBridge
 
             try
             {
+                // IConnectionPointContainer 인터페이스로 변환
+                // IConnectionPointContainer 인터페이스로 변환
                 var cpContainer = (IConnectionPointContainer)_capture;
                 var eventIID = new Guid("52b4a16b-9f83-4a3e-9240-4dd6676540ea"); 
                 IConnectionPoint? connectionPoint;
                 cpContainer.FindConnectionPoint(ref eventIID, out connectionPoint);
 
-                if (connectionPoint == null) return;
+                if (connectionPoint == null) 
+                {
+                    Console.Error.WriteLine($"[OnVoiceComBridge] ⚠️ ConnectionPoint를 찾을 수 없습니다.");
+                    return;
+                }
 
                 _connectionPoint = connectionPoint;
                 _eventSink = new OnVoiceCaptureEventSink();
@@ -352,7 +439,7 @@ namespace OnVoiceComBridge
                 try
                 {
                     _connectionPoint.Advise(pUnkSink, out _connectionCookie);
-                    Console.WriteLine($"[OnVoiceComBridge] COM 이벤트 구독 성공 (Cookie: {_connectionCookie})");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] COM 이벤트 구독 성공 (Cookie: {_connectionCookie})");
                 }
                 finally
                 {
@@ -455,14 +542,14 @@ namespace OnVoiceComBridge
                     {
                         session.SimpleAudioVolume.Volume = volume;
                         found = true;
-                        Console.WriteLine($"[OnVoiceComBridge] ✅ 볼륨 조절 성공: PID={targetPid}, Volume={volume:F2}");
+                        Console.Error.WriteLine($"[OnVoiceComBridge] ✅ 볼륨 조절 성공: PID={targetPid}, Volume={volume:F2}");
                         break;
                     }
                 }
                 
                 if (!found)
                 {
-                    Console.WriteLine($"[OnVoiceComBridge] ⚠️ PID {targetPid}에 해당하는 오디오 세션을 찾을 수 없습니다.");
+                    Console.Error.WriteLine($"[OnVoiceComBridge] ⚠️ PID {targetPid}에 해당하는 오디오 세션을 찾을 수 없습니다.");
                 }
                 
                 return new { ok = found, pid = targetPid, volume = volume };
@@ -550,7 +637,7 @@ namespace OnVoiceComBridge
         }
     }
 
-    [ComImport, Guid("43a468da-7889-46c9-99de-38cb93e4e649"), InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
+    [ComImport, Guid("43a468da-7889-46c9-99de-38cb93e4e649"), InterfaceType(ComInterfaceType.InterfaceIsDual)]
     public interface IOnVoiceCapture
     {
         [DispId(1)] void StartCapture(int pid);
