@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron';
 import * as path from 'path';
+import axios from 'axios';
 import { getEditModeState, setEditModeState } from '../state/editMode';
 
 let overlayTrayUpdateCallback: (() => void) | null = null;

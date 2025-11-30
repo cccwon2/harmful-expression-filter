@@ -21,8 +21,8 @@ const pendingRequests = new Map<
   { resolve: (value: any) => void; reject: (reason?: any) => void; timer: NodeJS.Timeout }
 >();
 const BRIDGE_TIMEOUT_MS = 10000; // Increased timeout for process startup
-const SERVER_REQUEST_TIMEOUT = 3000; // OCR은 1초 이내 유해 판독 및 블러 처리가 목표이므로 3초로 설정
-const SERVER_REQUEST_RETRY_COUNT = 1; // 재시도 횟수 (타임아웃이 짧으므로 1회만 재시도)
+const SERVER_REQUEST_TIMEOUT = 2000; // OCR은 1초 이내 유해 판독 및 블러 처리가 목표이므로 2초로 설정
+const SERVER_REQUEST_RETRY_COUNT = 0; // 재시도 없음 (타임아웃이 발생하면 즉시 false 반환)
 
 function getBridgePath(): string {
   let exePath: string;
@@ -449,17 +449,20 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
       lastError = error;
       const isTimeout = error.code === "ECONNABORTED" || error.message?.includes("timeout");
 
-      if (isTimeout && attempt < SERVER_REQUEST_RETRY_COUNT) {
-        // 재시도는 조용히 진행 (로그 없음)
+      // 타임아웃이면 즉시 false 반환 (재시도 없음)
+      if (isTimeout) {
+        console.warn(
+          `[OnVoiceBridge] ⚠️ 서버 AI 분석 타임아웃 (${SERVER_REQUEST_TIMEOUT}ms) - 유해하지 않은 것으로 간주`
+        );
+        return { isHarmful: false, confidence: 0.0 };
+      }
+
+      // 타임아웃이 아닌 다른 에러는 재시도
+      if (attempt < SERVER_REQUEST_RETRY_COUNT) {
         continue; // 재시도
       } else {
         // 마지막 시도 실패 시에만 에러 로그 출력
-        if (attempt === SERVER_REQUEST_RETRY_COUNT) {
-          console.error(
-            `[OnVoiceBridge] ⚠️ 서버 AI 분석 실패 (${SERVER_REQUEST_TIMEOUT}ms 타임아웃):`,
-            error.message || error
-          );
-        }
+        console.warn(`[OnVoiceBridge] ⚠️ 서버 AI 분석 실패:`, error.message || error);
         break; // 재시도 중단
       }
     }
