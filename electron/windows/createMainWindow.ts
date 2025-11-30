@@ -10,7 +10,7 @@ export function createMainWindow(): BrowserWindow {
 
   const mainWindow = new BrowserWindow({
     width: 400,
-    height: 280,
+    height: 320,
     backgroundColor: '#0a0a0a',
     title: "OnVoice",
     show: true, // 대시보드를 기본으로 표시
