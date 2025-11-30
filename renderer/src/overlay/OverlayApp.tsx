@@ -16,6 +16,11 @@ export const OverlayApp: React.FC = () => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const blindTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const BLIND_DURATION_MS = 3000;
+  
+  // 마우스 위치 추적을 위한 ref (성능 최적화)
+  const mousePositionRef = useRef<{ x: number; y: number } | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+  const isSelectingRef = useRef<boolean>(false);
 
   // 최신 상태를 항상 참조할 수 있는 Ref
   const latestStateRef = useRef({
@@ -204,10 +209,11 @@ export const OverlayApp: React.FC = () => {
         e.preventDefault();
         console.log("[Overlay] ESC 키 감지됨");
         
-        if (selectionState?.isSelecting) {
+        if (isSelectingRef.current) {
           console.log("[Overlay] ROI 선택 중 취소");
           setSelectionState(null);
           setIsSelectionComplete(false);
+          isSelectingRef.current = false;
           window.api?.roi?.sendCancelSelection();
           return;
         }
@@ -247,7 +253,7 @@ export const OverlayApp: React.FC = () => {
     };
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [selectionState]);
+  }, []); // selectionState 의존성 제거 - ref 사용
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
@@ -256,6 +262,7 @@ export const OverlayApp: React.FC = () => {
 
       setIsMonitoring(false);
       setRoi(undefined);
+      isSelectingRef.current = true;
       setSelectionState({
         isSelecting: true,
         startX: e.clientX,
@@ -267,12 +274,32 @@ export const OverlayApp: React.FC = () => {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!selectionState?.isSelecting) return;
-      setSelectionState((prev) => (prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null));
+      if (!isSelectingRef.current) return;
+      
+      // 마우스 위치를 ref에 저장 (상태 업데이트 없이)
+      mousePositionRef.current = { x: e.clientX, y: e.clientY };
+      
+      // requestAnimationFrame으로 상태 업데이트 스케줄링 (렌더링 최적화)
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          if (mousePositionRef.current && isSelectingRef.current) {
+            setSelectionState((prev) => {
+              if (!prev || !prev.isSelecting) return prev;
+              return { 
+                ...prev, 
+                currentX: mousePositionRef.current!.x, 
+                currentY: mousePositionRef.current!.y 
+              };
+            });
+          }
+          rafIdRef.current = null;
+        });
+      }
     };
 
     const handleMouseUp = () => {
-      if (!selectionState?.isSelecting) return;
+      if (!isSelectingRef.current) return;
+      isSelectingRef.current = false;
       const rect: ROI = {
         x: Math.min(selectionState.startX, selectionState.currentX),
         y: Math.min(selectionState.startY, selectionState.currentY),
@@ -282,6 +309,7 @@ export const OverlayApp: React.FC = () => {
 
       if (rect.width < 10 || rect.height < 10) {
         setSelectionState(null);
+        isSelectingRef.current = false;
         window.api?.roi?.sendCancelSelection();
         return;
       }
@@ -290,6 +318,7 @@ export const OverlayApp: React.FC = () => {
       setMode("detect");
       setIsSelectionComplete(true);
       setSelectionState(null);
+      isSelectingRef.current = false;
       window.api?.overlay?.startMonitoring?.();
       setIsMonitoring(true);
     };
@@ -301,8 +330,15 @@ export const OverlayApp: React.FC = () => {
       window.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      // cleanup: pending requestAnimationFrame 취소
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      mousePositionRef.current = null;
+      isSelectingRef.current = false;
     };
-  }, [selectionState]);
+  }, []); // selectionState 의존성 제거 - ref 사용으로 클로저 문제 해결
 
   const selectionRect = selectionState
     ? {
