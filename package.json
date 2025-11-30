@@ -17,7 +17,7 @@
     "start": "cross-env NODE_ENV=production DOTNET_ROOT=\"C:\\Program Files\\dotnet\" electron .",
     "build:renderer": "vite build",
     "build:electron": "electron-builder",
-    "build:portable": "electron-builder --win dir --x64 && if exist dist\\win-unpacked (move dist\\win-unpacked dist\\OnVoice-portable)",
+    "build:portable": "electron-builder --win dir --x64 --config.directories.output=dist/OnVoice-portable && if exist dist\\OnVoice-portable\\win-unpacked (xcopy /E /I /Y dist\\OnVoice-portable\\win-unpacked\\* dist\\OnVoice-portable\\ && rmdir /s /q dist\\OnVoice-portable\\win-unpacked 2>nul)",
     "prebuild": "taskkill /F /IM OnVoiceComBridge.exe 2>nul & taskkill /F /IM dllhost.exe 2>nul & taskkill /F /IM electron.exe 2>nul || exit 0",
     "build": "npm run prebuild && npm run build:all && npm run build:renderer && npm run build:electron",
     "build:win": "npm run build",
@@ -65,6 +65,11 @@
     "asar": true,
     "directories": {
       "output": "dist"
+    },
+    "portable": {
+      "directories": {
+        "output": "dist/OnVoice-portable"
+      }
     },
     "win": {
       "target": "nsis",
