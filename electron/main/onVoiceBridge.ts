@@ -31,7 +31,43 @@ function getBridgePath(): string {
     // NSIS 설치 버전과 포터블 버전 모두 동일하게 process.resourcesPath 사용
     // - NSIS: {설치경로}/resources
     // - 포터블 (dir): {실행파일경로}/resources
-    exePath = path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe");
+    let resourcesPath = process.resourcesPath;
+    
+    // process.resourcesPath가 없으면 app.getPath('exe')를 사용하여 계산
+    if (!resourcesPath) {
+      console.warn(`[OnVoiceBridge] ⚠️ process.resourcesPath가 undefined입니다. app.getPath('exe')를 사용하여 계산합니다.`);
+      try {
+        const exePath = app.getPath('exe');
+        // 실행 파일이 있는 디렉토리의 resources 폴더
+        resourcesPath = path.join(path.dirname(exePath), 'resources');
+        console.log(`[OnVoiceBridge] 💡 계산된 resourcesPath: ${resourcesPath}`);
+        
+        // 계산된 경로가 존재하는지 확인
+        if (!existsSync(resourcesPath)) {
+          console.error(`[OnVoiceBridge] ❌ 계산된 resourcesPath가 존재하지 않습니다: ${resourcesPath}`);
+          // 추가 폴백: __dirname 기준
+          const fallbackPath = path.join(__dirname, "..", "..", "resources", "bin", "OnVoiceComBridge.exe");
+          console.error(`[OnVoiceBridge] 💡 폴백 경로 시도: ${fallbackPath}`);
+          if (existsSync(fallbackPath)) {
+            console.warn(`[OnVoiceBridge] ⚠️ 폴백 경로 사용: ${fallbackPath}`);
+            return path.resolve(fallbackPath);
+          }
+          throw new Error(`[OnVoiceBridge] ❌ resourcesPath를 찾을 수 없습니다. exePath: ${exePath}, resourcesPath: ${resourcesPath}`);
+        }
+      } catch (err: any) {
+        console.error(`[OnVoiceBridge] ❌ app.getPath('exe') 실패: ${err.message}`);
+        // 최종 폴백: __dirname 기준
+        const fallbackPath = path.join(__dirname, "..", "..", "resources", "bin", "OnVoiceComBridge.exe");
+        console.error(`[OnVoiceBridge] 💡 최종 폴백 경로 시도: ${fallbackPath}`);
+        if (existsSync(fallbackPath)) {
+          console.warn(`[OnVoiceBridge] ⚠️ 최종 폴백 경로 사용: ${fallbackPath}`);
+          return path.resolve(fallbackPath);
+        }
+        throw new Error(`[OnVoiceBridge] ❌ process.resourcesPath가 undefined이고 폴백 경로도 찾을 수 없습니다.`);
+      }
+    }
+    
+    exePath = path.join(resourcesPath, "bin", "OnVoiceComBridge.exe");
   } else {
     // [개발 모드] Debug 빌드를 우선 사용, 없으면 Release 사용
     const debugPath = path.join(
@@ -74,6 +110,10 @@ function spawnBridge(): void {
 
   const exePath = getBridgePath();
   console.log(`[OnVoiceBridge] 🚀 Spawning Bridge Process: ${exePath}`);
+  console.log(`[OnVoiceBridge] 🔍 배포 모드 정보:`);
+  console.log(`[OnVoiceBridge]   - app.isPackaged: ${app.isPackaged}`);
+  console.log(`[OnVoiceBridge]   - process.resourcesPath: ${process.resourcesPath || "(없음)"}`);
+  console.log(`[OnVoiceBridge]   - exePath (절대 경로): ${path.resolve(exePath)}`);
 
   // 파일 존재 여부 확인 (포터블 배포 포함)
   if (!existsSync(exePath)) {
@@ -82,6 +122,29 @@ function spawnBridge(): void {
     if (app.isPackaged) {
       console.error(`[OnVoiceBridge] 💡 배포 모드: process.resourcesPath = ${process.resourcesPath}`);
       console.error(`[OnVoiceBridge] 💡 예상 경로: ${path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe")}`);
+      
+      // 실제 파일 시스템 확인
+      const fs = require("fs");
+      const resourcesPath = process.resourcesPath;
+      if (resourcesPath) {
+        console.error(`[OnVoiceBridge] 🔍 Resources 폴더 확인:`);
+        try {
+          const resourcesExists = fs.existsSync(resourcesPath);
+          console.error(`[OnVoiceBridge]   - resources 폴더 존재: ${resourcesExists}`);
+          if (resourcesExists) {
+            const binPath = path.join(resourcesPath, "bin");
+            const binExists = fs.existsSync(binPath);
+            console.error(`[OnVoiceBridge]   - bin 폴더 존재: ${binExists}`);
+            if (binExists) {
+              const files = fs.readdirSync(binPath);
+              console.error(`[OnVoiceBridge]   - bin 폴더 내용: ${files.join(", ")}`);
+            }
+          }
+        } catch (err: any) {
+          console.error(`[OnVoiceBridge]   - 폴더 확인 실패: ${err.message}`);
+        }
+      }
+      
       throw new Error(errorMsg);
     } else {
       // 개발 모드에서는 에러를 throw하지 않고 경고만 출력
@@ -89,12 +152,24 @@ function spawnBridge(): void {
       bridgeProcess = null;
       return;
     }
+  } else {
+    console.log(`[OnVoiceBridge] ✅ Bridge 실행 파일 확인됨: ${exePath}`);
   }
 
   try {
+    // exePath가 유효한지 확인
+    if (!exePath || exePath.trim() === "") {
+      throw new Error(`[OnVoiceBridge] ❌ Bridge 경로가 비어있습니다. exePath: ${exePath}`);
+    }
+    
     // 절대 경로로 변환하여 사용
     const absolutePath = path.resolve(exePath);
     console.log(`[OnVoiceBridge] 📍 절대 경로: ${absolutePath}`);
+    
+    // absolutePath가 유효한지 확인
+    if (!absolutePath || absolutePath.trim() === "" || absolutePath === "." || absolutePath === "..") {
+      throw new Error(`[OnVoiceBridge] ❌ Bridge 절대 경로가 유효하지 않습니다. absolutePath: ${absolutePath}, exePath: ${exePath}`);
+    }
 
     // 파일 존재 여부 재확인 (절대 경로 기준)
     if (!existsSync(absolutePath)) {
@@ -118,14 +193,66 @@ function spawnBridge(): void {
       // 이렇게 하면 COM DLL과 매니페스트 파일을 찾을 수 있습니다
       const bridgeDir = path.dirname(absolutePath);
       console.log(`[OnVoiceBridge] 📁 Bridge 작업 디렉토리: ${bridgeDir}`);
+      
+      // 작업 디렉토리 존재 확인
+      const fs = require("fs");
+      if (!fs.existsSync(bridgeDir)) {
+        throw new Error(`Bridge 작업 디렉토리가 존재하지 않습니다: ${bridgeDir}`);
+      }
+      console.log(`[OnVoiceBridge] ✅ Bridge 작업 디렉토리 확인됨`);
 
-      bridgeProcess = spawn(absolutePath, [], {
+      // spawn 호출 직전에 absolutePath 재확인
+      if (!absolutePath || absolutePath.trim() === "") {
+        throw new Error(`[OnVoiceBridge] ❌ spawn 호출 직전 absolutePath가 비어있습니다: ${absolutePath}`);
+      }
+      
+      // Windows에서 .exe 확장자 명시적으로 확인
+      let finalPath = absolutePath.endsWith('.exe') ? absolutePath : `${absolutePath}.exe`;
+      
+      // 경로를 절대 경로로 다시 정규화 (Windows 경로 문제 방지)
+      finalPath = path.resolve(finalPath);
+      
+      console.log(`[OnVoiceBridge] 🔍 spawn 호출 직전 경로 확인:`);
+      console.log(`[OnVoiceBridge]   - absolutePath: ${absolutePath}`);
+      console.log(`[OnVoiceBridge]   - finalPath: ${finalPath}`);
+      console.log(`[OnVoiceBridge]   - finalPath 타입: ${typeof finalPath}`);
+      console.log(`[OnVoiceBridge]   - finalPath 길이: ${finalPath.length}`);
+      console.log(`[OnVoiceBridge]   - finalPath 존재 여부: ${existsSync(finalPath)}`);
+      
+      // finalPath가 실제로 존재하는지 확인
+      if (!existsSync(finalPath)) {
+        console.warn(`[OnVoiceBridge] ⚠️ finalPath가 존재하지 않습니다. absolutePath 사용: ${absolutePath}`);
+        // absolutePath로 다시 시도
+        if (!existsSync(absolutePath)) {
+          throw new Error(`[OnVoiceBridge] ❌ Bridge 실행 파일을 찾을 수 없습니다. absolutePath: ${absolutePath}, finalPath: ${finalPath}`);
+        }
+        // absolutePath가 존재하면 그것을 사용
+        finalPath = path.resolve(absolutePath);
+        console.log(`[OnVoiceBridge] ⚠️ absolutePath를 finalPath로 사용: ${finalPath}`);
+      }
+
+      // spawn 호출 직전 최종 확인
+      if (!finalPath || finalPath.trim() === "" || typeof finalPath !== "string") {
+        throw new Error(`[OnVoiceBridge] ❌ spawn 호출 직전 finalPath가 유효하지 않습니다: ${finalPath} (타입: ${typeof finalPath})`);
+      }
+      
+      // 경로를 문자열로 명시적으로 변환 (혹시 모를 타입 문제 방지)
+      const spawnPath = String(finalPath).trim();
+      console.log(`[OnVoiceBridge] 🚀 spawn 호출 준비 완료:`);
+      console.log(`[OnVoiceBridge]   - spawnPath: ${spawnPath}`);
+      console.log(`[OnVoiceBridge]   - spawnPath 타입: ${typeof spawnPath}`);
+      console.log(`[OnVoiceBridge]   - spawnPath 존재 여부: ${existsSync(spawnPath)}`);
+
+      // spawn 호출 (try-catch로 감싸져 있음)
+      bridgeProcess = spawn(spawnPath, [], {
         stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr 모두 pipe로 받아서 필터링
         windowsHide: true,
         cwd: bridgeDir, // 작업 디렉토리를 Bridge 실행 파일이 있는 폴더로 설정
         // Windows에서 실행 권한 문제를 피하기 위해 shell 옵션은 사용하지 않음
         // (shell: true는 보안상 권장되지 않음)
       });
+      
+      console.log(`[OnVoiceBridge] ✅ Bridge 프로세스 spawn 완료 (PID: ${bridgeProcess.pid})`);
 
       // stderr 필터링: 0자 추출 로그는 완전히 무시
       bridgeProcess.stderr?.on("data", (data: Buffer) => {

@@ -102,12 +102,11 @@
     ],
     "extraResources": [
       {
-        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe",
-        "to": "bin/OnVoiceComBridge.exe"
-      },
-      {
-        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe.manifest",
-        "to": "bin/OnVoiceComBridge.exe.manifest"
+        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "native/OnVoiceAudioBridge.dll",

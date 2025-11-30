@@ -173,19 +173,52 @@ app.whenReady().then(async () => {
   registerDashboardHandlers();
 
   // COM DLL 등록 확인 및 자동 등록 시도 (Registration-Free COM 또는 레지스트리 등록 방식 지원)
+  console.log("[Main] 🔍 COM DLL 등록 상태 확인 중...");
+  if (app.isPackaged) {
+    console.log(`[Main]   - 배포 모드: process.resourcesPath = ${process.resourcesPath || "(없음)"}`);
+    if (process.resourcesPath) {
+      const dllPath = path.join(process.resourcesPath, "native", "OnVoiceAudioBridge.dll");
+      const fs = require("fs");
+      const dllExists = fs.existsSync(dllPath);
+      console.log(`[Main]   - COM DLL 파일 존재: ${dllExists} (${dllPath})`);
+      if (!dllExists) {
+        console.error(`[Main] ❌ COM DLL 파일을 찾을 수 없습니다: ${dllPath}`);
+        console.error(`[Main] 💡 빌드가 제대로 완료되었는지 확인하세요: npm run build:all`);
+      }
+      
+      // 매니페스트 파일도 확인
+      const manifestPath = path.join(process.resourcesPath, "native", "OnVoiceAudioBridge.dll.manifest");
+      const manifestExists = fs.existsSync(manifestPath);
+      console.log(`[Main]   - DLL 매니페스트 파일 존재: ${manifestExists} (${manifestPath})`);
+      
+      const appManifestPath = path.join(process.resourcesPath, "..", "OnVoice.exe.manifest");
+      const appManifestExists = fs.existsSync(appManifestPath);
+      console.log(`[Main]   - 앱 매니페스트 파일 존재: ${appManifestExists} (${appManifestPath})`);
+    }
+  }
+  
   const isRegistered = await checkComDllRegistered();
+  console.log(`[Main]   - COM DLL 등록 상태: ${isRegistered ? "등록됨" : "미등록"}`);
+  
   if (!isRegistered) {
     console.log("[Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...");
-    await registerComDll();
-    
-    // 등록 후 다시 확인
-    const isNowRegistered = await checkComDllRegistered();
-    if (!isNowRegistered) {
-      console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다.");
-      console.warn("[Main] 💡 Registration-Free COM 매니페스트 파일이 있는지 확인하거나, 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.");
-      console.warn(`[Main] 💡 수동 등록: regsvr32.exe "${path.join(process.resourcesPath || __dirname, "native", "OnVoiceAudioBridge.dll")}"`);
+    const registered = await registerComDll();
+    if (registered) {
+      // 등록 후 다시 확인
+      const isNowRegistered = await checkComDllRegistered();
+      if (isNowRegistered) {
+        console.log("[Main] ✅ COM DLL 등록 완료");
+      } else {
+        console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다.");
+        console.warn("[Main] 💡 Registration-Free COM 매니페스트 파일이 있는지 확인하거나, 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.");
+        const dllPath = app.isPackaged
+          ? path.join(process.resourcesPath || "", "native", "OnVoiceAudioBridge.dll")
+          : path.join(__dirname, "../native/OnVoiceAudioBridge.dll");
+        console.warn(`[Main] 💡 수동 등록: regsvr32.exe "${dllPath}"`);
+        console.warn(`[Main] 💡 또는 관리자 권한으로 앱을 실행하세요.`);
+      }
     } else {
-      console.log("[Main] ✅ COM DLL 등록 확인됨 (Registration-Free COM 또는 레지스트리 등록)");
+      console.warn("[Main] ⚠️ COM DLL 등록 시도 실패");
     }
   } else {
     console.log("[Main] ✅ COM DLL이 이미 등록되어 있습니다 (Registration-Free COM 또는 레지스트리 등록).");
