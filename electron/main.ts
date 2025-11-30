@@ -1,7 +1,6 @@
 // ⚠️ 반드시 파일의 최상단(import 문보다 위)에 작성해야 합니다.
 import "./env";
 
-
 import { app, BrowserWindow, Menu, ipcMain, globalShortcut, desktopCapturer, screen } from "electron";
 import { createOverlayWindow, setExitEditModeAndHideHandler } from "./windows/createOverlayWindow";
 import { createMainWindow } from "./windows/createMainWindow";
@@ -31,7 +30,7 @@ if (app.isPackaged && process.env.NODE_ENV !== "production") {
   process.env.NODE_ENV = "production";
 }
 
-const CAPTURE_INTERVAL_MS = 800; // 0.8초 간격 (성능 최적화를 위해)
+const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
@@ -117,13 +116,13 @@ const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   // 이미 다른 인스턴스가 실행 중이면 종료
-  console.log('[Main] 다른 인스턴스가 이미 실행 중입니다. 종료합니다.');
+  console.log("[Main] 다른 인스턴스가 이미 실행 중입니다. 종료합니다.");
   app.quit();
   process.exit(0);
 } else {
   // 두 번째 인스턴스가 실행되려고 할 때 기존 인스턴스에 포커스
-  app.on('second-instance', () => {
-    console.log('[Main] 두 번째 인스턴스 실행 시도 - 기존 인스턴스에 포커스');
+  app.on("second-instance", () => {
+    console.log("[Main] 두 번째 인스턴스 실행 시도 - 기존 인스턴스에 포커스");
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
@@ -145,13 +144,13 @@ app.whenReady().then(async () => {
   console.log(`[Main]   - process.env.NODE_ENV: ${process.env.NODE_ENV || "(설정 안 됨)"}`);
   console.log(`[Main]   - process.resourcesPath: ${process.resourcesPath || "(없음)"}`);
   console.log(`[Main]   - __dirname: ${__dirname}`);
-  
+
   // .env 파일 로드
   // 🔍 배포 환경(.exe)에서는 process.resourcesPath 사용
   // 🔍 개발 환경에서는 프로젝트 루트 사용
   const envPath = app.isPackaged
-    ? path.join(process.resourcesPath, ".env")  // ✅ 배포: resources/.env
-    : path.join(__dirname, "../.env");          // 🛠️ 개발: 루트 .env
+    ? path.join(process.resourcesPath, ".env") // ✅ 배포: resources/.env
+    : path.join(__dirname, "../.env"); // 🛠️ 개발: 루트 .env
 
   const envResult = dotenv.config({ path: envPath });
   console.log(`[Main] .env 파일 로드 시도 (경로: ${envPath})`);
@@ -168,7 +167,7 @@ app.whenReady().then(async () => {
   console.log("[Main] NODE_ENV:", process.env.NODE_ENV || "(설정 안 됨)");
 
   registerServerHandlers();
-  
+
   // 대시보드 IPC 핸들러 등록
   registerDashboardHandlers();
 
@@ -185,21 +184,21 @@ app.whenReady().then(async () => {
         console.error(`[Main] ❌ COM DLL 파일을 찾을 수 없습니다: ${dllPath}`);
         console.error(`[Main] 💡 빌드가 제대로 완료되었는지 확인하세요: npm run build:all`);
       }
-      
+
       // 매니페스트 파일도 확인
       const manifestPath = path.join(process.resourcesPath, "native", "OnVoiceAudioBridge.dll.manifest");
       const manifestExists = fs.existsSync(manifestPath);
       console.log(`[Main]   - DLL 매니페스트 파일 존재: ${manifestExists} (${manifestPath})`);
-      
+
       const appManifestPath = path.join(process.resourcesPath, "..", "OnVoice.exe.manifest");
       const appManifestExists = fs.existsSync(appManifestPath);
       console.log(`[Main]   - 앱 매니페스트 파일 존재: ${appManifestExists} (${appManifestPath})`);
     }
   }
-  
+
   const isRegistered = await checkComDllRegistered();
   console.log(`[Main]   - COM DLL 등록 상태: ${isRegistered ? "등록됨" : "미등록"}`);
-  
+
   if (!isRegistered) {
     console.log("[Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...");
     const registered = await registerComDll();
@@ -210,7 +209,9 @@ app.whenReady().then(async () => {
         console.log("[Main] ✅ COM DLL 등록 완료");
       } else {
         console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다.");
-        console.warn("[Main] 💡 Registration-Free COM 매니페스트 파일이 있는지 확인하거나, 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.");
+        console.warn(
+          "[Main] 💡 Registration-Free COM 매니페스트 파일이 있는지 확인하거나, 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다."
+        );
         const dllPath = app.isPackaged
           ? path.join(process.resourcesPath || "", "native", "OnVoiceAudioBridge.dll")
           : path.join(__dirname, "../native/OnVoiceAudioBridge.dll");
@@ -229,14 +230,14 @@ app.whenReady().then(async () => {
     console.warn("[Main] FastAPI server가 실행 중이 아닙니다. `server` 폴더에서 `python main.py`를 실행하세요.");
   } else {
     console.log("[Main] FastAPI server 연결이 확인되었습니다.");
-    
+
     // 서버에서 초기 threshold 값 가져와서 로컬 스토어에 저장 (없는 경우에만)
     try {
-      const axios = (await import('axios')).default;
+      const axios = (await import("axios")).default;
       const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:8000";
       const response = await axios.get(`${serverUrl}/health`, { timeout: 3000 });
       const serverThreshold = response.data?.threshold;
-      
+
       if (serverThreshold !== undefined && serverThreshold !== null) {
         // 로컬 스토어에 threshold가 없으면 서버 값 저장
         const localThreshold = getThreshold();
@@ -248,7 +249,7 @@ app.whenReady().then(async () => {
         }
       }
     } catch (error: any) {
-      console.warn('[Main] 서버에서 threshold 가져오기 실패 (무시):', error?.message || error);
+      console.warn("[Main] 서버에서 threshold 가져오기 실패 (무시):", error?.message || error);
     }
   }
 
@@ -274,7 +275,7 @@ app.whenReady().then(async () => {
   // 오버레이 창은 사용자가 OCR 모드를 선택할 때 생성됨 (미리 생성하지 않음)
   overlayWindow = null;
   console.log("[Main] 오버레이 윈도우는 모드 선택 시 생성됩니다");
-  
+
   // 대시보드 핸들러에 윈도우 참조 설정
   setWindows(overlayWindow, mainWindow);
 
@@ -366,11 +367,11 @@ app.whenReady().then(async () => {
       // Windows OCR + 분석 수행 (ROI 정보 포함)
       const result = roi
         ? await onVoiceBridge.performOCRAndAnalyze(imageBuffer, {
-          x: roi.x,
-          y: roi.y,
-          width: roi.width,
-          height: roi.height,
-        })
+            x: roi.x,
+            y: roi.y,
+            width: roi.width,
+            height: roi.height,
+          })
         : await onVoiceBridge.performOCR(imageBuffer);
 
       const requestTime = Date.now() - requestStartTime;
@@ -440,26 +441,20 @@ app.whenReady().then(async () => {
       // 1. 화면 캡처 (ROI 영역보다 약간 큰 크기만 캡처하여 성능 최적화)
       const primaryDisplay = screen.getPrimaryDisplay();
       const displaySize = primaryDisplay.size;
-      
+
       // ROI 영역을 기준으로 캡처 영역 계산 (ROI보다 20% 큰 영역만 캡처)
       const captureMargin = 0.2; // 20% 여유
       const captureX = Math.max(0, Math.floor(roi.x - roi.width * captureMargin));
       const captureY = Math.max(0, Math.floor(roi.y - roi.height * captureMargin));
-      const captureWidth = Math.min(
-        displaySize.width - captureX,
-        Math.floor(roi.width * (1 + captureMargin * 2))
-      );
-      const captureHeight = Math.min(
-        displaySize.height - captureY,
-        Math.floor(roi.height * (1 + captureMargin * 2))
-      );
-      
+      const captureWidth = Math.min(displaySize.width - captureX, Math.floor(roi.width * (1 + captureMargin * 2)));
+      const captureHeight = Math.min(displaySize.height - captureY, Math.floor(roi.height * (1 + captureMargin * 2)));
+
       // 최적화된 썸네일 크기 (ROI 영역보다 약간 큰 크기만)
       const optimizedThumbnailSize = {
         width: Math.min(displaySize.width, Math.max(roi.width * 1.5, 800)),
         height: Math.min(displaySize.height, Math.max(roi.height * 1.5, 600)),
       };
-      
+
       const sources = await desktopCapturer.getSources({
         types: ["screen"],
         thumbnailSize: optimizedThumbnailSize,
@@ -482,7 +477,7 @@ app.whenReady().then(async () => {
       const screenshotSize = screenshot.getSize();
       const scaleX = screenshotSize.width / displaySize.width;
       const scaleY = screenshotSize.height / displaySize.height;
-      
+
       // ROI 좌표를 썸네일 크기에 맞게 스케일링
       const cropX = Math.max(0, Math.floor(roi.x * scaleX));
       const cropY = Math.max(0, Math.floor(roi.y * scaleY));
@@ -549,10 +544,14 @@ app.whenReady().then(async () => {
         if (currentOverlayWindow && !currentOverlayWindow.isDestroyed()) {
           // is_harmful이 true인지 명확히 확인 (boolean 값)
           const isHarmful = is_harmful === true;
-          
+
           if (isHarmful) {
             // 유해 표현 감지 시에만 상세 로그 출력
-            console.warn(`[OCR] 🚨 유해 표현 감지 (${ocrElapsed}ms): "${extractedText.substring(0, 100)}${extractedText.length > 100 ? "..." : ""}"`);
+            console.warn(
+              `[OCR] 🚨 유해 표현 감지 (${ocrElapsed}ms): "${extractedText.substring(0, 100)}${
+                extractedText.length > 100 ? "..." : ""
+              }"`
+            );
             currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: true,
               words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
@@ -599,7 +598,7 @@ app.whenReady().then(async () => {
 
     // 모니터링이 활성화되어 있거나 ROI가 설정되어 있으면 중지
     const wasMonitoring = isMonitoring || currentROI !== null;
-    
+
     if (!wasMonitoring) {
       // 모니터링이 없어도 setup 모드로 전환하고 Edit Mode 활성화 (ESC 키 등)
       console.log("[OCR] Setup 모드로 전환 (모니터링 없음)", reason ? `(${reason})` : "");
@@ -644,7 +643,7 @@ app.whenReady().then(async () => {
         console.log("[OCR] 스토어에서 ROI 복원:", storedROI);
       }
     }
-    
+
     if (!currentROI) {
       console.warn("[OCR] 모니터링을 시작할 수 없습니다 - ROI가 정의되지 않음");
       return;
@@ -674,7 +673,7 @@ app.whenReady().then(async () => {
       captureAndProcessROI().catch((error: any) => {
         const errorMessage = error?.message || String(error);
         // 유해 표현 감지 관련이 아닌 경우에만 에러 로그 출력
-        if (!errorMessage.includes('timeout') && !errorMessage.includes('ECONNABORTED')) {
+        if (!errorMessage.includes("timeout") && !errorMessage.includes("ECONNABORTED")) {
           console.error(`[OCR] 캡처 루프 오류:`, errorMessage);
         }
       });
@@ -808,13 +807,13 @@ app.whenReady().then(async () => {
       if (stopMonitoring) {
         stopMonitoring("Renderer changed mode to setup");
       }
-      
+
       // Edit Mode 활성화 및 마우스 이벤트 활성화 (stopMonitoring이 early return하는 경우를 대비)
       setEditModeState(true);
       if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.setIgnoreMouseEvents(false);
         console.log("[Main] Edit Mode 활성화 및 마우스 이벤트 활성화됨 (ESC 키로 setup 모드 전환)");
-        
+
         // 오버레이에 setup 모드 신호 전송
         overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
         const storedROI = getROI();
@@ -824,7 +823,7 @@ app.whenReady().then(async () => {
           ...(storedROI ? { roi: storedROI } : {}),
         };
         overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
-        
+
         // 포커스 설정
         overlayWindow.focus();
       }
@@ -987,21 +986,21 @@ app.whenReady().then(async () => {
     const currentOverlayWindow: BrowserWindow = overlayWindow;
     if (!currentOverlayWindow.isDestroyed()) {
       currentOverlayWindow.webContents.once("did-finish-load", () => {
-      const savedROI = getROI();
-      const savedMode = getMode();
+        const savedROI = getROI();
+        const savedMode = getMode();
 
-      if (savedROI && savedMode && savedMode !== "setup") {
-        console.log("[Main] 저장된 상태 복원:", { savedROI, savedMode });
-        currentROI = savedROI;
-        setMode("detect");
-        setEditModeState(false, { hideOverlay: true }); // 오버레이 숨김 유지
+        if (savedROI && savedMode && savedMode !== "setup") {
+          console.log("[Main] 저장된 상태 복원:", { savedROI, savedMode });
+          currentROI = savedROI;
+          setMode("detect");
+          setEditModeState(false, { hideOverlay: true }); // 오버레이 숨김 유지
 
-        // 오버레이는 사용자가 대시보드에서 활성화할 때까지 숨김 상태 유지
-        // 상태만 복원하고 표시하지 않음
-        console.log("[Main] 오버레이 상태 복원 완료 (사용자 활성화 대기 중)");
-      } else {
-        console.log("[Main] 저장된 상태 없음 - 대시보드에서 설정 필요");
-      }
+          // 오버레이는 사용자가 대시보드에서 활성화할 때까지 숨김 상태 유지
+          // 상태만 복원하고 표시하지 않음
+          console.log("[Main] 오버레이 상태 복원 완료 (사용자 활성화 대기 중)");
+        } else {
+          console.log("[Main] 저장된 상태 없음 - 대시보드에서 설정 필요");
+        }
       });
     }
   }
@@ -1025,7 +1024,7 @@ app.whenReady().then(async () => {
     }
   });
 
-  app.on("activate", () => { });
+  app.on("activate", () => {});
 });
 
 app.on("window-all-closed", () => {
