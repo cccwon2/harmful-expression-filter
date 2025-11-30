@@ -1,8 +1,8 @@
-import { app, Menu, Tray, BrowserWindow, nativeImage } from 'electron';
+import { app, Menu, Tray, BrowserWindow, nativeImage, ipcMain } from 'electron';
 import type { NativeImage } from 'electron';
 import * as path from 'path';
 import { getEditModeState, setEditModeState } from './state/editMode';
-import { IPC_CHANNELS } from './ipc/channels';
+import { IPC_CHANNELS, DASHBOARD_CHANNELS } from './ipc/channels';
 import AudioManager from './main/AudioManager';
 import { getOnVoiceService } from './audio/onVoiceService';
 import { getVolumeLevel, setVolumeLevel, getThreshold, setThreshold } from './store';
@@ -142,38 +142,69 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
       {
         label: '영역 지정 (Select Region)',
         type: 'normal',
-        click: () => {
-          console.log('[Tray] Select Region requested');
-          // 오버레이가 표시되지 않은 경우 먼저 표시
-          if (!overlayWindow.isVisible()) {
-            overlayWindow.show();
-            overlayWindow.setSkipTaskbar(false);
-            console.log('[Tray] Overlay shown for region selection');
+        click: async () => {
+          console.log('[Tray] Select Region requested - OCR 모드로 전환');
+          
+          try {
+            // OCR 모드로 전환 (음성 모드가 활성화되어 있으면 중지)
+            // mainWindow를 찾아서 SELECT_MODE 이벤트 전송
+            const allWindows = BrowserWindow.getAllWindows();
+            const mainWindow = allWindows.find((win: BrowserWindow) => {
+              const url = win.webContents.getURL();
+              return url.includes('index.html') || (!url.includes('overlay.html') && url !== '');
+            });
+            
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              // mainWindow를 통해 SELECT_MODE 이벤트 전송
+              // dashboardHandlers의 SELECT_MODE 핸들러가 이를 받아서 처리
+              mainWindow.webContents.send(DASHBOARD_CHANNELS.SELECT_MODE, 'ocr');
+              console.log('[Tray] ✅ OCR 모드로 전환 요청 전송됨 (mainWindow를 통해)');
+            } else {
+              // mainWindow가 없으면 ipcMain을 통해 직접 이벤트 emit
+              console.log('[Tray] ⚠️ Main window를 찾을 수 없음. ipcMain을 통해 직접 호출');
+              const { ipcMain } = require('electron');
+              
+              // 가상의 이벤트 객체 생성
+              const fakeEvent = {
+                sender: {
+                  send: (channel: string, ...args: any[]) => {
+                    console.log(`[Tray] Fake event sender.send: ${channel}`, args);
+                  }
+                }
+              };
+              
+              // SELECT_MODE 핸들러 직접 호출
+              const listeners = (ipcMain as any).listeners(DASHBOARD_CHANNELS.SELECT_MODE);
+              if (listeners && listeners.length > 0) {
+                console.log('[Tray] ✅ SELECT_MODE 핸들러 발견, OCR 모드로 전환');
+                listeners[0](fakeEvent, 'ocr');
+              } else {
+                throw new Error('SELECT_MODE 핸들러를 찾을 수 없음');
+              }
+            }
+          } catch (error: any) {
+            console.error('[Tray] OCR 모드 전환 실패:', error);
+            // 폴백: 기존 setup 모드 진입 로직
+            console.log('[Tray] 폴백: Setup 모드로 진입');
+            if (!overlayWindow.isVisible()) {
+              overlayWindow.show();
+              overlayWindow.setSkipTaskbar(false);
+            }
+            if (handlers?.enterSetupMode) {
+              handlers.enterSetupMode();
+            } else {
+              overlayWindow.setIgnoreMouseEvents(false);
+              overlayWindow.focus();
+              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+              const { getROI } = require('./store');
+              const storedROI = getROI();
+              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
+                mode: 'setup',
+                ...(storedROI ? { roi: storedROI } : {}),
+              });
+            }
           }
           
-          if (handlers?.enterSetupMode) {
-            handlers.enterSetupMode();
-          } else {
-            overlayWindow.setIgnoreMouseEvents(false);
-            overlayWindow.focus();
-            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
-            const { getROI } = require('./store');
-            const storedROI = getROI();
-            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
-              mode: 'setup',
-              ...(storedROI ? { roi: storedROI } : {}),
-            });
-            console.log('[Tray] Setup mode activated via tray menu');
-            
-            // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
-            setTimeout(() => {
-              if (overlayWindow && overlayWindow.isVisible()) {
-                overlayWindow.focus();
-                overlayWindow.setIgnoreMouseEvents(false);
-                console.log('[Tray] Overlay focus and mouse events re-enabled after timeout (region selection)');
-              }
-            }, 100);
-          }
           updateContextMenu();
         },
       },
