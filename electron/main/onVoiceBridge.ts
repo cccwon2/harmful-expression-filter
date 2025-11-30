@@ -59,7 +59,10 @@ function spawnBridge(): void {
   if (bridgeProcess) return;
 
   // 개발 모드에서 이미 spawn이 실패한 경우 재시도하지 않음
+  // 단, bridgeSpawnFailed 플래그를 리셋할 수 있는 옵션 제공 (디버깅용)
   if (!app.isPackaged && bridgeSpawnFailed) {
+    // 개발 모드에서 재시도하려면 bridgeSpawnFailed를 false로 설정하거나
+    // 앱을 재시작하면 다시 시도됩니다
     return;
   }
 
