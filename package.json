@@ -66,11 +66,6 @@
     "directories": {
       "output": "dist"
     },
-    "portable": {
-      "directories": {
-        "output": "dist/OnVoice-portable"
-      }
-    },
     "win": {
       "target": "nsis",
       "requestedExecutionLevel": "requireAdministrator"
