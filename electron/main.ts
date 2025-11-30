@@ -427,21 +427,31 @@ app.whenReady().then(async () => {
           console.log(`[OCR] 텍스트 추출 없음 (${ocrElapsed}ms)`);
         }
 
-        // 5. 유해성 감지 시 알림
+        // is_harmful 값 로그 출력 (디버깅용)
+        console.log(`[OCR] 서버 AI 분석 결과: is_harmful=${is_harmful}, 타입=${typeof is_harmful}`);
+
+        // 5. 유해성 감지 시 알림 (서버 AI 모델 기반)
         if (overlayWindow && !overlayWindow.isDestroyed()) {
-          if (is_harmful) {
-            console.warn(`[OCR] 🚨 유해 표현 감지: ${harmful_words.join(", ")}`);
+          // is_harmful이 true인지 명확히 확인 (boolean 또는 truthy 값)
+          const isHarmful = is_harmful === true || is_harmful === 1 || is_harmful === "true";
+          
+          if (isHarmful) {
+            console.warn(`[OCR] 🚨 유해 표현 감지 (AI 모델)`);
             overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: true,
-              words: harmful_words,
+              words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
             });
+            console.log(`[OCR] ✅ ALERT_FROM_SERVER 전송 완료 (harmful=true)`);
           } else {
             // harmful=false도 전송하여 블라인드 해제 타이머 시작
             overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: false,
               words: [],
             });
+            console.log(`[OCR] ✅ ALERT_FROM_SERVER 전송 완료 (harmful=false)`);
           }
+        } else {
+          console.warn(`[OCR] ⚠️ 오버레이 윈도우가 없거나 파괴됨 - ALERT_FROM_SERVER 전송 불가`);
         }
 
         if (!isMonitoring || !currentROI) {

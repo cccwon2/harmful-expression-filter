@@ -408,14 +408,27 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
   try {
     const serverUrl = getServerUrl();
     const response = await axios.post<{
-      has_violation: boolean;
-      ai_analysis: { is_harmful: boolean; confidence: number } | null;
-    }>(`${serverUrl}/analyze`, { text: text.trim() }, { timeout: SERVER_REQUEST_TIMEOUT });
+      has_violation: boolean | number;
+      ai_analysis: { is_harmful: boolean | number; confidence: number } | null;
+    }>(`${serverUrl}/analyze`, { text: text.trim(), use_ai: true }, { timeout: SERVER_REQUEST_TIMEOUT });
 
-    if (response.data.ai_analysis)
-      return { isHarmful: response.data.ai_analysis.is_harmful, confidence: response.data.ai_analysis.confidence };
-    return { isHarmful: response.data.has_violation, confidence: response.data.has_violation ? 1.0 : 0.0 };
-  } catch (error) {
+    console.log(`[OnVoiceBridge] 서버 AI 분석 응답:`, JSON.stringify(response.data, null, 2));
+
+    if (response.data.ai_analysis) {
+      const isHarmful = response.data.ai_analysis.is_harmful === true || response.data.ai_analysis.is_harmful === 1;
+      return {
+        isHarmful,
+        confidence: response.data.ai_analysis.confidence || 0.0,
+      };
+    }
+
+    const isHarmful = response.data.has_violation === true || response.data.has_violation === 1;
+    return {
+      isHarmful,
+      confidence: isHarmful ? 1.0 : 0.0,
+    };
+  } catch (error: any) {
+    console.error(`[OnVoiceBridge] 서버 AI 분석 실패:`, error.message || error);
     return { isHarmful: false, confidence: 0.0 };
   }
 }
@@ -502,14 +515,19 @@ export const onVoiceBridge: OnVoiceBridge = {
       );
 
       let analysisResult = { isHarmful: false, confidence: 0.0 };
-      if (extractedText.trim().length > 0) analysisResult = await analyzeTextWithServer(extractedText);
+      if (extractedText.trim().length > 0) {
+        analysisResult = await analyzeTextWithServer(extractedText);
+        console.log(
+          `[OnVoiceBridge] AI 분석 결과: isHarmful=${analysisResult.isHarmful}, confidence=${analysisResult.confidence}`
+        );
+      }
 
       return {
         ok: true,
         text: extractedText,
-        isHarmful: analysisResult.isHarmful,
-        matchedKeywords: [],
-        confidence: analysisResult.confidence,
+        isHarmful: analysisResult.isHarmful || false,
+        matchedKeywords: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
+        confidence: analysisResult.confidence || 0.0,
         blurredImage: undefined,
       };
     } catch (error: any) {

@@ -156,59 +156,65 @@ export function registerDashboardHandlers(): void {
         const mainResetToSetupMode = (mainModule as any).resetToSetupMode;
         
         // 트레이 생성
-        let trayInstance = null;
+        let trayInstance: ReturnType<typeof createTray> | null = null;
         try {
           // main.ts의 전역 tray 변수 확인
           const mainTray = (mainModule as any).tray;
           if (!mainTray) {
-            trayInstance = createTray(overlayWindow, {
-              enterSetupMode: mainEnterSetupMode || (() => {
-                console.log("[Dashboard] enterSetupMode 호출됨");
-              }),
-              resetToSetupMode: mainResetToSetupMode || (() => {
-                console.log("[Dashboard] resetToSetupMode 호출됨");
-              }),
-            });
-            // main.ts의 setTrayInstance 함수를 통해 설정
-            const setTrayInstance = (mainModule as any).setTrayInstance;
-            if (setTrayInstance) {
-              setTrayInstance(trayInstance);
-              console.log("[Dashboard] ✅ 트레이 생성 완료 및 main.ts에 등록됨");
+            if (!overlayWindow || overlayWindow.isDestroyed()) {
+              console.error("[Dashboard] ❌ 오버레이 윈도우가 없거나 파괴됨 - 트레이 생성 불가");
             } else {
-              // fallback: 직접 설정
-              (mainModule as any).tray = trayInstance;
-              console.log("[Dashboard] ✅ 트레이 생성 완료 (fallback 방식)");
-            }
-            
-            // 트레이가 제대로 생성되었는지 확인 및 강제 표시
-            if (trayInstance) {
-              console.log("[Dashboard] ✅ 트레이 인스턴스 확인됨");
-              // 트레이 아이콘과 메뉴가 제대로 설정되었는지 확인
-              try {
-                // 컨텍스트 메뉴를 즉시 업데이트하여 표시되도록 함
-                if (typeof (trayInstance as any).updateContextMenu === "function") {
-                  (trayInstance as any).updateContextMenu();
-                  console.log("[Dashboard] ✅ 트레이 컨텍스트 메뉴 업데이트 완료");
-                }
-              } catch (err: any) {
-                console.error("[Dashboard] ❌ 트레이 메뉴 업데이트 실패:", err);
+              trayInstance = createTray(overlayWindow, {
+                enterSetupMode: mainEnterSetupMode || (() => {
+                  console.log("[Dashboard] enterSetupMode 호출됨");
+                }),
+                resetToSetupMode: mainResetToSetupMode || (() => {
+                  console.log("[Dashboard] resetToSetupMode 호출됨");
+                }),
+              });
+              // main.ts의 setTrayInstance 함수를 통해 설정
+              const setTrayInstance = (mainModule as any).setTrayInstance;
+              if (setTrayInstance) {
+                setTrayInstance(trayInstance);
+                console.log("[Dashboard] ✅ 트레이 생성 완료 및 main.ts에 등록됨");
+              } else {
+                // fallback: 직접 설정
+                (mainModule as any).tray = trayInstance;
+                console.log("[Dashboard] ✅ 트레이 생성 완료 (fallback 방식)");
               }
-            } else {
-              console.error("[Dashboard] ❌ 트레이 인스턴스가 null입니다");
+              
+              // 트레이가 제대로 생성되었는지 확인 및 강제 표시
+              if (trayInstance) {
+                console.log("[Dashboard] ✅ 트레이 인스턴스 확인됨");
+                // 트레이 아이콘과 메뉴가 제대로 설정되었는지 확인
+                try {
+                  // 컨텍스트 메뉴를 즉시 업데이트하여 표시되도록 함
+                  if (typeof (trayInstance as any).updateContextMenu === "function") {
+                    (trayInstance as any).updateContextMenu();
+                    console.log("[Dashboard] ✅ 트레이 컨텍스트 메뉴 업데이트 완료");
+                  }
+                } catch (err: any) {
+                  console.error("[Dashboard] ❌ 트레이 메뉴 업데이트 실패:", err);
+                }
+              } else {
+                console.error("[Dashboard] ❌ 트레이 인스턴스가 null입니다");
+              }
             }
           } else {
             trayInstance = mainTray;
             console.log("[Dashboard] 트레이가 이미 존재함");
           }
           
-          const trayUpdateFn = () => {
-            if (trayInstance && typeof (trayInstance as any).updateContextMenu === "function") {
-              (trayInstance as any).updateContextMenu();
-            }
-          };
-          setTrayUpdateCallback(trayUpdateFn);
-          setOverlayTrayUpdateCallback(trayUpdateFn);
-          setTrayAudioUpdateCallback(trayUpdateFn);
+          if (trayInstance) {
+            const trayUpdateFn = () => {
+              if (trayInstance && typeof (trayInstance as any).updateContextMenu === "function") {
+                (trayInstance as any).updateContextMenu();
+              }
+            };
+            setTrayUpdateCallback(trayUpdateFn);
+            setOverlayTrayUpdateCallback(trayUpdateFn);
+            setTrayAudioUpdateCallback(trayUpdateFn);
+          }
         } catch (err: any) {
           console.error("[Dashboard] ❌ 트레이 생성 실패:", err);
           console.error("[Dashboard] 에러 상세:", err.message, err.stack);
@@ -220,6 +226,11 @@ export function registerDashboardHandlers(): void {
       setMode("setup");
       
       // 오버레이 표시
+      if (!overlayWindow || overlayWindow.isDestroyed()) {
+        console.error("[Dashboard] ❌ 오버레이 윈도우가 없거나 파괴됨");
+        return;
+      }
+      
       overlayWindow.show();
       overlayWindow.setSkipTaskbar(false);
       
@@ -237,7 +248,7 @@ export function registerDashboardHandlers(): void {
         
         // 약간의 지연을 두어 렌더러가 완전히 준비될 때까지 대기
         setTimeout(() => {
-          if (overlayWindow.isDestroyed()) {
+          if (!overlayWindow || overlayWindow.isDestroyed()) {
             console.warn("[Dashboard] 오버레이가 이미 파괴됨");
             return;
           }
@@ -279,29 +290,31 @@ export function registerDashboardHandlers(): void {
       };
       
       // 오버레이가 이미 로드된 경우
-      if (!overlayWindow.webContents.isLoading()) {
-        console.log("[Dashboard] 오버레이 이미 로드됨 - setup 모드로 진입");
-        enterSetupMode();
-      } else {
-        // 오버레이가 아직 로드 중인 경우 로드 완료 대기
-        console.log("[Dashboard] 오버레이 로드 대기 중...");
-        
-        // did-finish-load 이벤트 대기
-        overlayWindow.webContents.once("did-finish-load", () => {
-          console.log("[Dashboard] 오버레이 로드 완료 (did-finish-load)");
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        if (!overlayWindow.webContents.isLoading()) {
+          console.log("[Dashboard] 오버레이 이미 로드됨 - setup 모드로 진입");
           enterSetupMode();
-        });
-        
-        // dom-ready 이벤트도 대기 (더 빠른 진입을 위해)
-        overlayWindow.webContents.once("dom-ready", () => {
-          console.log("[Dashboard] 오버레이 DOM 준비 완료 (dom-ready)");
-          // did-finish-load와 중복 방지를 위해 약간의 지연
-          setTimeout(() => {
-            if (!overlayWindow.isDestroyed() && !overlayWindow.webContents.isLoading()) {
-              enterSetupMode();
-            }
-          }, 300);
-        });
+        } else {
+          // 오버레이가 아직 로드 중인 경우 로드 완료 대기
+          console.log("[Dashboard] 오버레이 로드 대기 중...");
+          
+          // did-finish-load 이벤트 대기
+          overlayWindow.webContents.once("did-finish-load", () => {
+            console.log("[Dashboard] 오버레이 로드 완료 (did-finish-load)");
+            enterSetupMode();
+          });
+          
+          // dom-ready 이벤트도 대기 (더 빠른 진입을 위해)
+          overlayWindow.webContents.once("dom-ready", () => {
+            console.log("[Dashboard] 오버레이 DOM 준비 완료 (dom-ready)");
+            // did-finish-load와 중복 방지를 위해 약간의 지연
+            setTimeout(() => {
+              if (overlayWindow && !overlayWindow.isDestroyed() && !overlayWindow.webContents.isLoading()) {
+                enterSetupMode();
+              }
+            }, 300);
+          });
+        }
       }
       
       // 메인 윈도우 숨김

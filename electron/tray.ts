@@ -23,6 +23,13 @@ export function setTrayAudioUpdateCallback(callback: (() => void) | null): void 
 }
 
 /**
+ * 트레이 메뉴 업데이트 콜백 설정 (별칭)
+ */
+export function setTrayUpdateCallback(callback: (() => void) | null): void {
+  trayUpdateCallback = callback;
+}
+
+/**
  * 트레이 메뉴 업데이트 콜백 가져오기
  */
 export function getTrayAudioUpdateCallback(): (() => void) | null {
