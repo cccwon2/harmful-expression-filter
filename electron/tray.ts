@@ -127,7 +127,14 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
 
   // 컨텍스트 메뉴 생성
   const updateContextMenu = () => {
-    const isOverlayVisible = overlayWindow.isVisible();
+    // Tray가 destroy되었는지 확인 (방어 코드)
+    if (!trayInstance || !tray) {
+      console.warn('[Tray] updateContextMenu: Tray 인스턴스가 null입니다');
+      return;
+    }
+    
+    try {
+      const isOverlayVisible = overlayWindow.isVisible();
     const isEditMode = getEditModeState();
 
     // AudioManager 상태 가져오기
@@ -137,14 +144,23 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
     const currentTarget = audioStatus.target || null;
 
     // 트레이 아이콘 업데이트 (스트리밍 상태에 따라 색상 변경)
-    const newIcon = createTrayIcon(isStreaming);
-    trayInstance.setImage(newIcon);
+    try {
+      const newIcon = createTrayIcon(isStreaming);
+      trayInstance.setImage(newIcon);
 
-    // 트레이 툴팁 업데이트
-    const tooltip = isStreaming
-      ? `Harmful Expression Filter - 스트리밍 중 (${currentTarget || 'Unknown'})`
-      : 'Harmful Expression Filter - 대기 중';
-    trayInstance.setToolTip(tooltip);
+      // 트레이 툴팁 업데이트
+      const tooltip = isStreaming
+        ? `Harmful Expression Filter - 스트리밍 중 (${currentTarget || 'Unknown'})`
+        : 'Harmful Expression Filter - 대기 중';
+      trayInstance.setToolTip(tooltip);
+    } catch (err: any) {
+      // Tray가 destroy된 경우 조용히 반환
+      if (err?.message?.includes('destroy') || err?.message?.includes('Tray')) {
+        console.warn('[Tray] updateContextMenu: Tray가 destroy되어 업데이트 불가:', err?.message);
+        return;
+      }
+      throw err; // 다른 오류는 다시 throw
+    }
 
     // 현재 Threshold 값 가져오기 (로컬 스토어에서)
     const currentThreshold = getCurrentThresholdSync();
@@ -688,11 +704,32 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
       },
     ]);
 
-    trayInstance.setContextMenu(contextMenu);
+      try {
+        trayInstance.setContextMenu(contextMenu);
+      } catch (err: any) {
+        // Tray가 destroy된 경우 조용히 반환
+        if (err?.message?.includes('destroy') || err?.message?.includes('Tray')) {
+          console.warn('[Tray] updateContextMenu: Tray가 destroy되어 메뉴 설정 불가:', err?.message);
+          return;
+        }
+        throw err; // 다른 오류는 다시 throw
+      }
+    } catch (err: any) {
+      // Tray가 destroy된 경우 조용히 반환 (전체 함수 레벨 방어)
+      if (err?.message?.includes('destroy') || err?.message?.includes('Tray')) {
+        console.warn('[Tray] updateContextMenu: Tray가 destroy되어 업데이트 불가:', err?.message);
+        return;
+      }
+      console.error('[Tray] updateContextMenu: 예상치 못한 오류:', err);
+    }
   };
 
   // 초기 메뉴 설정
-  updateContextMenu();
+  try {
+    updateContextMenu();
+  } catch (err: any) {
+    console.error('[Tray] 초기 메뉴 설정 실패:', err);
+  }
 
   // 트레이 아이콘 더블클릭 시 오버레이 창 표시/숨김
   tray.on('double-click', () => {
