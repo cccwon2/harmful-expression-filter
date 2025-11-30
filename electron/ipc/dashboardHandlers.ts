@@ -1,8 +1,9 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { DASHBOARD_CHANNELS, IPC_CHANNELS } from "./channels";
 import { createOverlayWindow } from "../windows/createOverlayWindow";
-import { setOverlayWindow } from "../state/editMode";
+import { setOverlayWindow, setEditModeState } from "../state/editMode";
 import { setupROIHandlers, type ROI } from "./roi";
+import { setMode, getROI } from "../store";
 
 // main.ts에서 export된 함수를 동적으로 import
 let startMonitoringFn: (() => void) | null = null;
@@ -92,17 +93,54 @@ export function registerDashboardHandlers(): void {
         // (오버레이 윈도우가 생성된 후 main.ts에서 트레이를 생성할 수 있도록 별도 처리 필요)
       }
       
-      // 오버레이 표시 및 OCR 시작
+      // 오버레이 표시 및 setup 모드로 진입
       overlayWindow.show();
       overlayWindow.setSkipTaskbar(false);
-      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+      
+      // setup 모드로 진입하여 ROI 선택 가능하도록 설정
+      setEditModeState(true);
+      setMode("setup");
+      
+      // 오버레이에 setup 모드 신호 전송
+      overlayWindow.webContents.once("did-finish-load", () => {
+        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
+        
+        const storedROI = getROI();
+        const statePayload = {
+          mode: "setup" as const,
+          harmful: false,
+          ...(storedROI ? { roi: storedROI } : {}),
+        };
+        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
+        
+        // 마우스 이벤트 활성화하여 ROI 선택 가능하도록
+        overlayWindow.setIgnoreMouseEvents(false);
+        overlayWindow.focus();
+        
+        console.log("[Dashboard] Setup 모드로 진입 완료 - ROI 선택 가능");
+      });
+      
+      // 오버레이가 이미 로드된 경우 즉시 setup 모드로 설정
+      if (overlayWindow.webContents.isLoading() === false) {
+        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
+        const storedROI = getROI();
+        const statePayload = {
+          mode: "setup" as const,
+          harmful: false,
+          ...(storedROI ? { roi: storedROI } : {}),
+        };
+        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
+        overlayWindow.setIgnoreMouseEvents(false);
+        overlayWindow.focus();
+        console.log("[Dashboard] Setup 모드로 진입 완료 (이미 로드됨) - ROI 선택 가능");
+      }
       
       // 메인 윈도우 숨김
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.hide();
       }
       
-      console.log("[Dashboard] ✅ OCR 모드 활성화됨");
+      console.log("[Dashboard] ✅ OCR 모드 활성화됨 - ROI 선택 대기 중");
     } else if (mode === 'voice') {
       // 음성 모드 선택
       isVoiceEnabled = true;
