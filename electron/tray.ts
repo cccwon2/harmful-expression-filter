@@ -147,40 +147,26 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
           
           try {
             // OCR 모드로 전환 (음성 모드가 활성화되어 있으면 중지)
-            // mainWindow를 찾아서 SELECT_MODE 이벤트 전송
-            const allWindows = BrowserWindow.getAllWindows();
-            const mainWindow = allWindows.find((win: BrowserWindow) => {
-              const url = win.webContents.getURL();
-              return url.includes('index.html') || (!url.includes('overlay.html') && url !== '');
-            });
+            // ipcMain의 SELECT_MODE 핸들러를 직접 호출
+            // mainWindow.webContents.send는 renderer로 가므로 사용하지 않음
             
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              // mainWindow를 통해 SELECT_MODE 이벤트 전송
-              // dashboardHandlers의 SELECT_MODE 핸들러가 이를 받아서 처리
-              mainWindow.webContents.send(DASHBOARD_CHANNELS.SELECT_MODE, 'ocr');
-              console.log('[Tray] ✅ OCR 모드로 전환 요청 전송됨 (mainWindow를 통해)');
-            } else {
-              // mainWindow가 없으면 ipcMain을 통해 직접 이벤트 emit
-              console.log('[Tray] ⚠️ Main window를 찾을 수 없음. ipcMain을 통해 직접 호출');
-              const { ipcMain } = require('electron');
-              
-              // 가상의 이벤트 객체 생성
-              const fakeEvent = {
-                sender: {
-                  send: (channel: string, ...args: any[]) => {
-                    console.log(`[Tray] Fake event sender.send: ${channel}`, args);
-                  }
+            // 가상의 이벤트 객체 생성 (ipcMain.on 핸들러가 기대하는 형식)
+            const fakeEvent = {
+              sender: {
+                send: (channel: string, ...args: any[]) => {
+                  console.log(`[Tray] Fake event sender.send: ${channel}`, args);
                 }
-              };
-              
-              // SELECT_MODE 핸들러 직접 호출
-              const listeners = (ipcMain as any).listeners(DASHBOARD_CHANNELS.SELECT_MODE);
-              if (listeners && listeners.length > 0) {
-                console.log('[Tray] ✅ SELECT_MODE 핸들러 발견, OCR 모드로 전환');
-                listeners[0](fakeEvent, 'ocr');
-              } else {
-                throw new Error('SELECT_MODE 핸들러를 찾을 수 없음');
               }
+            };
+            
+            // SELECT_MODE 핸들러 직접 호출
+            const listeners = (ipcMain as any).listeners(DASHBOARD_CHANNELS.SELECT_MODE);
+            if (listeners && listeners.length > 0) {
+              console.log('[Tray] ✅ SELECT_MODE 핸들러 발견, OCR 모드로 전환');
+              await listeners[0](fakeEvent, 'ocr');
+              console.log('[Tray] ✅ OCR 모드 전환 완료');
+            } else {
+              throw new Error('SELECT_MODE 핸들러를 찾을 수 없음. dashboardHandlers가 등록되지 않았을 수 있습니다.');
             }
           } catch (error: any) {
             console.error('[Tray] OCR 모드 전환 실패:', error);

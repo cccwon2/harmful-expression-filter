@@ -337,8 +337,26 @@ export function registerDashboardHandlers(): void {
       }
       
       // 메인 윈도우 숨김
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.hide();
+      // mainWindow가 null이면 모든 윈도우에서 찾기
+      let targetMainWindow = mainWindow;
+      if (!targetMainWindow || targetMainWindow.isDestroyed()) {
+        const allWindows = BrowserWindow.getAllWindows();
+        targetMainWindow = allWindows.find((win: BrowserWindow) => {
+          const url = win.webContents.getURL();
+          return url.includes('index.html') || (!url.includes('overlay.html') && url !== '');
+        }) || null;
+        
+        // 찾은 윈도우를 mainWindow에 저장
+        if (targetMainWindow) {
+          mainWindow = targetMainWindow;
+        }
+      }
+      
+      if (targetMainWindow && !targetMainWindow.isDestroyed()) {
+        targetMainWindow.hide();
+        console.log("[Dashboard] ✅ 메인 윈도우 숨김 완료");
+      } else {
+        console.warn("[Dashboard] ⚠️ 메인 윈도우를 찾을 수 없음 (이미 숨겨져 있거나 없음)");
       }
       
       console.log("[Dashboard] ✅ OCR 모드 활성화됨 - ROI 선택 대기 중");
