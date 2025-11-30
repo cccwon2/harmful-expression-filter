@@ -341,7 +341,14 @@ export function createOverlayWindow(): BrowserWindow {
   // 개발 모드와 프로덕션 모드 분기
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
     // 🟢 개발 모드: Vite 개발 서버 사용
-    overlayWindow.loadURL('http://localhost:5173/overlay.html');
+    overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'ERR_CONNECTION_REFUSED') {
+        console.error('[Overlay] ⚠️ Vite 개발 서버가 실행되지 않았습니다.');
+        console.error('[Overlay] 해결 방법: 다른 터미널에서 "npm run dev:renderer"를 실행하거나 "npm run dev"로 전체 개발 환경을 시작하세요.');
+      } else {
+        console.error('[Overlay] Failed to load overlay from development server:', err);
+      }
+    });
     console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
   } else {
     // 🔴 배포 모드: file:// 프로토콜로 로컬 파일 로드

@@ -65,15 +65,20 @@ export function createMainWindow(): BrowserWindow {
   // 개발 모드와 프로덕션 모드 분기
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
     // Vite 개발 서버가 실행 중일 때만 로드 시도
-    // 실패하면 조용히 무시 (메인 윈도우는 개발/디버깅용)
     mainWindow.loadURL('http://localhost:5173').catch((err) => {
       // EPIPE 오류는 무시 (파이프가 끊어진 경우)
       if (err && typeof err === 'object' && 'code' in err && err.code === 'EPIPE') {
         return;
       }
-      // 다른 오류는 경고만 출력 (조용히 처리)
-      if (err && typeof err === 'object' && 'code' in err && err.code !== 'ERR_CONNECTION_REFUSED') {
-        console.warn('[Main] Failed to load main window (development server may not be running):', err);
+      // ERR_CONNECTION_REFUSED는 개발 서버가 실행되지 않았을 때 발생
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'ERR_CONNECTION_REFUSED') {
+        console.error('[Main] ⚠️ Vite 개발 서버가 실행되지 않았습니다.');
+        console.error('[Main] 해결 방법: 다른 터미널에서 "npm run dev:renderer"를 실행하거나 "npm run dev"로 전체 개발 환경을 시작하세요.');
+        return;
+      }
+      // 다른 오류는 경고만 출력
+      if (err && typeof err === 'object' && 'code' in err) {
+        console.warn('[Main] Failed to load main window:', err);
       }
     });
   } else {
