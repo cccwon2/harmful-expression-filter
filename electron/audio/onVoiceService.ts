@@ -9,7 +9,7 @@
 
 import { BrowserWindow } from "electron";
 import WebSocket from "ws";
-import { createOnVoiceCapture, OnVoiceCaptureHandle } from "./onvoiceBridgeAdapter";
+import { createOnVoiceCapture, OnVoiceCaptureHandle } from "./onVoiceBridgeAdapter";
 import { sendTextForAnalysis, AnalysisResult } from "../utils/harmfulAnalysisClient";
 import { IPC_CHANNELS } from "../ipc/channels";
 import { findProcessByType } from "../utils/processFinder";
@@ -355,7 +355,7 @@ export class OnVoiceService {
       if (message.status === "ok" && message.text) {
         const text = message.text;
         if (!text || !text.trim()) return;
-        
+
         const isHarmful = message.is_harmful === 1 || message.is_harmful === true;
         const aiChecked = message.ai_checked === true;
         const confidence = message.confidence || 0;
@@ -521,4 +521,3 @@ export function getOnVoiceService(): OnVoiceService | null {
 export function setOnVoiceService(service: OnVoiceService | null): void {
   globalOnVoiceService = service;
 }
-
