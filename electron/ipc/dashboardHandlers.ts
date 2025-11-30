@@ -92,6 +92,8 @@ export function registerDashboardHandlers(): void {
         // Ctrl+E/Q 핸들러 설정
         const { setExitEditModeAndHideHandler } = await import("../windows/createOverlayWindow");
         const mainModule = await import("../main");
+        const { globalShortcut } = await import("electron");
+        
         const handleExitEditModeAndHide = () => {
           console.log("[Dashboard] ✅ Exit Edit Mode and hide overlay (Ctrl+E/Q 핸들러 호출됨)");
           if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -109,7 +111,33 @@ export function registerDashboardHandlers(): void {
           }
         };
         setExitEditModeAndHideHandler(handleExitEditModeAndHide);
-        console.log("[Dashboard] ✅ Ctrl+E/Q 핸들러 설정 완료");
+        
+        // globalShortcut으로 Ctrl+E/Q 등록 (포커스 없이도 작동)
+        const retCtrlE = globalShortcut.register("CommandOrControl+E", () => {
+          console.log("[Dashboard] ✅ Ctrl+E globalShortcut 감지됨");
+          if (overlayWindow && overlayWindow.isVisible()) {
+            handleExitEditModeAndHide();
+          }
+        });
+        const retCtrlQ = globalShortcut.register("CommandOrControl+Q", () => {
+          console.log("[Dashboard] ✅ Ctrl+Q globalShortcut 감지됨");
+          if (overlayWindow && overlayWindow.isVisible()) {
+            handleExitEditModeAndHide();
+          }
+        });
+        
+        if (retCtrlE) {
+          console.log("[Dashboard] ✅ Ctrl+E globalShortcut 등록 완료");
+        } else {
+          console.warn("[Dashboard] ⚠️ Ctrl+E globalShortcut 등록 실패");
+        }
+        if (retCtrlQ) {
+          console.log("[Dashboard] ✅ Ctrl+Q globalShortcut 등록 완료");
+        } else {
+          console.warn("[Dashboard] ⚠️ Ctrl+Q globalShortcut 등록 실패");
+        }
+        
+        console.log("[Dashboard] ✅ Ctrl+E/Q 핸들러 설정 완료 (globalShortcut + before-input-event)");
         
         // 트레이 생성 (오버레이 윈도우가 생성된 후)
         const { createTray } = await import("../tray");
@@ -188,6 +216,14 @@ export function registerDashboardHandlers(): void {
       overlayWindow.show();
       overlayWindow.setSkipTaskbar(false);
       
+      // 키보드 이벤트를 받기 위해 포커스 설정
+      overlayWindow.focus();
+      console.log("[Dashboard] 오버레이 포커스 설정 완료");
+      
+      // before-input-event 리스너가 등록되었는지 확인
+      const listeners = overlayWindow.webContents.listenerCount('before-input-event');
+      console.log(`[Dashboard] before-input-event 리스너 개수: ${listeners}`);
+      
       // 오버레이가 완전히 로드되고 API가 준비될 때까지 기다린 후 setup 모드로 진입
       const enterSetupMode = () => {
         console.log("[Dashboard] 오버레이 준비 완료 - setup 모드로 진입");
@@ -198,6 +234,10 @@ export function registerDashboardHandlers(): void {
             console.warn("[Dashboard] 오버레이가 이미 파괴됨");
             return;
           }
+          
+          // 포커스를 다시 설정하여 키보드 이벤트 수신 보장
+          overlayWindow.focus();
+          console.log("[Dashboard] 오버레이 포커스 재설정 완료");
           
           // setup 모드 신호 전송
           overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
@@ -214,7 +254,16 @@ export function registerDashboardHandlers(): void {
           
           // 마우스 이벤트 활성화하여 ROI 선택 가능하도록
           overlayWindow.setIgnoreMouseEvents(false);
-          console.log("[Dashboard] 마우스 이벤트 활성화됨");
+          overlayWindow.focus();
+          console.log("[Dashboard] 마우스 이벤트 활성화 및 포커스 설정 완료");
+          
+          // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
+          setTimeout(() => {
+            if (overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
+              overlayWindow.focus();
+              console.log("[Dashboard] 오버레이 포커스 재설정 (지연 후)");
+            }
+          }, 100);
           
           // 포커스 설정
           overlayWindow.focus();

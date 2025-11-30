@@ -123,7 +123,9 @@ export function createOverlayWindow(): BrowserWindow {
   });
   
   // 키보드 이벤트 처리 - 메인 프로세스에서 Ctrl+E/Q 처리
+  console.log('[Overlay] before-input-event 리스너 등록 중...');
   overlayWindow.webContents.on('before-input-event', (event, input) => {
+    console.log(`[Overlay] before-input-event 감지: key=${input.key}, control=${input.control}, meta=${input.meta}`);
     // Ctrl+Shift+I 또는 F12: 개발자 도구 토글 (undocked 모드로 열어서 다른 창 클릭 가능)
     if (
       (input.control || input.meta) && 
