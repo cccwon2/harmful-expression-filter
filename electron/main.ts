@@ -110,6 +110,29 @@ type OverlayStatePayload = {
   harmful?: boolean;
 };
 
+// 🔒 단일 인스턴스만 실행되도록 보장
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // 이미 다른 인스턴스가 실행 중이면 종료
+  console.log('[Main] 다른 인스턴스가 이미 실행 중입니다. 종료합니다.');
+  app.quit();
+  process.exit(0);
+} else {
+  // 두 번째 인스턴스가 실행되려고 할 때 기존 인스턴스에 포커스
+  app.on('second-instance', () => {
+    console.log('[Main] 두 번째 인스턴스 실행 시도 - 기존 인스턴스에 포커스');
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      if (overlayWindow.isMinimized()) overlayWindow.restore();
+      overlayWindow.focus();
+    }
+  });
+}
+
 // 헤드리스 실행: 메뉴 없음
 Menu.setApplicationMenu(null);
 
