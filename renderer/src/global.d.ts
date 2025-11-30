@@ -79,6 +79,7 @@ declare global {
         hide: () => void;
         setClickThrough: (enabled: boolean) => Promise<void>;
         sendROI: (roi: ROI) => void;
+        sendModeChange: (mode: OverlayMode) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
         startMonitoring: () => void;

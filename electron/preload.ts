@@ -12,6 +12,7 @@ const IPC_CHANNELS = {
   EXIT_EDIT_MODE_AND_HIDE: 'exit-edit-mode-and-hide',
   SET_CLICK_THROUGH: 'overlay:setClickThrough',
   OVERLAY_SET_MODE: 'overlay:setMode',
+  OVERLAY_MODE_CHANGED: 'overlay:modeChanged', // 렌더러에서 메인 프로세스로 모드 변경 알림
   OVERLAY_STATE_PUSH: 'overlay:state',
   START_MONITORING: 'monitoring:start',
   STOP_MONITORING: 'monitoring:stop',
@@ -180,6 +181,15 @@ try {
           console.log('[Preload] ROI_SELECTED IPC sent');
         } catch (error) {
           console.error('[Preload] Error sending ROI_SELECTED:', error);
+        }
+      },
+      sendModeChange: (mode: OverlayMode) => {
+        console.log('[Preload] overlay.sendModeChange() called with:', mode);
+        try {
+          ipcRenderer.send(IPC_CHANNELS.OVERLAY_MODE_CHANGED, mode);
+          console.log('[Preload] OVERLAY_MODE_CHANGED IPC sent');
+        } catch (error) {
+          console.error('[Preload] Error sending OVERLAY_MODE_CHANGED:', error);
         }
       },
       onModeChange: (callback: (mode: OverlayMode) => void) => {

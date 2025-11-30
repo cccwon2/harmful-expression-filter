@@ -201,20 +201,47 @@ export const OverlayApp: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" || e.key === "Esc") {
         e.preventDefault();
+        console.log("[Overlay] ESC 키 감지됨");
+        
         if (selectionState?.isSelecting) {
+          console.log("[Overlay] ROI 선택 중 취소");
           setSelectionState(null);
           setIsSelectionComplete(false);
           window.api?.roi?.sendCancelSelection();
           return;
         }
-        Promise.resolve(window.api?.overlay?.stopMonitoring?.()).catch(console.error);
+        
+        console.log("[Overlay] Setup 모드로 재진입");
+        
+        // 타이머 정리
         if (blindTimerRef.current) clearTimeout(blindTimerRef.current);
+        
+        // 상태 리셋
         setIsMonitoring(false);
         setHarmful(false);
-        setMode("setup");
         setSelectionState(null);
         setIsSelectionComplete(false);
         setRoi(undefined);
+        
+        // 모니터링 중지 (메인 프로세스에 알림)
+        if (window.api?.overlay?.stopMonitoring) {
+          window.api.overlay.stopMonitoring();
+        }
+        
+        // 모드 변경
+        setMode("setup");
+        
+        // 메인 프로세스에 모드 변경 알림
+        if ((window.api?.overlay as any)?.sendModeChange) {
+          (window.api.overlay as any).sendModeChange("setup");
+        }
+        
+        // 클릭 투루 비활성화하여 ROI 선택 가능하도록
+        if (window.api?.overlay?.setClickThrough) {
+          window.api.overlay.setClickThrough(false).then(() => {
+            console.log("[Overlay] 클릭 투루 비활성화됨 - ROI 선택 가능");
+          }).catch(console.error);
+        }
       }
     };
     document.addEventListener("keydown", handleKeyDown, true);

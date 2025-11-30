@@ -646,6 +646,24 @@ app.whenReady().then(async () => {
     }
   });
 
+  // 렌더러에서 메인 프로세스로 모드 변경 알림
+  ipcMain.on(IPC_CHANNELS.OVERLAY_MODE_CHANGED, (_event, mode: OverlayMode) => {
+    console.log("[Main] OVERLAY_MODE_CHANGED received from renderer:", mode);
+    if (mode === "setup") {
+      // setup 모드로 전환 시 모니터링 중지 및 Edit Mode 활성화
+      if (stopMonitoring) {
+        stopMonitoring("Renderer changed mode to setup");
+      }
+      
+      // Edit Mode 활성화 및 마우스 이벤트 활성화
+      setEditModeState(true);
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.setIgnoreMouseEvents(false);
+        console.log("[Main] Edit Mode 활성화 및 마우스 이벤트 활성화됨 (ESC 키로 setup 모드 전환)");
+      }
+    }
+  });
+
   ipcMain.on(IPC_CHANNELS.OCR_START, () => {
     console.log("[OCR] OCR 모니터링 시작 요청");
     if (startMonitoring) {
