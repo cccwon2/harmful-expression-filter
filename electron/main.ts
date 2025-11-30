@@ -321,10 +321,28 @@ app.whenReady().then(async () => {
       console.warn("[Main] state/editMode overlayWindow:", getOverlayWindow() ? "존재" : "null");
       return;
     }
-    currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, state);
-    // 유해 표현 감지 시에만 로그 출력
-    if (state.harmful === true) {
-      console.warn("[Main] 🚨 Sent OVERLAY_STATE_PUSH (harmful):", JSON.stringify(state));
+    try {
+      // 안전하게 직렬화 가능한 형태로 변환
+      const safeState: OverlayStatePayload = {
+        mode: state.mode,
+        harmful: state.harmful === true,
+        ...(state.roi && {
+          roi: {
+            x: Number(state.roi.x) || 0,
+            y: Number(state.roi.y) || 0,
+            width: Number(state.roi.width) || 0,
+            height: Number(state.roi.height) || 0,
+          },
+        }),
+      };
+      currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, safeState);
+      // 유해 표현 감지 시에만 로그 출력
+      if (state.harmful === true) {
+        console.warn("[Main] 🚨 Sent OVERLAY_STATE_PUSH (harmful):", JSON.stringify(safeState));
+      }
+    } catch (error: any) {
+      console.error("[Main] pushOverlayState 실패:", error?.message || error);
+      console.error("[Main] state 객체:", state);
     }
   };
 
@@ -552,16 +570,24 @@ app.whenReady().then(async () => {
                 extractedText.length > 100 ? "..." : ""
               }"`
             );
-            currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
-              harmful: true,
-              words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
-            });
+            try {
+              currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
+                harmful: true,
+                words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
+              });
+            } catch (sendError: any) {
+              console.error("[OCR] ALERT_FROM_SERVER 전송 실패:", sendError?.message || sendError);
+            }
           } else {
             // harmful=false는 조용히 전송 (로그 없음)
-            currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
-              harmful: false,
-              words: [],
-            });
+            try {
+              currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
+                harmful: false,
+                words: [],
+              });
+            } catch (sendError: any) {
+              // 조용히 실패 (로그 없음)
+            }
           }
         }
 
@@ -572,17 +598,31 @@ app.whenReady().then(async () => {
 
         // 상태 업데이트
         const nextMode: OverlayMode = is_harmful ? "alert" : "detect";
-        pushOverlayState({
-          mode: nextMode,
-          roi: currentROI,
-          harmful: is_harmful,
-        });
+        try {
+          pushOverlayState({
+            mode: nextMode,
+            roi: currentROI,
+            harmful: is_harmful,
+          });
+        } catch (pushError: any) {
+          console.error("[OCR] pushOverlayState 실패:", pushError?.message || pushError);
+        }
       } else {
         console.error(`[OCR] 서버 요청 실패 (${ocrElapsed}ms):`, result.error);
       }
     } catch (error: any) {
       const errorMessage = error?.message || String(error);
+      const errorStack = error?.stack || "";
       console.error("[OCR] 캡처/처리 오류:", errorMessage);
+      if (errorStack) {
+        console.error("[OCR] 오류 스택:", errorStack);
+      }
+      // 전체 오류 객체 출력 (순환 참조 방지)
+      try {
+        console.error("[OCR] 오류 상세:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      } catch (e) {
+        console.error("[OCR] 오류 객체 직렬화 실패:", e);
+      }
     } finally {
       // 🔥 중요: finally 블록에서 플래그를 해제하여 다음 주기가 실행될 수 있도록 보장
       isCaptureInProgress = false;
