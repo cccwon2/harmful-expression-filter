@@ -5,6 +5,8 @@
   "main": "./dist-electron/entry.js",
   "scripts": {
     "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o bin/Release/net6.0/win-x64/publish",
+    "build:dotnet:single": "cd dotnet/OnVoiceComBridge && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o bin/Release/net6.0/win-x64/publish",
+    "build:dotnet:debug": "cd dotnet/OnVoiceComBridge && dotnet publish -c Debug -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o bin/Debug/net6.0/win-x64/publish",
     "copy:dll": "node scripts/copy-dll.js",
     "build:native": "node scripts/build-native.js",
     "copy:native": "node scripts/copy-native-dll.js",

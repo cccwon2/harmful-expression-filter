@@ -44,6 +44,13 @@ const ONVOICE_CHANNELS = {
   GET_STATUS: 'onvoice:get-status',
 } as const;
 
+const DASHBOARD_CHANNELS = {
+  TOGGLE_OCR: 'dashboard:toggle-ocr',
+  TOGGLE_VOICE: 'dashboard:toggle-voice',
+  GET_WINDOW_STATUS: 'dashboard:get-window-status',
+  OCR_STATUS_CHANGE: 'dashboard:ocr-status-change',
+} as const;
+
 // OverlayMode 타입 정의 (preload에서 직접 정의)
 type OverlayMode = 'setup' | 'detect' | 'alert';
 type OverlayState = {
@@ -286,6 +293,25 @@ try {
         ipcRenderer.on(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, (_, data) => callback(data));
       },
     },
+    // 대시보드 및 멀티 윈도우 관리 API
+    dashboard: {
+      toggleOCR: (enabled: boolean) => {
+        ipcRenderer.send(DASHBOARD_CHANNELS.TOGGLE_OCR, enabled);
+      },
+      toggleVoice: (enabled: boolean) => {
+        ipcRenderer.send(DASHBOARD_CHANNELS.TOGGLE_VOICE, enabled);
+      },
+      getWindowStatus: () => ipcRenderer.invoke(DASHBOARD_CHANNELS.GET_WINDOW_STATUS),
+      onOCRStatusChange: (callback: (status: 'start' | 'stop') => void) => {
+        const listener = (_event: unknown, status: 'start' | 'stop') => {
+          callback(status);
+        };
+        ipcRenderer.on(DASHBOARD_CHANNELS.OCR_STATUS_CHANGE, listener);
+        return () => {
+          ipcRenderer.removeListener(DASHBOARD_CHANNELS.OCR_STATUS_CHANGE, listener);
+        };
+      },
+    },
   });
   
   console.log('[Preload] api exposed successfully');
@@ -342,6 +368,16 @@ declare global {
         }>;
         onStatusChange: (callback: (status: any) => void) => void;
         onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
+      dashboard: {
+        toggleOCR: (enabled: boolean) => void;
+        toggleVoice: (enabled: boolean) => void;
+        getWindowStatus: () => Promise<{
+          isOcrEnabled: boolean;
+          isVoiceEnabled: boolean;
+          isOverlayVisible: boolean;
+        }>;
+        onOCRStatusChange: (callback: (status: 'start' | 'stop') => void) => () => void;
       };
     };
   }
