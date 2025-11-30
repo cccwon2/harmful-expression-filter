@@ -40,19 +40,21 @@
 27. **[Deepgram STT 통합](./27-deepgram-stt-integration.md)** ✅ 완료 (Task 35로 실시간 스트리밍 방식으로 업데이트됨)
 28. **[PaddleOCR 서버 연동 및 Tesseract.js 대체](./28-paddle-ocr-integration.md)** ✅ 완료 (현재는 Windows SDK OCR로 대체됨)
 29. **[OnVoice COM Bridge 통합](./29-onvoice-com-bridge-integration.md)** ✅ 완료
-33. **[AudioManager 트레이 통합](./33-audiomanager-tray-integration.md)** ✅ 완료
-34. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ✅ 완료
-35. **[Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)** ✅ 완료
-36. **[로컬 Whisper 폴백 시스템](./36-local-whisper-fallback.md)** ✅ 완료
-37. **[Ubuntu 서버 FastAPI 배포](./37-ubuntu-fastapi-deployment.md)** ✅ 문서화 완료
-38. **[코드 리팩토링 및 정리](./38-code-refactoring-cleanup.md)** ✅ 완료
-39. **[C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)** ✅ 완료
-40. **[C++ Core Audio 구현 상세](./40-cpp-core-audio-implementation.md)** ✅ 완료
-41. **[파인튜닝된 KoElectra 분류기 연동](./41-koelectra-classifier-integration.md)** ✅ 완료
-42. **[Electron 앱 배포](./42-electron-app-deployment.md)** ✅ 완료
-43. **[Threshold(임계값) 설정 및 최적화](./43-threshold-configuration.md)** ✅ 완료
-44. **[Vercel 관리자 대시보드 구축 가이드](./44-vercel-admin-dashboard.md)** 📝 계획 단계
-45. **[Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)** ✅ 완료
+30. **[AudioManager 트레이 통합](./33-audiomanager-tray-integration.md)** ✅ 완료
+31. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ✅ 완료
+32. **[Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)** ✅ 완료
+33. **[로컬 Whisper 폴백 시스템](./36-local-whisper-fallback.md)** ✅ 완료
+34. **[Ubuntu 서버 FastAPI 배포](./37-ubuntu-fastapi-deployment.md)** ✅ 문서화 완료
+35. **[코드 리팩토링 및 정리](./38-code-refactoring-cleanup.md)** ✅ 완료
+36. **[C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)** ✅ 완료
+37. **[C++ Core Audio 구현 상세](./40-cpp-core-audio-implementation.md)** ✅ 완료
+38. **[파인튜닝된 KoElectra 분류기 연동](./41-koelectra-classifier-integration.md)** ✅ 완료
+39. **[Electron 앱 배포](./42-electron-app-deployment.md)** ✅ 완료
+40. **[Threshold(임계값) 설정 및 최적화](./43-threshold-configuration.md)** ✅ 완료
+41. **[Vercel 관리자 대시보드 구축 가이드](./44-vercel-admin-dashboard.md)** 📝 계획 단계
+42. **[Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)** ✅ 완료
+43. **[Supabase 기반 관리자 DB 및 로깅 시스템 구축](./46-supabase-admin-db.md)** 📝 계획 단계
+44. **[메인 대시보드 구축 및 멀티 윈도우 관리](./47-main-dashboard-multi-window.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -137,54 +139,64 @@
     ├─ 29-onvoice-com-bridge-integration
     ├─ 39-csharp-volume-control
     └─ 42-electron-app-deployment
+46-supabase-admin-db
+    ├─ 20-fastapi-setup
+    ├─ 21-text-analysis-api
+    ├─ 43-threshold-configuration
+    └─ 44-vercel-admin-dashboard
+47-main-dashboard-multi-window
+    ├─ 42-electron-app-deployment
+    └─ 45-spawn-bridge-migration
 ```
 
 ## 작업 상태
 
-| 작업                    | 상태         | 진행률 | 우선순위 |
-| ----------------------- | ------------ | ------ | -------- |
-| 기본 Electron 앱 설정   | ✅ 완료      | 100%   | High     |
-| 시스템 트레이           | ✅ 완료      | 100%   | High     |
-| 투명 오버레이 창        | ✅ 완료      | 100%   | High     |
-| ROI 선택 기능           | ✅ 완료      | 100%   | High     |
-| Edit Mode 관리          | ✅ 완료      | 100%   | High     |
-| 상태 관리               | ✅ 완료      | 100%   | High     |
-| IPC 통신                | ✅ 완료      | 100%   | High     |
-| 개발자 도구 통합        | ✅ 완료      | 100%   | Medium   |
-| 키보드 단축키           | ✅ 완료      | 100%   | Medium   |
-| Preload API             | ✅ 완료      | 100%   | High     |
-| 상태 모델 정의          | ✅ 완료      | 80%    | High     |
-| 트레이 메뉴 "영역 지정" | ✅ 완료      | 100%   | High     |
-| 설정 모드 ROI 선택      | ✅ 완료      | 100%   | High     |
-| 감시 모니터링 & HUD/OCR | ✅ 완료      | 100%   | High     |
-| OCR/STT 파이프라인 스텁 | ✅ 완료      | 100%   | Medium   | (Task 28에서 PaddleOCR로 대체됨)
-| 서버 알림 및 블라인드   | ✅ 완료      | 100%   | High     |
-| ESC/트레이 재진입       | ✅ 완료      | 100%   | Medium   |
-| ROI/모드 영속화         | ⚠️ 부분 완료 | 80%    | Medium   |
-| 네이티브 Tesseract 통합 | 🔄 대체됨    | -      | -        | (Task 28로 대체됨)
-| FastAPI 기본 구조       | ✅ 완료      | 100%   | Medium   |
-| 텍스트 분석 API         | ✅ 완료      | 100%   | High     |
-| IPC 서버 핸들러         | ✅ 완료      | 100%   | High     |
-| Electron 통합          | ✅ 완료      | 100%   | High     |
-| 음성 STT API           | ✅ 완료      | 100%   | Medium   |
-| 음성 Electron 연동     | ✅ 완료      | 100%   | High     |
-| 앱별 볼륨 조절 마이그레이션 | ✅ 완료 | 100%   | High     |
-| Deepgram STT 통합     | ✅ 완료      | 100%   | High     |
-| PaddleOCR 서버 연동    | ✅ 완료      | 100%   | High     | (현재는 Windows SDK OCR로 대체됨)
-| OnVoice COM Bridge 통합 | ✅ 완료      | 100%   | High     |
-| AudioManager 트레이 통합 | ✅ 완료      | 100%   | High     |
-| Windows OCR 성능 최적화 | ✅ 완료      | 100%   | High     |
-| Deepgram 실시간 스트리밍 | ✅ 완료      | 100%   | High     |
-| 로컬 Whisper 폴백 시스템 | ✅ 완료      | 100%   | High     |
-| Ubuntu 서버 FastAPI 배포 | ✅ 문서화 완료 | 100%   | Medium   |
-| 코드 리팩토링 및 정리 | ✅ 완료      | 100%   | Medium   |
-| C# 기반 PID 볼륨 제어 통합 | ✅ 완료      | 100%   | High     |
-| C++ Core Audio 구현 상세 | ✅ 완료      | 100%   | Low      |
-| 파인튜닝된 KoElectra 분류기 연동 | ✅ 완료      | 100%   | High     |
-| Electron 앱 배포 | ✅ 완료      | 100%   | Medium   |
-| Threshold 설정 및 최적화 | ✅ 완료      | 100%   | Medium   |
-| Vercel 관리자 대시보드 | 📝 계획 단계  | 0%     | Low      |
-| Spawn 방식 Bridge 마이그레이션 | ✅ 완료      | 100%   | High     |
+| 작업                                   | 상태           | 진행률 | 우선순위 |
+| -------------------------------------- | -------------- | ------ | -------- | --------------------------------- |
+| 기본 Electron 앱 설정                  | ✅ 완료        | 100%   | High     |
+| 시스템 트레이                          | ✅ 완료        | 100%   | High     |
+| 투명 오버레이 창                       | ✅ 완료        | 100%   | High     |
+| ROI 선택 기능                          | ✅ 완료        | 100%   | High     |
+| Edit Mode 관리                         | ✅ 완료        | 100%   | High     |
+| 상태 관리                              | ✅ 완료        | 100%   | High     |
+| IPC 통신                               | ✅ 완료        | 100%   | High     |
+| 개발자 도구 통합                       | ✅ 완료        | 100%   | Medium   |
+| 키보드 단축키                          | ✅ 완료        | 100%   | Medium   |
+| Preload API                            | ✅ 완료        | 100%   | High     |
+| 상태 모델 정의                         | ✅ 완료        | 80%    | High     |
+| 트레이 메뉴 "영역 지정"                | ✅ 완료        | 100%   | High     |
+| 설정 모드 ROI 선택                     | ✅ 완료        | 100%   | High     |
+| 감시 모니터링 & HUD/OCR                | ✅ 완료        | 100%   | High     |
+| OCR/STT 파이프라인 스텁                | ✅ 완료        | 100%   | Medium   | (Task 28에서 PaddleOCR로 대체됨)  |
+| 서버 알림 및 블라인드                  | ✅ 완료        | 100%   | High     |
+| ESC/트레이 재진입                      | ✅ 완료        | 100%   | Medium   |
+| ROI/모드 영속화                        | ⚠️ 부분 완료   | 80%    | Medium   |
+| 네이티브 Tesseract 통합                | 🔄 대체됨      | -      | -        | (Task 28로 대체됨)                |
+| FastAPI 기본 구조                      | ✅ 완료        | 100%   | Medium   |
+| 텍스트 분석 API                        | ✅ 완료        | 100%   | High     |
+| IPC 서버 핸들러                        | ✅ 완료        | 100%   | High     |
+| Electron 통합                          | ✅ 완료        | 100%   | High     |
+| 음성 STT API                           | ✅ 완료        | 100%   | Medium   |
+| 음성 Electron 연동                     | ✅ 완료        | 100%   | High     |
+| 앱별 볼륨 조절 마이그레이션            | ✅ 완료        | 100%   | High     |
+| Deepgram STT 통합                      | ✅ 완료        | 100%   | High     |
+| PaddleOCR 서버 연동                    | ✅ 완료        | 100%   | High     | (현재는 Windows SDK OCR로 대체됨) |
+| OnVoice COM Bridge 통합                | ✅ 완료        | 100%   | High     |
+| AudioManager 트레이 통합               | ✅ 완료        | 100%   | High     |
+| Windows OCR 성능 최적화                | ✅ 완료        | 100%   | High     |
+| Deepgram 실시간 스트리밍               | ✅ 완료        | 100%   | High     |
+| 로컬 Whisper 폴백 시스템               | ✅ 완료        | 100%   | High     |
+| Ubuntu 서버 FastAPI 배포               | ✅ 문서화 완료 | 100%   | Medium   |
+| 코드 리팩토링 및 정리                  | ✅ 완료        | 100%   | Medium   |
+| C# 기반 PID 볼륨 제어 통합             | ✅ 완료        | 100%   | High     |
+| C++ Core Audio 구현 상세               | ✅ 완료        | 100%   | Low      |
+| 파인튜닝된 KoElectra 분류기 연동       | ✅ 완료        | 100%   | High     |
+| Electron 앱 배포                       | ✅ 완료        | 100%   | Medium   |
+| Threshold 설정 및 최적화               | ✅ 완료        | 100%   | Medium   |
+| Vercel 관리자 대시보드                 | 📝 계획 단계   | 0%     | Low      |
+| Spawn 방식 Bridge 마이그레이션         | ✅ 완료        | 100%   | High     |
+| Supabase 기반 관리자 DB 및 로깅 시스템 | 📝 계획 단계   | 0%     | Medium   |
+| 메인 대시보드 구축 및 멀티 윈도우 관리 | ✅ 완료        | 100%   | High     |
 
 ## 최근 변경 사항 (2025-11-26)
 
@@ -262,3 +274,16 @@
   - Self-contained `.exe` 파일로 배포 (.NET 런타임 포함)
   - JSON over stdio 통신 프로토콜 사용
   - 포터블 빌드 검증 문서 추가: `docs/PORTABLE_BUILD_VERIFICATION.md`
+- **Task 46: Supabase 기반 관리자 DB 및 로깅 시스템 구축 계획**
+  - PostgreSQL 기반 로그 저장 시스템 설계
+  - Supabase 연동 가이드 작성
+  - 관리자 API 엔드포인트 설계
+  - 설정 원격 관리 기능 제안
+- **Task 47: 메인 대시보드 구축 및 멀티 윈도우 관리 완료**
+  - 모드 선택 화면 구현 (OCR/음성 선택)
+  - OCR 모드 선택 시 오버레이 윈도우 동적 생성
+  - 음성 모드 선택 시 AudioManager 스트리밍 시작
+  - OCR 성능 최적화 (캡처 간격 800ms, 썸네일 크기 최적화)
+  - 단일 인스턴스 보장 (중복 실행 방지)
+  - 중복 텍스트 필터링 (OCR 및 서버 분석)
+  - 트레이 메뉴 상태 업데이트 개선

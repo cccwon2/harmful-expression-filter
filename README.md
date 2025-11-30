@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~45**까지 진행 중입니다 (Task 43, 44 포함):
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~47**까지 진행 중입니다 (Task 43, 44, 46, 47 포함):
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -36,6 +36,8 @@
 - **Task 43**: Threshold(임계값) 설정 및 최적화 (모델별 기본값 설정, 환경 변수 지원, API를 통한 동적 조정, Electron 트레이 연동)
 - **Task 44**: Vercel 관리자 대시보드 구축 가이드 (Next.js 기반 대시보드, FastAPI 서버 연동, 실시간 모니터링)
 - **Task 45**: Spawn 방식 Bridge 마이그레이션 (electron-edge-js → child_process.spawn, 프로세스 분리 및 안정성 향상)
+- **Task 46**: Supabase 기반 관리자 DB 및 로깅 시스템 구축 (PostgreSQL 로그 저장, 설정 원격 관리, 관리자 API) 📝 계획 단계
+- **Task 47**: 메인 대시보드 구축 및 멀티 윈도우 관리 (모드 선택 화면, OCR/음성 모드 분리, 성능 최적화)
 
 ### 주요 기술 스택
 
