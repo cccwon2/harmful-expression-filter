@@ -72,6 +72,11 @@ console.warn = function (...args: any[]) {
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let tray: ReturnType<typeof createTray> | null = null;
+
+// 트레이를 외부에서 설정할 수 있도록 export
+export function setTrayInstance(trayInstance: ReturnType<typeof createTray> | null) {
+  tray = trayInstance;
+}
 let currentROI: ROI | null = null;
 let monitoringInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;

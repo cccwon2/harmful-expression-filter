@@ -290,7 +290,11 @@ export function createOverlayWindow(): BrowserWindow {
       console.log('[Overlay] Ctrl+E/Q detected in main process');
       event.preventDefault();
       if (exitEditModeAndHideHandler) {
+        console.log('[Overlay] ✅ Exit Edit Mode 핸들러 호출 중...');
         exitEditModeAndHideHandler();
+        console.log('[Overlay] ✅ Exit Edit Mode 핸들러 호출 완료');
+      } else {
+        console.warn('[Overlay] ⚠️ Exit Edit Mode 핸들러가 설정되지 않음');
       }
       return;
     }

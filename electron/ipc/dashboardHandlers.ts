@@ -89,29 +89,78 @@ export function registerDashboardHandlers(): void {
         const { registerAudioHandlers } = await import("./audioHandlers");
         registerAudioHandlers(overlayWindow);
         
+        // Ctrl+E/Q 핸들러 설정
+        const { setExitEditModeAndHideHandler } = await import("../windows/createOverlayWindow");
+        const mainModule = await import("../main");
+        const handleExitEditModeAndHide = () => {
+          console.log("[Dashboard] ✅ Exit Edit Mode and hide overlay (Ctrl+E/Q 핸들러 호출됨)");
+          if (overlayWindow && !overlayWindow.isDestroyed()) {
+            const { setEditModeState } = require("../state/editMode");
+            setEditModeState(false);
+            overlayWindow.hide();
+            overlayWindow.setSkipTaskbar(true);
+            const mainStopMonitoring = (mainModule as any).stopMonitoring;
+            if (mainStopMonitoring) {
+              mainStopMonitoring("Exit edit mode and hide overlay request");
+            }
+            console.log("[Dashboard] ✅ 오버레이 숨김 완료");
+          } else {
+            console.warn("[Dashboard] ⚠️ 오버레이 윈도우가 없거나 파괴됨");
+          }
+        };
+        setExitEditModeAndHideHandler(handleExitEditModeAndHide);
+        console.log("[Dashboard] ✅ Ctrl+E/Q 핸들러 설정 완료");
+        
         // 트레이 생성 (오버레이 윈도우가 생성된 후)
         const { createTray } = await import("../tray");
         const { setTrayUpdateCallback, setTrayAudioUpdateCallback } = await import("../tray");
         const { setOverlayTrayUpdateCallback } = await import("../windows/createOverlayWindow");
         
         // main.ts의 함수들을 가져와서 트레이 핸들러에 전달
-        const mainModule = await import("../main");
         const mainEnterSetupMode = (mainModule as any).enterSetupMode;
         const mainResetToSetupMode = (mainModule as any).resetToSetupMode;
         
-        // 트레이가 없으면 생성
+        // 트레이 생성
         let trayInstance = null;
         try {
           // main.ts의 전역 tray 변수 확인
           const mainTray = (mainModule as any).tray;
           if (!mainTray) {
             trayInstance = createTray(overlayWindow, {
-              enterSetupMode: mainEnterSetupMode || (() => {}),
-              resetToSetupMode: mainResetToSetupMode || (() => {}),
+              enterSetupMode: mainEnterSetupMode || (() => {
+                console.log("[Dashboard] enterSetupMode 호출됨");
+              }),
+              resetToSetupMode: mainResetToSetupMode || (() => {
+                console.log("[Dashboard] resetToSetupMode 호출됨");
+              }),
             });
-            // main.ts의 전역 tray 변수에 설정
-            (mainModule as any).tray = trayInstance;
-            console.log("[Dashboard] 트레이 생성 완료");
+            // main.ts의 setTrayInstance 함수를 통해 설정
+            const setTrayInstance = (mainModule as any).setTrayInstance;
+            if (setTrayInstance) {
+              setTrayInstance(trayInstance);
+              console.log("[Dashboard] ✅ 트레이 생성 완료 및 main.ts에 등록됨");
+            } else {
+              // fallback: 직접 설정
+              (mainModule as any).tray = trayInstance;
+              console.log("[Dashboard] ✅ 트레이 생성 완료 (fallback 방식)");
+            }
+            
+            // 트레이가 제대로 생성되었는지 확인 및 강제 표시
+            if (trayInstance) {
+              console.log("[Dashboard] ✅ 트레이 인스턴스 확인됨");
+              // 트레이 아이콘과 메뉴가 제대로 설정되었는지 확인
+              try {
+                // 컨텍스트 메뉴를 즉시 업데이트하여 표시되도록 함
+                if (typeof (trayInstance as any).updateContextMenu === "function") {
+                  (trayInstance as any).updateContextMenu();
+                  console.log("[Dashboard] ✅ 트레이 컨텍스트 메뉴 업데이트 완료");
+                }
+              } catch (err: any) {
+                console.error("[Dashboard] ❌ 트레이 메뉴 업데이트 실패:", err);
+              }
+            } else {
+              console.error("[Dashboard] ❌ 트레이 인스턴스가 null입니다");
+            }
           } else {
             trayInstance = mainTray;
             console.log("[Dashboard] 트레이가 이미 존재함");
@@ -125,8 +174,9 @@ export function registerDashboardHandlers(): void {
           setTrayUpdateCallback(trayUpdateFn);
           setOverlayTrayUpdateCallback(trayUpdateFn);
           setTrayAudioUpdateCallback(trayUpdateFn);
-        } catch (err) {
-          console.warn("[Dashboard] 트레이 생성 실패:", err);
+        } catch (err: any) {
+          console.error("[Dashboard] ❌ 트레이 생성 실패:", err);
+          console.error("[Dashboard] 에러 상세:", err.message, err.stack);
         }
       }
       
