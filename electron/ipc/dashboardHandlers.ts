@@ -414,11 +414,35 @@ export function registerDashboardHandlers(): void {
           await audioManager.startStream("chrome");
           console.log("[Dashboard] ✅ 음성 모드 활성화됨 (chrome)");
           
-          // 스트리밍 시작 후 트레이 메뉴 업데이트
+          // 스트리밍 시작 후 트레이 메뉴 업데이트 (약간의 지연을 두어 상태가 확실히 반영되도록)
+          setTimeout(() => {
+            if (trayInstance && typeof (trayInstance as any).updateContextMenu === "function") {
+              try {
+                (trayInstance as any).updateContextMenu();
+                console.log("[Dashboard] ✅ 트레이 메뉴 업데이트 완료 (스트리밍 시작 후)");
+              } catch (err: any) {
+                console.error("[Dashboard] ❌ 트레이 메뉴 업데이트 실패:", err);
+              }
+            } else {
+              // 트레이 업데이트 콜백을 통해 업데이트 시도
+              const { getTrayAudioUpdateCallback } = require("../tray");
+              const trayUpdateCallback = getTrayAudioUpdateCallback();
+              if (trayUpdateCallback && typeof trayUpdateCallback === "function") {
+                try {
+                  trayUpdateCallback();
+                  console.log("[Dashboard] ✅ 트레이 메뉴 업데이트 완료 (콜백 방식)");
+                } catch (err: any) {
+                  console.error("[Dashboard] ❌ 트레이 메뉴 업데이트 실패 (콜백):", err);
+                }
+              }
+            }
+          }, 200);
+        } else {
+          // 이미 스트리밍 중이면 메뉴만 업데이트
           if (trayInstance && typeof (trayInstance as any).updateContextMenu === "function") {
             try {
               (trayInstance as any).updateContextMenu();
-              console.log("[Dashboard] ✅ 트레이 메뉴 업데이트 완료 (스트리밍 시작 후)");
+              console.log("[Dashboard] ✅ 트레이 메뉴 업데이트 완료 (이미 스트리밍 중)");
             } catch (err: any) {
               console.error("[Dashboard] ❌ 트레이 메뉴 업데이트 실패:", err);
             }

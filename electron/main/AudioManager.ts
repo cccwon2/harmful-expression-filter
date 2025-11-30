@@ -382,15 +382,20 @@ class AudioManager {
       console.log(`[AudioManager] ✅ 스트리밍 시작: ${target} (PID: ${pid})`);
       
       // 트레이 메뉴 업데이트 (순환 의존성 방지를 위해 동적 import)
-      try {
-        const { getTrayAudioUpdateCallback } = require("../tray");
-        const trayUpdateCallback = getTrayAudioUpdateCallback();
-        if (trayUpdateCallback && typeof trayUpdateCallback === "function") {
-          trayUpdateCallback();
+      // 약간의 지연을 두어 상태가 확실히 반영되도록 함
+      setImmediate(() => {
+        try {
+          const { getTrayAudioUpdateCallback } = require("../tray");
+          const trayUpdateCallback = getTrayAudioUpdateCallback();
+          if (trayUpdateCallback && typeof trayUpdateCallback === "function") {
+            trayUpdateCallback();
+            console.log("[AudioManager] ✅ 트레이 메뉴 업데이트 완료 (startStream)");
+          }
+        } catch (err) {
+          // 트레이 업데이트 실패는 치명적이지 않음
+          console.warn("[AudioManager] ⚠️ 트레이 메뉴 업데이트 실패 (무시됨):", err);
         }
-      } catch (err) {
-        // 트레이 업데이트 실패는 치명적이지 않음
-      }
+      });
     } catch (e) {
       console.error(e);
       throw e;
