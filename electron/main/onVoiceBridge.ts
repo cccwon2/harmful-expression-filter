@@ -122,19 +122,26 @@ function spawnBridge(): void {
         // (shell: true는 보안상 권장되지 않음)
       });
 
-      // stderr 필터링: 0자 추출 로그는 출력하지 않음
+      // stderr 필터링: 0자 추출 로그는 완전히 무시
       bridgeProcess.stderr?.on("data", (data: Buffer) => {
-        const lines = data.toString().split("\n");
-        lines.forEach((line) => {
-          const trimmedLine = line.trim();
-          // 0자 추출 로그는 필터링
-          if (trimmedLine && !trimmedLine.includes("[OnVoiceComBridge] OCR 완료: 0자 추출")) {
-            // 다른 stderr 로그는 개발 모드에서만 출력
-            if (!app.isPackaged) {
+        const text = data.toString();
+        // 0자 추출 로그 패턴 매칭 (정규표현식 사용)
+        const zeroCharPattern = /\[OnVoiceComBridge\]\s*OCR\s*완료:\s*0자\s*추출/;
+        if (zeroCharPattern.test(text)) {
+          return; // 0자 추출 로그는 완전히 무시
+        }
+
+        // 다른 stderr 로그는 개발 모드에서만 출력 (0자 추출 제외)
+        if (!app.isPackaged) {
+          const lines = text.split("\n");
+          lines.forEach((line) => {
+            const trimmedLine = line.trim();
+            // 각 라인도 0자 추출 로그인지 확인
+            if (trimmedLine && !zeroCharPattern.test(trimmedLine)) {
               console.error(`[Bridge stderr] ${trimmedLine}`);
             }
-          }
-        });
+          });
+        }
       });
 
       // spawn이 성공했지만 프로세스가 즉시 실패할 수 있으므로 error 이벤트 리스너를 먼저 등록
