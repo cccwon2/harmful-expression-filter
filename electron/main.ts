@@ -9,7 +9,7 @@ import { createTray } from "./tray";
 import { setupROIHandlers, type ROI } from "./ipc/roi";
 import { IPC_CHANNELS } from "./ipc/channels";
 import { SERVER_CHANNELS } from "./ipc/channels";
-import { setOverlayWindow, setEditModeState, setTrayUpdateCallback } from "./state/editMode";
+import { setOverlayWindow, getOverlayWindow, setEditModeState, setTrayUpdateCallback } from "./state/editMode";
 import { getROI, getMode, setMode, getThreshold, setThreshold } from "./store";
 import * as fs from "fs";
 import * as path from "path";
@@ -83,6 +83,12 @@ let currentROI: ROI | null = null;
 export function setCurrentROI(roi: ROI | null) {
   currentROI = roi;
   console.log("[Main] currentROI 업데이트:", roi);
+}
+
+// overlayWindow를 외부에서 업데이트할 수 있도록 export
+export function setOverlayWindowInstance(window: BrowserWindow | null) {
+  overlayWindow = window;
+  console.log("[Main] overlayWindow 업데이트:", window ? "설정됨" : "null");
 }
 let monitoringInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;
@@ -230,20 +236,26 @@ app.whenReady().then(async () => {
   }
 
   const sendOverlayMode = (mode: OverlayMode) => {
-    if (!overlayWindow || overlayWindow.isDestroyed()) {
+    // overlayWindow는 state/editMode.ts에서 가져오기 (dashboardHandlers에서 생성한 윈도우도 포함)
+    const currentOverlayWindow = overlayWindow || getOverlayWindow();
+    if (!currentOverlayWindow || currentOverlayWindow.isDestroyed()) {
       console.warn("[Main] Cannot send OVERLAY_SET_MODE - overlay window is unavailable");
       return;
     }
-    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, mode);
+    currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, mode);
     console.log("[Main] Sent OVERLAY_SET_MODE:", mode);
   };
 
   const pushOverlayState = (state: OverlayStatePayload) => {
-    if (!overlayWindow || overlayWindow.isDestroyed()) {
+    // overlayWindow는 state/editMode.ts에서 가져오기 (dashboardHandlers에서 생성한 윈도우도 포함)
+    const currentOverlayWindow = overlayWindow || getOverlayWindow();
+    if (!currentOverlayWindow || currentOverlayWindow.isDestroyed()) {
       console.warn("[Main] Cannot push overlay state - overlay window is unavailable");
+      console.warn("[Main] main.ts overlayWindow:", overlayWindow ? "존재" : "null");
+      console.warn("[Main] state/editMode overlayWindow:", getOverlayWindow() ? "존재" : "null");
       return;
     }
-    overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, state);
+    currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, state);
     console.log("[Main] Sent OVERLAY_STATE_PUSH:", JSON.stringify(state));
   };
 
@@ -431,20 +443,22 @@ app.whenReady().then(async () => {
         console.log(`[OCR] 서버 AI 분석 결과: is_harmful=${is_harmful}, 타입=${typeof is_harmful}`);
 
         // 5. 유해성 감지 시 알림 (서버 AI 모델 기반)
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          // is_harmful이 true인지 명확히 확인 (boolean 또는 truthy 값)
-          const isHarmful = is_harmful === true || is_harmful === 1 || is_harmful === "true";
+        // overlayWindow는 state/editMode.ts에서 가져오기 (dashboardHandlers에서 생성한 윈도우도 포함)
+        const currentOverlayWindow = overlayWindow || getOverlayWindow();
+        if (currentOverlayWindow && !currentOverlayWindow.isDestroyed()) {
+          // is_harmful이 true인지 명확히 확인 (boolean 값)
+          const isHarmful = is_harmful === true;
           
           if (isHarmful) {
             console.warn(`[OCR] 🚨 유해 표현 감지 (AI 모델)`);
-            overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
+            currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: true,
               words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
             });
             console.log(`[OCR] ✅ ALERT_FROM_SERVER 전송 완료 (harmful=true)`);
           } else {
             // harmful=false도 전송하여 블라인드 해제 타이머 시작
-            overlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
+            currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: false,
               words: [],
             });
@@ -452,6 +466,8 @@ app.whenReady().then(async () => {
           }
         } else {
           console.warn(`[OCR] ⚠️ 오버레이 윈도우가 없거나 파괴됨 - ALERT_FROM_SERVER 전송 불가`);
+          console.warn(`[OCR] main.ts overlayWindow:`, overlayWindow ? "존재" : "null");
+          console.warn(`[OCR] state/editMode overlayWindow:`, getOverlayWindow() ? "존재" : "null");
         }
 
         if (!isMonitoring || !currentROI) {

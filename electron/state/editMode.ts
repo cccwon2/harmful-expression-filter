@@ -12,6 +12,10 @@ export function setOverlayWindow(window: BrowserWindow | null) {
   overlayWindow = window;
 }
 
+export function getOverlayWindow(): BrowserWindow | null {
+  return overlayWindow;
+}
+
 export function setTrayUpdateCallback(callback: (() => void) | null) {
   trayUpdateCallback = callback;
 }
