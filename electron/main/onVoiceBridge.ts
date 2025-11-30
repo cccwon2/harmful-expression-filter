@@ -31,11 +31,24 @@ function getBridgePath(): string {
     // - 포터블 (dir): {실행파일경로}/resources
     exePath = path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe");
   } else {
-    // [개발 모드] dotnet publish 출력 경로
-    exePath = path.join(
+    // [개발 모드] Debug 빌드를 우선 사용, 없으면 Release 사용
+    const debugPath = path.join(
+      __dirname,
+      "../../dotnet/OnVoiceComBridge/bin/Debug/net6.0/win-x64/publish/OnVoiceComBridge.exe"
+    );
+    const releasePath = path.join(
       __dirname,
       "../../dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe"
     );
+
+    // Debug 빌드가 있으면 사용, 없으면 Release 사용
+    if (existsSync(debugPath)) {
+      exePath = debugPath;
+      console.log(`[OnVoiceBridge] 🔍 Debug 빌드 사용: ${debugPath}`);
+    } else {
+      exePath = releasePath;
+      console.log(`[OnVoiceBridge] 🔍 Release 빌드 사용: ${releasePath}`);
+    }
   }
   // 절대 경로로 변환하여 공백이나 특수 문자 문제 방지
   return path.resolve(exePath);
@@ -109,7 +122,8 @@ function spawnBridge(): void {
         }
       });
     } catch (spawnError: any) {
-      // spawn이 동기적으로 실패한 경우 (예: UNKNOWN 에러)
+      // spawn이 동기적으로 실패한 경우 (예: UNKNOWN 에러, 파일 손상, VC++ 미설치 등)
+      console.error(`[OnVoiceBridge] ❌ spawn 동기 에러: ${spawnError.message}`);
 
       // 개발 모드에서는 더 자세한 진단 정보 제공 (한 번만)
       if (!app.isPackaged) {
