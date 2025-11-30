@@ -15,6 +15,7 @@ import { existsSync } from "fs";
 let bridgeProcess: ChildProcess | null = null;
 let bridgeReadline: readline.Interface | null = null;
 let bridgeSpawnFailed = false; // 개발 모드에서 spawn 실패 플래그
+let bridgeWarningShown = false; // 개발 모드에서 경고 메시지 한 번만 표시
 const pendingRequests = new Map<
   string,
   { resolve: (value: any) => void; reject: (reason?: any) => void; timer: NodeJS.Timeout }
@@ -264,7 +265,13 @@ function callBridge(command: string, payload: any = {}): Promise<any> {
   // Bridge 프로세스가 여전히 null이면 (개발 모드에서 실행 실패한 경우)
   if (!bridgeProcess) {
     if (!app.isPackaged) {
-      console.warn(`[OnVoiceBridge] ⚠️ Bridge 프로세스가 없어 '${command}' 명령을 건너뜁니다.`);
+      // 개발 모드에서 경고 메시지는 한 번만 출력
+      if (!bridgeWarningShown) {
+        console.warn(
+          `[OnVoiceBridge] ⚠️ 개발 모드: Bridge 프로세스가 없어 명령을 건너뜁니다. (오디오 필터링 비활성화)`
+        );
+        bridgeWarningShown = true;
+      }
       return Promise.resolve(null);
     }
     return Promise.reject(new Error("Bridge process is not available"));
@@ -390,19 +397,15 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
 export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
   try {
     const result: any = await callBridge("listSessions");
-    // 개발 모드에서 Bridge가 없으면 빈 배열 반환
+    // 개발 모드에서 Bridge가 없으면 빈 배열 반환 (경고는 callBridge에서 이미 출력됨)
     if (result === null) {
-      if (!app.isPackaged) {
-        console.warn("[OnVoiceBridge] ⚠️ Bridge가 없어 빈 오디오 세션 목록을 반환합니다.");
-      }
       return [];
     }
     if (result && Array.isArray(result.sessions)) return result.sessions as BridgeAudioSession[];
     return [];
   } catch (error: any) {
-    // 개발 모드에서는 에러를 무시하고 빈 배열 반환
+    // 개발 모드에서는 에러를 무시하고 빈 배열 반환 (경고는 callBridge에서 이미 출력됨)
     if (!app.isPackaged) {
-      console.warn(`[OnVoiceBridge] ⚠️ 개발 모드: 오디오 세션 조회 실패를 무시합니다.`, error?.message || error);
       return [];
     }
     console.error(`[OnVoiceBridge] 오디오 세션 조회 실패`, error);

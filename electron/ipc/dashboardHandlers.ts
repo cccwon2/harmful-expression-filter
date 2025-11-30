@@ -100,8 +100,9 @@ export function registerDashboardHandlers(): void {
       if (isEnabled) {
         // 음성 필터링 시작
         if (!audioManager.getStatus().isStreaming) {
-          await audioManager.startStream();
-          console.log("[Dashboard] ✅ 음성 필터링 활성화됨");
+          // 기본값으로 chrome 사용 (추후 사용자 선택 기능 추가 가능)
+          await audioManager.startStream("chrome");
+          console.log("[Dashboard] ✅ 음성 필터링 활성화됨 (chrome)");
         }
       } else {
         // 음성 필터링 중지
