@@ -110,6 +110,17 @@ declare global {
         onStatusChange: (callback: (status: any) => void) => void;
         onHarmfulDetected: (callback: (data: any) => void) => void;
       };
+      dashboard: {
+        selectMode: (mode: 'ocr' | 'voice') => void;
+        toggleOCR: (enabled: boolean) => void;
+        toggleVoice: (enabled: boolean) => void;
+        getWindowStatus: () => Promise<{
+          isOcrEnabled: boolean;
+          isVoiceEnabled: boolean;
+          isOverlayVisible: boolean;
+        }>;
+        onOCRStatusChange: (callback: (status: 'start' | 'stop') => void) => () => void;
+      };
     };
   }
 }

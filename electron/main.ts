@@ -77,6 +77,10 @@ let monitoringInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;
 let isCaptureInProgress = false;
 
+// startMonitoring과 stopMonitoring 함수를 export하기 위한 전역 변수
+export let startMonitoring: (() => void) | null = null;
+export let stopMonitoring: ((reason?: string) => void) | null = null;
+
 type OverlayMode = "setup" | "detect" | "alert";
 
 type OverlayStatePayload = {
@@ -171,52 +175,41 @@ app.whenReady().then(async () => {
     console.error("[Main] AudioManager 초기화 실패:", error);
   }
 
-  // 메인 윈도우 생성 (대시보드 - 기본으로 표시)
+  // 메인 윈도우 생성 (모드 선택 화면 - 기본으로 표시)
   try {
     mainWindow = createMainWindow();
-    mainWindow.show(); // 대시보드를 기본으로 표시
-    console.log("[Main] 대시보드 윈도우 표시됨");
+    mainWindow.show(); // 모드 선택 화면을 기본으로 표시
+    console.log("[Main] 모드 선택 윈도우 표시됨");
   } catch (err) {
     console.warn("[Main] Failed to create main window (non-critical):", err);
     mainWindow = null;
   }
 
-  // 오버레이 창 생성 (숨김 상태로 시작)
-  overlayWindow = createOverlayWindow();
-  console.log("[Main] 오버레이 윈도우 생성됨 (숨김 상태)");
+  // 오버레이 창은 사용자가 OCR 모드를 선택할 때 생성됨 (미리 생성하지 않음)
+  overlayWindow = null;
+  console.log("[Main] 오버레이 윈도우는 모드 선택 시 생성됩니다");
   
   // 대시보드 핸들러에 윈도우 참조 설정
   setWindows(overlayWindow, mainWindow);
 
-  // Edit Mode 상태 관리에 오버레이 창 등록
-  if (overlayWindow) {
-    setOverlayWindow(overlayWindow);
-  }
-
-  // 오디오 핸들러 등록
+  // 오디오 핸들러 등록 (메인 윈도우만)
   try {
     if (mainWindow) {
       registerAudioHandlers(mainWindow);
       console.log("[Main] Audio handlers registered on main window");
     }
-    if (overlayWindow) {
-      registerAudioHandlers(overlayWindow);
-      console.log("[Main] Audio handlers registered on overlay window");
-    }
+    // 오버레이 윈도우는 모드 선택 시 생성되므로 여기서는 등록하지 않음
   } catch (err) {
     console.warn("[Main] Failed to register audio handlers (non-critical):", err);
   }
 
-  // OnVoice 핸들러 등록
+  // OnVoice 핸들러 등록 (메인 윈도우만)
   try {
     if (mainWindow) {
       registerOnVoiceHandlers(mainWindow);
       console.log("[Main] OnVoice handlers registered on main window");
     }
-    if (overlayWindow) {
-      registerOnVoiceHandlers(overlayWindow);
-      console.log("[Main] OnVoice handlers registered on overlay window");
-    }
+    // 오버레이 윈도우는 모드 선택 시 생성되므로 여기서는 등록하지 않음
   } catch (err) {
     console.warn("[Main] Failed to register OnVoice handlers (non-critical):", err);
   }
@@ -458,7 +451,8 @@ app.whenReady().then(async () => {
     }
   };
 
-  const stopMonitoring = (reason?: string) => {
+  // startMonitoring과 stopMonitoring 함수를 export하여 dashboardHandlers에서 사용 가능하도록
+  stopMonitoring = (reason?: string) => {
     if (monitoringInterval) {
       clearTimeout(monitoringInterval);
       monitoringInterval = null;
@@ -490,7 +484,7 @@ app.whenReady().then(async () => {
     }
   };
 
-  const startMonitoring = () => {
+  startMonitoring = () => {
     if (!currentROI) {
       console.warn("[OCR] 모니터링을 시작할 수 없습니다 - ROI가 정의되지 않음");
       return;
@@ -545,18 +539,8 @@ app.whenReady().then(async () => {
     }
   };
 
-  if (overlayWindow) {
-    setupROIHandlers(overlayWindow, {
-      onROISelected: (roi) => {
-        currentROI = roi;
-        console.log("[Main] Current ROI updated:", roi);
-        startMonitoring();
-      },
-      onROICancelled: () => {
-        stopMonitoring("ROI selection cancelled");
-      },
-    });
-  }
+  // ROI 핸들러는 오버레이 윈도우가 생성될 때 설정됨 (dashboardHandlers.ts에서)
+  // 여기서는 설정하지 않음
 
   const enterSetupMode = () => {
     const target = overlayWindow;

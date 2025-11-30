@@ -295,6 +295,9 @@ try {
     },
     // 대시보드 및 멀티 윈도우 관리 API
     dashboard: {
+      selectMode: (mode: 'ocr' | 'voice') => {
+        ipcRenderer.send(DASHBOARD_CHANNELS.SELECT_MODE, mode);
+      },
       toggleOCR: (enabled: boolean) => {
         ipcRenderer.send(DASHBOARD_CHANNELS.TOGGLE_OCR, enabled);
       },
@@ -370,6 +373,7 @@ declare global {
         onHarmfulDetected: (callback: (data: any) => void) => void;
       };
       dashboard: {
+        selectMode: (mode: 'ocr' | 'voice') => void;
         toggleOCR: (enabled: boolean) => void;
         toggleVoice: (enabled: boolean) => void;
         getWindowStatus: () => Promise<{

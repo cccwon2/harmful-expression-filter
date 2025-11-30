@@ -1,3 +1,12 @@
+import React from 'react';
+import { ModeSelection } from './components/ModeSelection';
+
+export const App: React.FC = () => {
+  return <ModeSelection />;
+};
+
+// 기존 대시보드 코드는 주석 처리 (필요시 복원 가능)
+/*
 import React, { useEffect, useState } from 'react';
 import { ServerTest } from './components/ServerTest';
 import { AudioMonitor } from './components/AudioMonitor';
