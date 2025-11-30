@@ -78,6 +78,7 @@ function spawnBridge() {
     }
 
     // spawn 시도 (기본 방법)
+    // spawn은 동기적으로 에러를 throw할 수 있으므로 try-catch로 감싸야 함
     try {
       bridgeProcess = spawn(absolutePath, [], {
         stdio: ["pipe", "pipe", "inherit"], // stdin, stdout, stderr (inherit for debug)
@@ -85,16 +86,34 @@ function spawnBridge() {
         // Windows에서 실행 권한 문제를 피하기 위해 shell 옵션은 사용하지 않음
         // (shell: true는 보안상 권장되지 않음)
       });
+
+      // spawn이 성공했지만 프로세스가 즉시 실패할 수 있으므로 error 이벤트 리스너를 먼저 등록
+      bridgeProcess.on("error", (err) => {
+        console.error("[OnVoiceBridge] ❌ Failed to spawn bridge process (비동기 에러):", err);
+        bridgeProcess = null;
+        // 개발 모드에서는 에러를 무시하고 계속 진행
+        if (!app.isPackaged) {
+          console.warn("[OnVoiceBridge] ⚠️ 개발 모드: Bridge 프로세스 에러를 무시합니다.");
+          return;
+        }
+      });
     } catch (spawnError: any) {
-      // spawn 실패 시 execFile로 재시도 (일부 환경에서 더 안정적)
-      console.warn(`[OnVoiceBridge] ⚠️ spawn 실패, execFile로 재시도:`, spawnError.message);
-      throw spawnError; // 일단 에러를 다시 throw하여 아래 catch에서 처리
+      // spawn이 동기적으로 실패한 경우 (예: UNKNOWN 에러)
+      console.error(`[OnVoiceBridge] ❌ spawn 동기 에러:`, spawnError);
+      // 개발 모드에서는 에러를 throw하지 않고 null로 설정
+      if (!app.isPackaged) {
+        console.warn("[OnVoiceBridge] ⚠️ 개발 모드: spawn 동기 에러를 무시합니다.");
+        bridgeProcess = null;
+        return; // 에러를 throw하지 않고 함수 종료
+      }
+      throw spawnError; // 배포 모드에서는 에러를 throw
     }
 
-    bridgeProcess.on("error", (err) => {
-      console.error("[OnVoiceBridge] ❌ Failed to spawn bridge process:", err);
-      bridgeProcess = null;
-    });
+    // bridgeProcess가 null이 아닌 경우에만 이벤트 리스너 등록
+    if (!bridgeProcess) {
+      // spawn이 실패했지만 개발 모드에서는 계속 진행
+      return;
+    }
 
     bridgeProcess.on("exit", (code, signal) => {
       console.log(`[OnVoiceBridge] 🛑 Bridge process exited with code ${code} signal ${signal}`);
@@ -108,7 +127,14 @@ function spawnBridge() {
       pendingRequests.clear();
     });
 
-    if (!bridgeProcess.stdout) {
+    // bridgeProcess가 null이거나 stdout이 null인 경우 처리
+    if (!bridgeProcess || !bridgeProcess.stdout) {
+      // 개발 모드에서는 에러를 throw하지 않음
+      if (!app.isPackaged) {
+        console.warn("[OnVoiceBridge] ⚠️ 개발 모드: Bridge stdout이 없어 계속 진행합니다.");
+        bridgeProcess = null;
+        return;
+      }
       throw new Error("Failed to spawn bridge: stdout is null");
     }
 
