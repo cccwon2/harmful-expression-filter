@@ -115,11 +115,26 @@ function spawnBridge(): void {
       console.log(`[OnVoiceBridge] 📁 Bridge 작업 디렉토리: ${bridgeDir}`);
 
       bridgeProcess = spawn(absolutePath, [], {
-        stdio: ["pipe", "pipe", "inherit"], // stdin, stdout, stderr (inherit for debug)
+        stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr 모두 pipe로 받아서 필터링
         windowsHide: true,
         cwd: bridgeDir, // 작업 디렉토리를 Bridge 실행 파일이 있는 폴더로 설정
         // Windows에서 실행 권한 문제를 피하기 위해 shell 옵션은 사용하지 않음
         // (shell: true는 보안상 권장되지 않음)
+      });
+
+      // stderr 필터링: 0자 추출 로그는 출력하지 않음
+      bridgeProcess.stderr?.on("data", (data: Buffer) => {
+        const lines = data.toString().split("\n");
+        lines.forEach((line) => {
+          const trimmedLine = line.trim();
+          // 0자 추출 로그는 필터링
+          if (trimmedLine && !trimmedLine.includes("[OnVoiceComBridge] OCR 완료: 0자 추출")) {
+            // 다른 stderr 로그는 개발 모드에서만 출력
+            if (!app.isPackaged) {
+              console.error(`[Bridge stderr] ${trimmedLine}`);
+            }
+          }
+        });
       });
 
       // spawn이 성공했지만 프로세스가 즉시 실패할 수 있으므로 error 이벤트 리스너를 먼저 등록
@@ -555,11 +570,13 @@ export const onVoiceBridge: OnVoiceBridge = {
       if (!result || result.ok === false) return { ok: false, error: result?.error || "OCR 실패" };
 
       const extractedText = result.text || "";
+      const normalizedText = extractedText.trim(); // 공백 정규화
 
       let analysisResult = { isHarmful: false, confidence: 0.0 };
-      if (extractedText.trim().length > 0) {
+      if (normalizedText.length > 0) {
         // 중복 텍스트 필터링: 같은 텍스트가 연속으로 나오면 서버 분석 건너뜀
-        if (extractedText === lastAnalyzedText) {
+        // 정규화된 텍스트로 비교 (공백, 줄바꿈 차이 무시)
+        if (normalizedText === lastAnalyzedText) {
           // 중복 텍스트는 서버로 전송하지 않음 (DB 저장 방지)
           return {
             ok: true,
@@ -572,8 +589,8 @@ export const onVoiceBridge: OnVoiceBridge = {
         }
 
         // 새로운 텍스트인 경우에만 서버 분석 수행
-        lastAnalyzedText = extractedText;
-        analysisResult = await analyzeTextWithServer(extractedText);
+        lastAnalyzedText = normalizedText;
+        analysisResult = await analyzeTextWithServer(normalizedText);
         // 유해 표현 감지 시에만 로그 출력
         if (analysisResult.isHarmful) {
           console.warn(
