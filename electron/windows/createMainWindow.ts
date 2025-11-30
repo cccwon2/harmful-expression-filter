@@ -9,8 +9,8 @@ export function createMainWindow(): BrowserWindow {
   console.log('[Main] __dirname:', __dirname);
 
   const mainWindow = new BrowserWindow({
-    width: 360,
-    height: 240,
+    width: 400,
+    height: 280,
     backgroundColor: '#0a0a0a',
     title: "OnVoice",
     show: true, // 대시보드를 기본으로 표시
