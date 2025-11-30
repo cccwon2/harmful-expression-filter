@@ -69,7 +69,8 @@ export function createMainWindow(): BrowserWindow {
   });
 
   // 개발 모드와 프로덕션 모드 분기
-  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+  // 배포 모드(app.isPackaged)에서는 항상 프로덕션 모드로 처리
+  if (!app.isPackaged && (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV)) {
     // Vite 개발 서버가 준비될 때까지 대기 후 로드
     const waitForDevServer = async (retries = 30, delay = 500) => {
       for (let i = 0; i < retries; i++) {
@@ -106,11 +107,24 @@ export function createMainWindow(): BrowserWindow {
     // 패키지 환경에서 __dirname 은 dist-electron/windows 이므로
     // Vite build 결과(dist-electron/renderer)를 그대로 바라본다
     const indexPath = path.join(__dirname, '../renderer/index.html');
+    console.log('[Main] 🔍 배포 모드 - 메인 윈도우 로드 정보:');
+    console.log('[Main]   - __dirname:', __dirname);
+    console.log('[Main]   - indexPath:', indexPath);
+    
+    // 파일 존재 여부 확인
+    const fs = require('fs');
+    if (fs.existsSync(indexPath)) {
+      console.log('[Main] ✅ index.html 파일 발견:', indexPath);
+    } else {
+      console.error('[Main] ❌ index.html 파일을 찾을 수 없음:', indexPath);
+      console.error('[Main] 💡 빌드가 제대로 완료되었는지 확인하세요: npm run build:all');
+    }
+    
     mainWindow
       .loadFile(indexPath)
       .catch((err) => {
         // 프로덕션 모드에서도 실패 시 조용히 처리
-        console.warn('[Main] Failed to load main window:', err);
+        console.error('[Main] ❌ 메인 윈도우 로드 실패:', err);
       });
   }
 

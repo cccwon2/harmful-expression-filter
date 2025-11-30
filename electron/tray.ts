@@ -106,6 +106,17 @@ function createTrayIcon(isMonitoring: boolean = false): NativeImage {
 }
 
 export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers): Tray {
+  // 기존 트레이가 있으면 제거 (중복 방지)
+  if (tray) {
+    console.log('[Tray] 기존 트레이 제거 중...');
+    try {
+      tray.destroy();
+    } catch (err) {
+      console.warn('[Tray] 기존 트레이 제거 실패 (무시됨):', err);
+    }
+    tray = null;
+  }
+  
   // 트레이 아이콘 생성 (초기에는 모니터링 중지 상태)
   const icon = createTrayIcon(false);
 

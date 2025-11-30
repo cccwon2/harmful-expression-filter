@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, app } from 'electron';
 import * as path from 'path';
 import axios from 'axios';
 import { getEditModeState, setEditModeState } from '../state/editMode';
@@ -337,7 +337,8 @@ export function createOverlayWindow(): BrowserWindow {
   });
 
   // 개발 모드와 프로덕션 모드 분기
-  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+  // 배포 모드(app.isPackaged)에서는 항상 프로덕션 모드로 처리
+  if (!app.isPackaged && (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV)) {
     // 🟢 개발 모드: Vite 개발 서버가 준비될 때까지 대기 후 로드
     const waitForDevServer = async (retries = 30, delay = 500) => {
       for (let i = 0; i < retries; i++) {

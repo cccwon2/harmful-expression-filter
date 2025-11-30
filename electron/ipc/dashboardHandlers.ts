@@ -169,7 +169,7 @@ export async function switchToOcrMode(): Promise<void> {
     const mainEnterSetupMode = (mainModule as any).enterSetupMode;
     const mainResetToSetupMode = (mainModule as any).resetToSetupMode;
     
-    // 트레이 생성
+    // 트레이 생성 또는 재사용
     let trayInstance: ReturnType<typeof createTray> | null = null;
     try {
       // main.ts의 전역 tray 변수 확인
@@ -178,6 +178,7 @@ export async function switchToOcrMode(): Promise<void> {
         if (!overlayWindow || overlayWindow.isDestroyed()) {
           console.error("[Dashboard] ❌ 오버레이 윈도우가 없거나 파괴됨 - 트레이 생성 불가");
         } else {
+          // 트레이 생성 (createTray 내부에서 기존 트레이 제거 처리됨)
           trayInstance = createTray(overlayWindow, {
             enterSetupMode: mainEnterSetupMode || (() => {
               console.log("[Dashboard] enterSetupMode 호출됨");
@@ -215,8 +216,15 @@ export async function switchToOcrMode(): Promise<void> {
           }
         }
       } else {
+        // 기존 트레이 재사용
         trayInstance = mainTray;
-        console.log("[Dashboard] 트레이가 이미 존재함");
+        console.log("[Dashboard] ✅ 기존 트레이 재사용 (OCR 모드 전환)");
+        
+        // 오버레이 윈도우가 변경되었을 수 있으므로 트레이 메뉴 업데이트
+        if (typeof (trayInstance as any).updateContextMenu === "function") {
+          (trayInstance as any).updateContextMenu();
+          console.log("[Dashboard] ✅ 트레이 컨텍스트 메뉴 업데이트 완료 (기존 트레이)");
+        }
       }
       
       if (trayInstance) {
@@ -516,8 +524,15 @@ export function registerDashboardHandlers(): void {
               }
             }
           } else {
+            // 기존 트레이 재사용
             trayInstance = mainTray;
-            console.log("[Dashboard] 트레이가 이미 존재함");
+            console.log("[Dashboard] ✅ 기존 트레이 재사용 (OCR 모드 선택)");
+            
+            // 오버레이 윈도우가 변경되었을 수 있으므로 트레이 메뉴 업데이트
+            if (typeof (trayInstance as any).updateContextMenu === "function") {
+              (trayInstance as any).updateContextMenu();
+              console.log("[Dashboard] ✅ 트레이 컨텍스트 메뉴 업데이트 완료 (기존 트레이)");
+            }
           }
           
           if (trayInstance) {

@@ -139,6 +139,13 @@ if (!gotTheLock) {
 Menu.setApplicationMenu(null);
 
 app.whenReady().then(async () => {
+  // 배포 모드 디버깅 정보 출력
+  console.log(`[Main] 🔍 배포 모드 정보:`);
+  console.log(`[Main]   - app.isPackaged: ${app.isPackaged}`);
+  console.log(`[Main]   - process.env.NODE_ENV: ${process.env.NODE_ENV || "(설정 안 됨)"}`);
+  console.log(`[Main]   - process.resourcesPath: ${process.resourcesPath || "(없음)"}`);
+  console.log(`[Main]   - __dirname: ${__dirname}`);
+  
   // .env 파일 로드
   // 🔍 배포 환경(.exe)에서는 process.resourcesPath 사용
   // 🔍 개발 환경에서는 프로젝트 루트 사용
