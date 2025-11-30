@@ -111,7 +111,7 @@ app.whenReady().then(async () => {
 
   registerServerHandlers();
 
-  // COM DLL 등록 확인 및 자동 등록 시도 (포터블 방식 지원)
+  // COM DLL 등록 확인 및 자동 등록 시도 (Registration-Free COM 또는 레지스트리 등록 방식 지원)
   const isRegistered = await checkComDllRegistered();
   if (!isRegistered) {
     console.log("[Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...");
@@ -120,13 +120,14 @@ app.whenReady().then(async () => {
     // 등록 후 다시 확인
     const isNowRegistered = await checkComDllRegistered();
     if (!isNowRegistered) {
-      console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다. 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.");
+      console.warn("[Main] ⚠️ COM DLL 자동 등록에 실패했습니다.");
+      console.warn("[Main] 💡 Registration-Free COM 매니페스트 파일이 있는지 확인하거나, 관리자 권한으로 실행하거나 수동 등록이 필요할 수 있습니다.");
       console.warn(`[Main] 💡 수동 등록: regsvr32.exe "${path.join(process.resourcesPath || __dirname, "native", "OnVoiceAudioBridge.dll")}"`);
     } else {
-      console.log("[Main] ✅ COM DLL 등록 확인됨");
+      console.log("[Main] ✅ COM DLL 등록 확인됨 (Registration-Free COM 또는 레지스트리 등록)");
     }
   } else {
-    console.log("[Main] ✅ COM DLL이 이미 등록되어 있습니다.");
+    console.log("[Main] ✅ COM DLL이 이미 등록되어 있습니다 (Registration-Free COM 또는 레지스트리 등록).");
   }
 
   const serverReady = await checkServerConnection();

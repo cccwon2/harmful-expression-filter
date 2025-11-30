@@ -1,6 +1,7 @@
 # 작업 42: Electron 앱 배포
 
 ## 상태
+
 ✅ 완료
 
 ## 개요
@@ -10,16 +11,19 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 ## 완료된 기능
 
 ### 빌드 시스템 구성
+
 - ✅ electron-builder 설정 (`package.json`)
 - ✅ Windows NSIS 인스톨러 타겟 설정
 - ✅ C# DLL 자동 포함 (extraResources)
 - ✅ C++ COM DLL 포함 방법 문서화
 - ✅ 프로덕션 빌드 스크립트
 - ✅ 오버레이 창 배포 모드 문제 해결 (Vite base 경로, file:// 프로토콜 지원)
+- ✅ Registration-Free COM 지원 (관리자 권한 없이 COM DLL 사용 가능)
 
 ### 주요 설정
 
 #### package.json 빌드 설정
+
 ```json
 {
   "build": {
@@ -51,9 +55,14 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 ```
 
 **주요 변경사항**:
+
 - `build:dotnet` 스크립트에 `--output` 옵션 추가하여 일관된 경로(`bin/Release/net6.0/win-x64/publish`)에 출력
 - `extraResources`에서 `.exe` 파일을 `bin/OnVoiceComBridge.exe`로 정확히 복사
 - C++ COM DLL을 `native/OnVoiceAudioBridge.dll`로 포함
+- **Registration-Free COM 매니페스트 파일 포함**: `extraFiles`와 `extraResources`에 매니페스트 파일 추가
+  - `OnVoice.exe.manifest`: Electron 앱 매니페스트
+  - `OnVoiceComBridge.exe.manifest`: C# Bridge 매니페스트
+  - `OnVoiceAudioBridge.dll.manifest`: COM DLL 매니페스트
 
 ### 빌드 프로세스
 
@@ -81,6 +90,7 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 ## 빌드 스크립트
 
 ### 개발 빌드
+
 ```bash
 # 전체 빌드 (C# DLL + 복사 + TypeScript)
 npm run build:all
@@ -89,6 +99,7 @@ npm run build:all
 ### 프로덕션 빌드
 
 #### 설치 버전 (NSIS 인스톨러)
+
 ```bash
 # 1. 전체 소스 빌드
 npm run build:all
@@ -101,6 +112,7 @@ npm run build:electron
 ```
 
 #### 포터블 버전 (설치 없이 실행 가능)
+
 ```bash
 # 1. 전체 소스 빌드
 npm run build:all
@@ -113,14 +125,39 @@ npm run build:portable
 ```
 
 **포터블 버전 특징**:
+
 - 설치 과정 없이 바로 실행 가능
 - `dist/OnVoice-portable/` 폴더에 생성됨
 - `OnVoice.exe`를 직접 실행하여 사용
-- 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+- **Registration-Free COM 지원**: 관리자 권한 없이 실행 가능 (매니페스트 파일 포함)
+- 매니페스트 파일이 없으면 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
 
 **참고**: `build:portable` 스크립트는 `electron-builder --win dir`로 빌드한 후 `win-unpacked` 폴더를 `OnVoice-portable`로 이름을 변경합니다.
 
+**매니페스트 파일 포함**:
+
+포터블 버전 빌드 후 다음 매니페스트 파일들이 포함되어야 합니다:
+
+- `OnVoice.exe.manifest` - Electron 앱 매니페스트 (루트)
+- `resources/native/OnVoiceAudioBridge.dll.manifest` - COM DLL 매니페스트
+- `resources/bin/OnVoiceComBridge.exe.manifest` - C# Bridge 매니페스트
+
+빌드 후 매니페스트 파일이 누락된 경우 수동으로 복사해야 할 수 있습니다:
+
+```bash
+# 빌드 후 매니페스트 파일 확인 및 복사
+# OnVoice.exe.manifest
+copy electron\OnVoice.exe.manifest dist\OnVoice-portable\
+
+# DLL 매니페스트
+copy native\OnVoiceAudioBridge.dll.manifest dist\OnVoice-portable\resources\native\
+
+# Bridge 매니페스트
+copy dotnet\OnVoiceComBridge\bin\Release\net6.0\win-x64\publish\OnVoiceComBridge.exe.manifest dist\OnVoice-portable\resources\bin\
+```
+
 ### 통합 빌드 스크립트 (권장)
+
 `package.json`에 다음 스크립트를 추가할 수 있습니다:
 
 ```json
@@ -139,6 +176,7 @@ npm run build:portable
 ### 1. 사전 요구사항 확인
 
 #### 필수 도구
+
 - Node.js 18+ 및 npm
 - .NET 6 SDK (C# DLL 빌드용)
 - Windows SDK (Windows 빌드용)
@@ -147,6 +185,7 @@ npm run build:portable
   - MSBuild가 PATH에 없어도 스크립트가 자동으로 찾습니다
 
 #### 환경 변수
+
 ```bash
 # .NET 경로 확인
 echo %DOTNET_ROOT%
@@ -189,6 +228,7 @@ npx electron-builder
 빌드가 완료되면 `dist/` 폴더에 다음 파일들이 생성됩니다:
 
 #### 설치 버전 (NSIS)
+
 ```
 dist/
 ├── OnVoice Setup 1.0.0.exe    # NSIS 인스톨러
@@ -205,30 +245,37 @@ dist/
 ```
 
 #### 포터블 버전
+
 ```
 dist/
 ├── OnVoice-portable/
-│   ├── OnVoice.exe           # 포터블 실행 파일
+│   ├── OnVoice.exe                    # 포터블 실행 파일
+│   ├── OnVoice.exe.manifest          # Electron 앱 매니페스트 (Registration-Free COM)
 │   ├── resources/
 │   │   ├── app.asar
 │   │   ├── bin/
-│   │   │   └── OnVoiceComBridge.exe
+│   │   │   ├── OnVoiceComBridge.exe
+│   │   │   └── OnVoiceComBridge.exe.manifest  # C# Bridge 매니페스트
 │   │   └── native/
-│   │       └── OnVoiceAudioBridge.dll
+│   │       ├── OnVoiceAudioBridge.dll
+│   │       └── OnVoiceAudioBridge.dll.manifest  # COM DLL 매니페스트
 │   └── ...
 └── builder-debug.yml
 ```
 
 **포터블 버전 사용 시**:
+
 - 설치 과정 없이 `OnVoice.exe`를 직접 실행
-- 앱 시작 시 자동으로 COM DLL 등록 시도
-- 관리자 권한이 없으면 등록 실패 가능 (수동 등록 필요)
+- **Registration-Free COM 매니페스트가 있으면 관리자 권한 없이 실행 가능**
+- 매니페스트가 없으면 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+- 레지스트리 등록 없이 COM 객체 사용 가능
 
 ## 빌드 설정 상세
 
 ### Windows 설정
 
 #### NSIS 인스톨러 옵션
+
 ```json
 {
   "win": {
@@ -239,12 +286,13 @@ dist/
       }
     ],
     "requestedExecutionLevel": "asInvoker",
-    "icon": "build/icon.ico"  // 아이콘 파일 경로 (선택사항)
+    "icon": "build/icon.ico" // 아이콘 파일 경로 (선택사항)
   }
 }
 ```
 
 #### 추가 NSIS 옵션 (선택사항)
+
 ```json
 {
   "nsis": {
@@ -260,6 +308,7 @@ dist/
 ### 리소스 포함
 
 #### C# DLL 포함
+
 `extraResources` 설정을 통해 C# DLL이 앱과 함께 배포됩니다:
 
 ```json
@@ -275,18 +324,51 @@ dist/
 ```
 
 런타임에서 DLL 경로 접근:
+
 ```typescript
 // electron/main/onvoiceBridge.ts
-const dllPath = path.join(
-  process.resourcesPath,
-  'dotnet',
-  'OnVoiceComBridge.dll'
-);
+const dllPath = path.join(process.resourcesPath, "dotnet", "OnVoiceComBridge.dll");
 ```
 
 #### C++ COM DLL 포함 (필수)
 
 C# DLL이 `OnVoiceAudioBridge.OnVoiceCapture` COM 객체를 사용하므로, C++ COM DLL도 함께 배포해야 합니다.
+
+#### Registration-Free COM 지원 (권장)
+
+**관리자 권한 없이 COM DLL 사용**
+
+포터블 버전에서도 관리자 권한 없이 COM DLL을 사용할 수 있도록 **Registration-Free COM**을 지원합니다. 이 방식은 레지스트리 등록 없이 매니페스트 파일을 통해 COM 객체를 사용할 수 있게 해줍니다.
+
+**필요한 매니페스트 파일**:
+
+1. **COM DLL 매니페스트** (`native/OnVoiceAudioBridge.dll.manifest`):
+
+   - COM 클래스의 CLSID, ProgID, 인터페이스 정보 포함
+   - DLL과 같은 디렉토리에 배치
+
+2. **애플리케이션 매니페스트** (`electron/OnVoice.exe.manifest`):
+
+   - Electron 앱이 COM DLL을 사용한다고 선언
+   - 실행 파일과 같은 디렉토리에 배치
+
+3. **C# Bridge 매니페스트** (`dotnet/OnVoiceComBridge/OnVoiceComBridge.exe.manifest`):
+   - C# Bridge가 COM DLL을 사용한다고 선언
+   - C# 프로젝트 파일에 포함되어 빌드 시 자동 복사
+
+**동작 방식**:
+
+- 매니페스트 파일이 존재하면: Registration-Free COM 사용 (레지스트리 등록 불필요)
+- 매니페스트 파일이 없으면: 기존 방식 (레지스트리 등록 필요, 관리자 권한 필요)
+
+**장점**:
+
+- ✅ 관리자 권한 없이 실행 가능
+- ✅ 레지스트리 오염 방지
+- ✅ 포터블 버전에서도 완전히 독립적으로 실행 가능
+- ✅ 여러 버전의 앱을 동시에 실행 가능 (레지스트리 충돌 없음)
+
+**참고**: 설치 버전(NSIS 인스톨러)에서는 기존 레지스트리 등록 방식도 계속 지원됩니다 (`build/installer.nsh`).
 
 **포함 방법 선택**
 
@@ -305,6 +387,7 @@ git submodule update --init --recursive
 ```
 
 프로젝트 구조:
+
 ```
 harmful-expression-filter/
 ├── native/
@@ -321,6 +404,7 @@ harmful-expression-filter/
 **참고**: 실제 프로젝트는 `phase3-com-dll/OnVoiceAudioBridge/` 경로에 있습니다.
 
 빌드 스크립트 추가 (`package.json`):
+
 ```json
 {
   "scripts": {
@@ -392,6 +476,7 @@ git clone https://github.com/cccwon2/onvoice-com-bridge.git native/OnVoiceAudioB
 ```
 
 프로젝트 구조:
+
 ```
 harmful-expression-filter/
 ├── native/
@@ -405,6 +490,7 @@ harmful-expression-filter/
 ```
 
 **권장 방법**: 방법 1 (Git 서브모듈)을 사용하면:
+
 - 원본 리포지토리와 동기화 가능
 - 버전 관리 용이
 - 프로젝트 구조가 깔끔함
@@ -443,18 +529,18 @@ harmful-expression-filter/
 **DLL 복사 스크립트** (`scripts/copy-native-dll.js`):
 
 ```javascript
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 // C++ DLL 빌드 출력 경로 (Visual Studio 기본 경로)
 const sourcePaths = [
-  path.join(__dirname, '..', 'native', 'OnVoiceAudioBridge', 'x64', 'Release', 'OnVoiceAudioBridge.dll'),
-  path.join(__dirname, '..', 'native', 'OnVoiceAudioBridge', 'Release', 'OnVoiceAudioBridge.dll'),
-  path.join(__dirname, '..', 'native', 'OnVoiceAudioBridge.dll'), // 이미 복사된 경우
+  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "x64", "Release", "OnVoiceAudioBridge.dll"),
+  path.join(__dirname, "..", "native", "OnVoiceAudioBridge", "Release", "OnVoiceAudioBridge.dll"),
+  path.join(__dirname, "..", "native", "OnVoiceAudioBridge.dll"), // 이미 복사된 경우
 ];
 
-const targetDir = path.join(__dirname, '..', 'native');
-const targetFile = path.join(targetDir, 'OnVoiceAudioBridge.dll');
+const targetDir = path.join(__dirname, "..", "native");
+const targetFile = path.join(targetDir, "OnVoiceAudioBridge.dll");
 
 // 소스 파일 찾기
 let sourceFile = null;
@@ -466,9 +552,9 @@ for (const sourcePath of sourcePaths) {
 }
 
 if (!sourceFile) {
-  console.error('[Copy Native DLL] ❌ DLL을 찾을 수 없습니다.');
-  console.error('           다음 경로를 확인하세요:');
-  sourcePaths.forEach(p => console.error(`           - ${p}`));
+  console.error("[Copy Native DLL] ❌ DLL을 찾을 수 없습니다.");
+  console.error("           다음 경로를 확인하세요:");
+  sourcePaths.forEach((p) => console.error(`           - ${p}`));
   process.exit(1);
 }
 
@@ -499,28 +585,46 @@ Section Uninstall
 SectionEnd
 ```
 
-**4. 포터블 방식: 앱 시작 시 자동 등록 (구현됨)**
+**4. 포터블 방식: Registration-Free COM 또는 자동 등록 (구현됨)**
 
-포터블 방식(설치 없이 실행)에서는 설치 스크립트가 실행되지 않으므로, 앱 시작 시 자동으로 COM DLL 등록을 시도합니다.
+포터블 방식(설치 없이 실행)에서는 두 가지 방식을 지원합니다:
+
+**방식 1: Registration-Free COM (권장)**
+
+- 매니페스트 파일이 존재하면 자동으로 Registration-Free COM 사용
+- 관리자 권한 없이 실행 가능
+- 레지스트리 등록 불필요
+
+**방식 2: 자동 레지스트리 등록 (폴백)**
+
+- 매니페스트 파일이 없으면 기존 방식 사용
+- 앱 시작 시 자동으로 `regsvr32.exe`를 사용하여 등록 시도
+- 관리자 권한 필요할 수 있음
 
 **구현된 기능**:
-- `electron/main/registerComDll.ts`: COM DLL 등록 및 확인 유틸리티
+
+- `electron/main/registerComDll.ts`: Registration-Free COM 감지 및 COM DLL 등록 유틸리티
 - `electron/main.ts`: 앱 시작 시 자동 등록 로직 통합
 
 **동작 방식**:
-1. 앱 시작 시 COM DLL 등록 상태 확인 (`checkComDllRegistered()`)
-2. 미등록 시 자동으로 `regsvr32.exe`를 사용하여 등록 시도 (`registerComDll()`)
-3. 등록 실패 시 콘솔에 수동 등록 방법 안내
+
+1. 앱 시작 시 Registration-Free COM 매니페스트 파일 확인
+2. 매니페스트가 있으면: Registration-Free COM 사용 (등록 불필요)
+3. 매니페스트가 없으면: 레지스트리 등록 상태 확인 (`checkComDllRegistered()`)
+4. 미등록 시 자동으로 `regsvr32.exe`를 사용하여 등록 시도 (`registerComDll()`)
+5. 등록 실패 시 콘솔에 수동 등록 방법 안내
 
 **코드 구조**:
+
 ```typescript
 // electron/main/registerComDll.ts
-export async function registerComDll(): Promise<boolean>
-export async function checkComDllRegistered(): Promise<boolean>
+export async function hasRegistrationFreeManifest(): Promise<boolean>;
+export async function registerComDll(): Promise<boolean>;
+export async function checkComDllRegistered(): Promise<boolean>;
 
 // electron/main.ts
 app.whenReady().then(async () => {
-  // COM DLL 등록 확인 및 자동 등록 시도
+  // COM DLL 등록 확인 및 자동 등록 시도 (Registration-Free COM 우선)
   const isRegistered = await checkComDllRegistered();
   if (!isRegistered) {
     console.log("[Main] COM DLL이 등록되어 있지 않습니다. 자동 등록을 시도합니다...");
@@ -531,8 +635,10 @@ app.whenReady().then(async () => {
 ```
 
 **주의사항**:
-- COM 등록은 관리자 권한이 필요할 수 있습니다.
-- 포터블 방식에서 관리자 권한 없이 실행하면 등록이 실패할 수 있습니다.
+
+- **Registration-Free COM 사용 시**: 관리자 권한이 필요하지 않습니다. 매니페스트 파일만 올바르게 배치되면 됩니다.
+- **레지스트리 등록 방식 사용 시**: COM 등록은 관리자 권한이 필요할 수 있습니다.
+- 포터블 방식에서 관리자 권한 없이 실행하면 레지스트리 등록이 실패할 수 있습니다.
 - 등록 실패 시 콘솔에 수동 등록 방법이 안내됩니다.
 - 설치 방식(NSIS 인스톨러)에서는 `build/installer.nsh`의 등록 로직이 실행되어 더 안정적입니다.
 
@@ -556,6 +662,7 @@ app.whenReady().then(async () => {
 ```
 
 또는 환경 변수 사용:
+
 ```bash
 set CSC_LINK=path/to/certificate.pfx
 set CSC_KEY_PASSWORD=password
@@ -568,21 +675,24 @@ set CSC_KEY_PASSWORD=password
 자동 업데이트 기능을 추가하려면:
 
 1. **의존성 설치**
+
 ```bash
 npm install electron-updater
 ```
 
 2. **메인 프로세스에 업데이트 로직 추가**
+
 ```typescript
 // electron/main.ts
-import { autoUpdater } from 'electron-updater';
+import { autoUpdater } from "electron-updater";
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === "production") {
   autoUpdater.checkForUpdatesAndNotify();
 }
 ```
 
 3. **package.json 설정**
+
 ```json
 {
   "build": {
@@ -598,26 +708,37 @@ if (process.env.NODE_ENV === 'production') {
 ## 배포 체크리스트
 
 ### 빌드 전 확인사항
+
 - [ ] 모든 의존성이 설치되어 있는지 확인 (`npm install`)
 - [ ] C# 프로젝트가 정상적으로 빌드되는지 확인 (`npm run build:dotnet`)
 - [ ] TypeScript 컴파일 오류가 없는지 확인 (`npm run typecheck`)
 - [ ] 환경 변수가 올바르게 설정되어 있는지 확인
 
 ### 빌드 후 확인사항
+
 - [ ] `dist/` 폴더에 인스톨러가 생성되었는지 확인
 - [ ] `win-unpacked/OnVoice.exe`가 실행되는지 확인
-- [ ] C# DLL이 `resources/dotnet/`에 포함되었는지 확인
+- [ ] C# DLL이 `resources/bin/`에 포함되었는지 확인
 - [ ] **C++ COM DLL이 Release 빌드인지 확인** (Debug 빌드는 배포 불가)
+- [ ] **Registration-Free COM 매니페스트 파일이 포함되었는지 확인** (포터블 버전)
+  - [ ] `OnVoice.exe.manifest` (루트)
+  - [ ] `resources/native/OnVoiceAudioBridge.dll.manifest`
+  - [ ] `resources/bin/OnVoiceComBridge.exe.manifest`
 - [ ] 앱이 정상적으로 시작되는지 확인
 - [ ] 시스템 트레이 아이콘이 표시되는지 확인
 - [ ] 오디오 캡처 기능이 작동하는지 확인
 
 ### 배포 전 테스트
+
 - [ ] 깨끗한 Windows 환경에서 설치 테스트
 - [ ] .NET 6 런타임이 설치되지 않은 환경에서 테스트 (필요 시)
 - [ ] 관리자 권한 없이 설치 가능한지 확인
 - [ ] 제거(Uninstall)가 정상적으로 작동하는지 확인
-- [ ] C++ COM DLL이 정상적으로 등록되었는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
+- [ ] **포터블 버전**: Registration-Free COM 테스트
+  - [ ] 관리자 권한 없이 실행 가능한지 확인
+  - [ ] 레지스트리에 등록되지 않았는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
+  - [ ] 콘솔에서 `[COM Registration] ✅ Registration-Free COM 매니페스트가 감지되었습니다` 메시지 확인
+- [ ] **설치 버전**: C++ COM DLL이 정상적으로 등록되었는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
 - [ ] COM 객체를 통한 오디오 캡처가 정상 작동하는지 확인
 
 ## ⚠️ 중요: Debug vs Release 빌드
@@ -665,6 +786,7 @@ COM 프로그래밍에서는 Debug/Release 혼용 시 메모리 할당 문제가
 ### 💡 결론 및 권장 사항
 
 1. **개발 중 (Local Development)**:
+
    - **Debug 빌드**를 사용하세요. 브레이크포인트를 걸고 변수 값을 확인하거나, `assert`로 로직 오류를 잡는 데 유리합니다.
 
 2. **배포 및 최종 테스트 (Production)**:
@@ -692,6 +814,7 @@ npm run copy:native
 ### 빌드 실패
 
 #### C# DLL을 찾을 수 없음
+
 ```bash
 # DLL 복사 스크립트 수동 실행
 npm run copy:dll
@@ -701,6 +824,7 @@ npm run build:dotnet
 ```
 
 #### MSBuild를 찾을 수 없음
+
 ```bash
 # MSBuild 경로 확인
 node scripts/find-msbuild.js
@@ -716,6 +840,7 @@ msbuild OnVoiceAudioBridge.sln /p:Configuration=Release /p:Platform=x64
 ```
 
 **Visual Studio Build Tools 설치**:
+
 1. [Visual Studio Build Tools 다운로드](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
 2. "C++ 빌드 도구" 워크로드 선택
 3. 설치 후 재시도
@@ -729,13 +854,16 @@ msbuild OnVoiceAudioBridge.sln /p:Configuration=Release /p:Platform=x64
 **해결 방법**:
 
 1. **자동 해결 (권장)**: 빌드 스크립트가 자동으로 Visual Studio 버전에 맞는 플랫폼 도구 집합을 사용합니다.
+
    ```bash
    npm run build:native
    ```
+
    - Visual Studio 2022를 사용 중이면 `v143` 자동 사용
    - Visual Studio 2019를 사용 중이면 `v142` 자동 사용
 
 2. **수동 해결**: Visual Studio에서 프로젝트 업그레이드
+
    - Visual Studio에서 `OnVoiceAudioBridge.slnx` 또는 `OnVoiceAudioBridge.sln` 열기
    - 프로젝트를 마우스 오른쪽 클릭 > **속성** > **일반** > **플랫폼 도구 집합**
    - `v143` (Visual Studio 2022) 또는 `v142` (Visual Studio 2019)로 변경
@@ -747,6 +875,7 @@ msbuild OnVoiceAudioBridge.sln /p:Configuration=Release /p:Platform=x64
    - "MSVC v143 - VS 2022 C++ x64/x86 빌드 도구" 또는 "MSVC v142 - VS 2019 C++ x64/x86 빌드 도구" 설치
 
 #### electron-builder 오류
+
 ```bash
 # 캐시 정리
 rm -rf node_modules/.cache
@@ -761,11 +890,13 @@ npm run build:electron
 ### 런타임 오류
 
 #### DLL 로드 실패
+
 - `process.resourcesPath` 경로 확인
 - DLL 파일이 `resources/dotnet/`에 포함되었는지 확인
 - .NET 6 런타임이 설치되어 있는지 확인
 
 #### COM 객체 생성 실패
+
 ```bash
 # COM 등록 확인
 reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"
@@ -778,6 +909,7 @@ regsvr32.exe /u "C:\path\to\OnVoiceAudioBridge.dll"
 ```
 
 **해결 방법**:
+
 1. C++ COM DLL이 `resources/native/`에 포함되었는지 확인
 2. **설치 버전**: 설치 후 COM 등록이 실행되었는지 확인 (`build/installer.nsh`의 `RegDLL` 명령)
 3. **포터블 버전**: 앱 시작 시 자동 등록이 시도되었는지 확인 (콘솔 로그 확인)
@@ -791,6 +923,7 @@ regsvr32.exe /u "C:\path\to\OnVoiceAudioBridge.dll"
 **원인**: Debug 빌드 DLL을 배포했을 때 발생합니다. Debug Runtime 라이브러리는 Visual Studio가 설치된 개발자 PC에만 있습니다.
 
 **해결 방법**:
+
 ```bash
 # 1. Release 빌드로 다시 빌드
 npm run build:native
@@ -809,6 +942,7 @@ npm run copy:native
 **증상**: OnVoiceComBridge.exe 프로세스가 시작되지 않거나 통신 실패
 
 **해결 방법**:
+
 ```bash
 # C# 프로젝트 재빌드
 npm run build:dotnet
@@ -842,8 +976,8 @@ npm run build:all
 // vite.config.ts
 export default defineConfig({
   plugins: [react()],
-  base: './', // ✅ file:// 프로토콜에서 리소스를 찾기 위해 상대 경로 사용
-  root: 'renderer',
+  base: "./", // ✅ file:// 프로토콜에서 리소스를 찾기 위해 상대 경로 사용
+  root: "renderer",
   // ...
 });
 ```
@@ -856,27 +990,27 @@ export default defineConfig({
 
 ```typescript
 // electron/windows/createOverlayWindow.ts
-if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
   // 🟢 개발 모드: Vite 개발 서버 사용
-  overlayWindow.loadURL('http://localhost:5173/overlay.html');
-  console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
+  overlayWindow.loadURL("http://localhost:5173/overlay.html");
+  console.log("[Overlay] Loading from development server: http://localhost:5173/overlay.html");
 } else {
   // 🔴 배포 모드: file:// 프로토콜로 로컬 파일 로드
-  const overlayPath = path.join(__dirname, '../renderer/overlay.html');
-  console.log('[Overlay] Production mode - loading overlay from:', overlayPath);
-  console.log('[Overlay] __dirname:', __dirname);
-  
+  const overlayPath = path.join(__dirname, "../renderer/overlay.html");
+  console.log("[Overlay] Production mode - loading overlay from:", overlayPath);
+  console.log("[Overlay] __dirname:", __dirname);
+
   // 파일 존재 여부 확인
-  const fs = require('fs');
+  const fs = require("fs");
   if (fs.existsSync(overlayPath)) {
-    console.log('[Overlay] ✓ overlay.html file found at:', overlayPath);
+    console.log("[Overlay] ✓ overlay.html file found at:", overlayPath);
   } else {
-    console.error('[Overlay] ✗ overlay.html file NOT found at:', overlayPath);
-    console.error('[Overlay] This will cause the overlay window to fail loading!');
+    console.error("[Overlay] ✗ overlay.html file NOT found at:", overlayPath);
+    console.error("[Overlay] This will cause the overlay window to fail loading!");
   }
-  
+
   overlayWindow.loadFile(overlayPath).catch((err) => {
-    console.error('[Overlay] Failed to load overlay.html:', err);
+    console.error("[Overlay] Failed to load overlay.html:", err);
   });
 }
 ```
@@ -898,6 +1032,7 @@ dir dist-electron\renderer\overlay.html
 ```
 
 **파일 구조**:
+
 ```
 프로젝트/
 ├── renderer/
@@ -914,6 +1049,7 @@ dir dist-electron\renderer\overlay.html
 ```
 
 **경로 일치성**:
+
 - `__dirname` = `dist-electron/windows`
 - `overlayPath` = `dist-electron/windows/../renderer/overlay.html` = `dist-electron/renderer/overlay.html` ✅
 
@@ -931,6 +1067,7 @@ dir dist-electron\renderer\overlay.html
 4. **Network 탭**에서 자산(JS, CSS)이 정상적으로 로드되는지 확인
 
 **예상 콘솔 로그 (정상)**:
+
 ```
 [Overlay] Production mode - loading overlay from: C:\...\dist-electron\renderer\overlay.html
 [Overlay] __dirname: C:\...\dist-electron\windows
@@ -952,24 +1089,25 @@ dir dist-electron\renderer\overlay.html
 
 ```typescript
 // ❌ 변경 전 (BrowserRouter: 개발에선 되지만 배포시 file:// 경로 인식 불가)
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 // ✅ 변경 후 (HashRouter: 주소 뒤에 #/overlay 형태로 접근)
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from "react-router-dom";
 ```
 
 ```typescript
 // createOverlayWindow.ts
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === "development") {
   overlayWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}#/overlay`);
 } else {
-  overlayWindow.loadFile(indexPath, { hash: 'overlay' });
+  overlayWindow.loadFile(indexPath, { hash: "overlay" });
   // 또는
   // overlayWindow.loadURL(`file://${indexPath}#/overlay`);
 }
 ```
 
 **요약**:
+
 - ✅ `vite.config.ts`에서 `base: './'` 설정 (가장 중요)
 - ✅ `createOverlayWindow.ts`에서 배포 모드 경로 로깅 및 에러 처리
 - ✅ 빌드 결과 확인 (`dist-electron/renderer/overlay.html`)
@@ -980,14 +1118,11 @@ if (process.env.NODE_ENV === 'development') {
 ### 파일 크기 최적화
 
 #### 불필요한 파일 제외
+
 ```json
 {
   "build": {
-    "files": [
-      "dist-electron/**/*",
-      "dist/renderer/**/*",
-      "package.json"
-    ],
+    "files": ["dist-electron/**/*", "dist/renderer/**/*", "package.json"],
     "extraFiles": [
       {
         "from": "dotnet/OnVoiceComBridge/bin/Debug/net6.0",
@@ -1000,6 +1135,7 @@ if (process.env.NODE_ENV === 'development') {
 ```
 
 #### asar 압축
+
 electron-builder는 기본적으로 `app.asar`로 앱을 압축합니다. 비활성화하려면:
 
 ```json
@@ -1013,6 +1149,7 @@ electron-builder는 기본적으로 `app.asar`로 앱을 압축합니다. 비활
 ### 빌드 속도 최적화
 
 #### 병렬 빌드
+
 ```json
 {
   "scripts": {
@@ -1022,7 +1159,9 @@ electron-builder는 기본적으로 `app.asar`로 앱을 압축합니다. 비활
 ```
 
 #### 캐시 활용
+
 electron-builder는 자동으로 캐시를 사용합니다. 캐시 위치:
+
 - Windows: `%LOCALAPPDATA%\electron-builder\Cache`
 
 ## 관련 파일
@@ -1033,7 +1172,10 @@ electron-builder는 자동으로 캐시를 사용합니다. 캐시 위치:
 - `electron/tsconfig.json`: 메인 프로세스 TypeScript 설정
 - `vite.config.ts`: 렌더러 빌드 설정 (⚠️ `base: './'` 설정 필수 - 배포 모드에서 file:// 프로토콜 지원)
 - `electron/windows/createOverlayWindow.ts`: 오버레이 창 생성 및 로드 경로 관리
-- `electron/main/registerComDll.ts`: COM DLL 자동 등록 유틸리티 (포터블 방식 지원)
+- `electron/main/registerComDll.ts`: Registration-Free COM 지원 및 COM DLL 자동 등록 유틸리티 (포터블 방식 지원)
+- `native/OnVoiceAudioBridge.dll.manifest`: COM DLL Registration-Free COM 매니페스트
+- `electron/OnVoice.exe.manifest`: Electron 앱 Registration-Free COM 매니페스트
+- `dotnet/OnVoiceComBridge/OnVoiceComBridge.exe.manifest`: C# Bridge Registration-Free COM 매니페스트
 - `electron/main.ts`: 앱 초기화 및 COM DLL 자동 등록 로직
 - `scripts/copy-dll.js`: C# DLL 복사 스크립트
 - `scripts/copy-native-dll.js`: C++ COM DLL 복사 스크립트
@@ -1057,4 +1199,3 @@ electron-builder는 자동으로 캐시를 사용합니다. 캐시 위치:
 - [작업 30: electron-edge-js 마이그레이션](./30-electron-edge-js-migration.md) (Deprecated)
 - [작업 45: Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)
 - [작업 39: C# 기반 PID 볼륨 제어 통합](./39-csharp-volume-control.md)
-

@@ -6,13 +6,54 @@ import { promisify } from "util";
 const execAsync = promisify(exec);
 
 /**
- * COM DLL을 시스템에 등록합니다.
- * 포터블 방식에서 앱 시작 시 자동으로 COM DLL을 등록하기 위해 사용됩니다.
+ * Registration-Free COM 매니페스트 파일이 존재하는지 확인합니다.
  * 
- * @returns 등록 성공 여부
+ * @returns 매니페스트 파일이 존재하는지 여부
+ */
+async function hasRegistrationFreeManifest(): Promise<boolean> {
+  try {
+    const fs = await import("fs/promises");
+    
+    // DLL 매니페스트 파일 경로
+    const dllManifestPath = app.isPackaged
+      ? path.join(process.resourcesPath, "native", "OnVoiceAudioBridge.dll.manifest")
+      : path.join(__dirname, "../../native/OnVoiceAudioBridge.dll.manifest");
+    
+    // 앱 매니페스트 파일 경로
+    const appManifestPath = app.isPackaged
+      ? path.join(process.resourcesPath, "..", "OnVoice.exe.manifest")
+      : path.join(__dirname, "../../electron/OnVoice.exe.manifest");
+    
+    try {
+      const [dllManifestExists, appManifestExists] = await Promise.all([
+        fs.access(dllManifestPath).then(() => true).catch(() => false),
+        fs.access(appManifestPath).then(() => true).catch(() => false)
+      ]);
+      
+      return dllManifestExists && appManifestExists;
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * COM DLL을 시스템에 등록합니다.
+ * Registration-Free COM 매니페스트가 있으면 등록을 건너뜁니다.
+ * 
+ * @returns 등록 성공 여부 (또는 Registration-Free COM 사용 시 true)
  */
 export async function registerComDll(): Promise<boolean> {
   try {
+    // Registration-Free COM 매니페스트 확인
+    const hasManifest = await hasRegistrationFreeManifest();
+    if (hasManifest) {
+      console.log(`[COM Registration] ✅ Registration-Free COM 매니페스트가 감지되었습니다. 레지스트리 등록이 필요하지 않습니다.`);
+      return true;
+    }
+
     // COM DLL 경로 찾기
     const dllPath = app.isPackaged
       ? path.join(process.resourcesPath, "native", "OnVoiceAudioBridge.dll")
@@ -28,6 +69,7 @@ export async function registerComDll(): Promise<boolean> {
     }
 
     console.log(`[COM Registration] COM DLL 등록 시도: ${dllPath}`);
+    console.log(`[COM Registration] ⚠️ Registration-Free COM 매니페스트가 없어 레지스트리 등록 방식을 사용합니다.`);
 
     // regsvr32를 사용하여 COM DLL 등록
     // /s: 자동 모드 (메시지 표시 안 함)
@@ -62,12 +104,20 @@ export async function registerComDll(): Promise<boolean> {
 
 /**
  * COM DLL 등록 상태를 확인합니다.
+ * Registration-Free COM을 사용하는 경우 항상 true를 반환합니다.
  * 
- * @returns 등록되어 있는지 여부
+ * @returns 등록되어 있는지 여부 (또는 Registration-Free COM 사용 시 true)
  */
 export async function checkComDllRegistered(): Promise<boolean> {
   try {
-    // 레지스트리에서 ProgID 확인
+    // Registration-Free COM 매니페스트 확인
+    const hasManifest = await hasRegistrationFreeManifest();
+    if (hasManifest) {
+      // Registration-Free COM을 사용하면 레지스트리 등록이 필요 없음
+      return true;
+    }
+
+    // 레지스트리에서 ProgID 확인 (기존 방식)
     const command = `reg query "HKEY_CLASSES_ROOT\\OnVoiceAudioBridge.OnVoiceCapture" /ve 2>nul`;
     const { stdout } = await execAsync(command);
     return stdout.includes("OnVoiceAudioBridge.OnVoiceCapture");
