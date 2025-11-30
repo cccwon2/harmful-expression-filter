@@ -31,7 +31,7 @@ if (app.isPackaged && process.env.NODE_ENV !== "production") {
   process.env.NODE_ENV = "production";
 }
 
-const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격 (안정적인 텍스트 추출을 위해)
+const CAPTURE_INTERVAL_MS = 800; // 0.8초 간격 (성능 최적화를 위해)
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
@@ -397,11 +397,32 @@ app.whenReady().then(async () => {
 
     isCaptureInProgress = true;
     try {
-      // 1. 화면 캡처
+      // 1. 화면 캡처 (ROI 영역보다 약간 큰 크기만 캡처하여 성능 최적화)
       const primaryDisplay = screen.getPrimaryDisplay();
+      const displaySize = primaryDisplay.size;
+      
+      // ROI 영역을 기준으로 캡처 영역 계산 (ROI보다 20% 큰 영역만 캡처)
+      const captureMargin = 0.2; // 20% 여유
+      const captureX = Math.max(0, Math.floor(roi.x - roi.width * captureMargin));
+      const captureY = Math.max(0, Math.floor(roi.y - roi.height * captureMargin));
+      const captureWidth = Math.min(
+        displaySize.width - captureX,
+        Math.floor(roi.width * (1 + captureMargin * 2))
+      );
+      const captureHeight = Math.min(
+        displaySize.height - captureY,
+        Math.floor(roi.height * (1 + captureMargin * 2))
+      );
+      
+      // 최적화된 썸네일 크기 (ROI 영역보다 약간 큰 크기만)
+      const optimizedThumbnailSize = {
+        width: Math.min(displaySize.width, Math.max(roi.width * 1.5, 800)),
+        height: Math.min(displaySize.height, Math.max(roi.height * 1.5, 600)),
+      };
+      
       const sources = await desktopCapturer.getSources({
         types: ["screen"],
-        thumbnailSize: primaryDisplay.size,
+        thumbnailSize: optimizedThumbnailSize,
       });
 
       if (sources.length === 0) {
@@ -417,12 +438,16 @@ app.whenReady().then(async () => {
         return;
       }
 
-      // 2. ROI 영역만 크롭
+      // 2. ROI 영역만 크롭 (썸네일 크기에 맞춰 좌표 조정)
       const screenshotSize = screenshot.getSize();
-      const cropX = Math.max(0, Math.floor(roi.x));
-      const cropY = Math.max(0, Math.floor(roi.y));
-      const cropWidth = Math.max(1, Math.floor(Math.min(roi.width, screenshotSize.width - cropX)));
-      const cropHeight = Math.max(1, Math.floor(Math.min(roi.height, screenshotSize.height - cropY)));
+      const scaleX = screenshotSize.width / displaySize.width;
+      const scaleY = screenshotSize.height / displaySize.height;
+      
+      // ROI 좌표를 썸네일 크기에 맞게 스케일링
+      const cropX = Math.max(0, Math.floor(roi.x * scaleX));
+      const cropY = Math.max(0, Math.floor(roi.y * scaleY));
+      const cropWidth = Math.max(1, Math.floor(Math.min(roi.width * scaleX, screenshotSize.width - cropX)));
+      const cropHeight = Math.max(1, Math.floor(Math.min(roi.height * scaleY, screenshotSize.height - cropY)));
 
       if (cropWidth <= 0 || cropHeight <= 0) {
         console.warn("[OCR] 잘못된 크롭 크기:", { cropX, cropY, cropWidth, cropHeight });
