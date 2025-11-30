@@ -4,11 +4,10 @@ type Mode = 'ocr' | 'voice';
 
 export const ModeSelection: React.FC = () => {
   const [selectedMode, setSelectedMode] = React.useState<Mode | null>(null);
+  const [hoveredMode, setHoveredMode] = React.useState<Mode | null>(null);
 
   const handleModeSelect = (mode: Mode) => {
     console.log('[ModeSelection] 모드 선택 시도:', mode);
-    console.log('[ModeSelection] window.api:', window.api);
-    console.log('[ModeSelection] window.api.dashboard:', window.api?.dashboard);
     
     if (window.api?.dashboard?.selectMode) {
       console.log('[ModeSelection] selectMode 호출:', mode);
@@ -28,16 +27,16 @@ export const ModeSelection: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: '100vh',
-          backgroundColor: '#121212',
+          background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)',
           color: '#ffffff',
           fontFamily: 'system-ui, -apple-system, sans-serif',
         }}
       >
         <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '1rem', marginBottom: '8px', fontWeight: 600 }}>
             {selectedMode === 'ocr' ? '👁️ OCR 모드' : '🎙️ 음성 모드'} 활성화됨
           </h2>
-          <p style={{ color: '#9ca3af' }}>필터링이 시작되었습니다.</p>
+          <p style={{ color: '#9ca3af', fontSize: '0.75rem', margin: 0 }}>필터링이 시작되었습니다.</p>
         </div>
       </div>
     );
@@ -51,97 +50,134 @@ export const ModeSelection: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        backgroundColor: '#121212',
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)',
         color: '#ffffff',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        padding: '32px',
+        fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+        padding: '24px',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
+      {/* 배경 장식 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '-50%',
+          left: '-50%',
+          width: '200%',
+          height: '200%',
+          background: 'radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%)',
+          animation: 'pulse 8s ease-in-out infinite',
+        }}
+      />
+      
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.5; }
+          50% { transform: scale(1.1) rotate(180deg); opacity: 0.8; }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+      `}</style>
+
       <header
         style={{
           textAlign: 'center',
-          marginBottom: '64px',
+          marginBottom: '32px',
+          zIndex: 1,
         }}
       >
         <h1
           style={{
-            fontSize: '3rem',
-            fontWeight: 700,
-            margin: '0 0 16px 0',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            fontSize: '1.75rem',
+            fontWeight: 800,
+            margin: '0 0 8px 0',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
+            letterSpacing: '-0.02em',
           }}
         >
           OnVoice
         </h1>
-        <p style={{ fontSize: '1.25rem', color: '#9ca3af', margin: 0 }}>
-          필터링 모드를 선택하세요
+        <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0, fontWeight: 500 }}>
+          필터링 모드 선택
         </p>
       </header>
 
       <div
         style={{
           display: 'flex',
-          gap: '32px',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          maxWidth: '800px',
+          gap: '16px',
+          width: '100%',
+          maxWidth: '420px',
+          zIndex: 1,
         }}
       >
         {/* OCR 모드 선택 */}
         <button
           onClick={() => handleModeSelect('ocr')}
+          onMouseEnter={() => setHoveredMode('ocr')}
+          onMouseLeave={() => setHoveredMode(null)}
           style={{
-            flex: '1',
-            minWidth: '300px',
-            padding: '48px 32px',
-            backgroundColor: '#1f2937',
-            border: '2px solid #374151',
+            flex: 1,
+            padding: '20px 16px',
+            background: hoveredMode === 'ocr' 
+              ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)'
+              : 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            border: hoveredMode === 'ocr'
+              ? '1.5px solid rgba(99, 102, 241, 0.6)'
+              : '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '16px',
             cursor: 'pointer',
-            transition: 'all 0.3s ease',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '16px',
+            gap: '12px',
             color: '#ffffff',
-            fontSize: '1.1rem',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#374151';
-            e.currentTarget.style.borderColor = '#4b5563';
-            e.currentTarget.style.transform = 'translateY(-4px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#1f2937';
-            e.currentTarget.style.borderColor = '#374151';
-            e.currentTarget.style.transform = 'translateY(0)';
+            fontSize: '0.875rem',
+            transform: hoveredMode === 'ocr' ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+            boxShadow: hoveredMode === 'ocr'
+              ? '0 8px 32px rgba(99, 102, 241, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.1)'
+              : '0 4px 16px rgba(0, 0, 0, 0.2)',
           }}
         >
-          <span style={{ fontSize: '4rem' }}>👁️</span>
+          <div
+            style={{
+              fontSize: '2rem',
+              filter: hoveredMode === 'ocr' ? 'drop-shadow(0 0 8px rgba(99, 102, 241, 0.6))' : 'none',
+              transition: 'all 0.3s ease',
+              animation: hoveredMode === 'ocr' ? 'float 2s ease-in-out infinite' : 'none',
+            }}
+          >
+            👁️
+          </div>
           <div style={{ textAlign: 'center' }}>
             <h2
               style={{
-                fontSize: '1.5rem',
-                fontWeight: 600,
-                margin: '0 0 8px 0',
+                fontSize: '0.875rem',
+                fontWeight: 700,
+                margin: '0 0 4px 0',
+                letterSpacing: '-0.01em',
               }}
             >
-              OCR 필터링
+              OCR
             </h2>
             <p
               style={{
-                fontSize: '0.95rem',
+                fontSize: '0.7rem',
                 color: '#9ca3af',
                 margin: 0,
-                lineHeight: '1.5',
+                lineHeight: '1.4',
               }}
             >
-              화면의 텍스트를 실시간으로 감지하고
-              <br />
-              유해 표현을 차단합니다
+              화면 텍스트<br />실시간 감지
             </p>
           </div>
         </button>
@@ -149,55 +185,64 @@ export const ModeSelection: React.FC = () => {
         {/* 음성 모드 선택 */}
         <button
           onClick={() => handleModeSelect('voice')}
+          onMouseEnter={() => setHoveredMode('voice')}
+          onMouseLeave={() => setHoveredMode(null)}
           style={{
-            flex: '1',
-            minWidth: '300px',
-            padding: '48px 32px',
-            backgroundColor: '#1f2937',
-            border: '2px solid #374151',
+            flex: 1,
+            padding: '20px 16px',
+            background: hoveredMode === 'voice'
+              ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(219, 39, 119, 0.2) 100%)'
+              : 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            border: hoveredMode === 'voice'
+              ? '1.5px solid rgba(236, 72, 153, 0.6)'
+              : '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '16px',
             cursor: 'pointer',
-            transition: 'all 0.3s ease',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '16px',
+            gap: '12px',
             color: '#ffffff',
-            fontSize: '1.1rem',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#374151';
-            e.currentTarget.style.borderColor = '#4b5563';
-            e.currentTarget.style.transform = 'translateY(-4px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#1f2937';
-            e.currentTarget.style.borderColor = '#374151';
-            e.currentTarget.style.transform = 'translateY(0)';
+            fontSize: '0.875rem',
+            transform: hoveredMode === 'voice' ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+            boxShadow: hoveredMode === 'voice'
+              ? '0 8px 32px rgba(236, 72, 153, 0.3), 0 0 0 1px rgba(236, 72, 153, 0.1)'
+              : '0 4px 16px rgba(0, 0, 0, 0.2)',
           }}
         >
-          <span style={{ fontSize: '4rem' }}>🎙️</span>
+          <div
+            style={{
+              fontSize: '2rem',
+              filter: hoveredMode === 'voice' ? 'drop-shadow(0 0 8px rgba(236, 72, 153, 0.6))' : 'none',
+              transition: 'all 0.3s ease',
+              animation: hoveredMode === 'voice' ? 'float 2s ease-in-out infinite' : 'none',
+            }}
+          >
+            🎙️
+          </div>
           <div style={{ textAlign: 'center' }}>
             <h2
               style={{
-                fontSize: '1.5rem',
-                fontWeight: 600,
-                margin: '0 0 8px 0',
+                fontSize: '0.875rem',
+                fontWeight: 700,
+                margin: '0 0 4px 0',
+                letterSpacing: '-0.01em',
               }}
             >
-              음성 필터링
+              음성
             </h2>
             <p
               style={{
-                fontSize: '0.95rem',
+                fontSize: '0.7rem',
                 color: '#9ca3af',
                 margin: 0,
-                lineHeight: '1.5',
+                lineHeight: '1.4',
               }}
             >
-              음성 채팅을 실시간으로 감지하고
-              <br />
-              유해 표현을 차단합니다
+              음성 채팅<br />실시간 감지
             </p>
           </div>
         </button>
@@ -205,4 +250,3 @@ export const ModeSelection: React.FC = () => {
     </div>
   );
 };
-

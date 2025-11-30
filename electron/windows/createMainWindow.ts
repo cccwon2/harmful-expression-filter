@@ -9,11 +9,12 @@ export function createMainWindow(): BrowserWindow {
   console.log('[Main] __dirname:', __dirname);
 
   const mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
-    backgroundColor: '#121212',
-    title: "OnVoice Dashboard",
+    width: 480,
+    height: 320,
+    backgroundColor: '#0a0a0a',
+    title: "OnVoice",
     show: true, // 대시보드를 기본으로 표시
+    resizable: false, // 크기 조절 비활성화
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
