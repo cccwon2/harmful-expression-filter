@@ -38,6 +38,7 @@
 - **Task 45**: Spawn 방식 Bridge 마이그레이션 (electron-edge-js → child_process.spawn, 프로세스 분리 및 안정성 향상)
 - **Task 46**: Supabase 기반 관리자 DB 및 로깅 시스템 구축 (PostgreSQL 로그 저장, 설정 원격 관리, 관리자 API) 📝 계획 단계
 - **Task 47**: 메인 대시보드 구축 및 멀티 윈도우 관리 (모드 선택 화면, OCR/음성 모드 분리, 성능 최적화)
+- **Task 48**: 애플리케이션 성능 최적화 (마우스 버벅거림 해결, React 렌더링 최적화, IPC 통신 최적화) 🔄 진행 중
 
 ### 주요 기술 스택
 

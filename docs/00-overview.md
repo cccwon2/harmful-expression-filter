@@ -55,6 +55,7 @@
 42. **[Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)** ✅ 완료
 43. **[Supabase 기반 관리자 DB 및 로깅 시스템 구축](./46-supabase-admin-db.md)** 📝 계획 단계
 44. **[메인 대시보드 구축 및 멀티 윈도우 관리](./47-main-dashboard-multi-window.md)** ✅ 완료
+45. **[애플리케이션 성능 최적화](./48-performance-optimization.md)** 🔄 진행 중
 
 ## 작업 의존성 그래프
 
@@ -147,6 +148,9 @@
 47-main-dashboard-multi-window
     ├─ 42-electron-app-deployment
     └─ 45-spawn-bridge-migration
+48-performance-optimization
+    ├─ 34-windows-ocr-optimization
+    └─ 47-main-dashboard-multi-window
 ```
 
 ## 작업 상태
@@ -197,6 +201,7 @@
 | Spawn 방식 Bridge 마이그레이션         | ✅ 완료        | 100%   | High     |
 | Supabase 기반 관리자 DB 및 로깅 시스템 | 📝 계획 단계   | 0%     | Medium   |
 | 메인 대시보드 구축 및 멀티 윈도우 관리 | ✅ 완료        | 100%   | High     |
+| 애플리케이션 성능 최적화                | 🔄 진행 중     | 10%    | High     |
 
 ## 최근 변경 사항 (2025-11-26)
 
@@ -287,3 +292,10 @@
   - 단일 인스턴스 보장 (중복 실행 방지)
   - 중복 텍스트 필터링 (OCR 및 서버 분석)
   - 트레이 메뉴 상태 업데이트 개선
+- **Task 48: 애플리케이션 성능 최적화 진행 중**
+  - 마우스 버벅거림 문제 분석 및 해결 방안 수립
+  - React 렌더링 최적화 계획 (메모이제이션, 배치 처리)
+  - IPC 통신 최적화 계획 (메시지 배치, 직렬화)
+  - 이벤트 핸들러 최적화 (디바운싱, 스로틀링)
+  - 마우스 이벤트에 requestAnimationFrame 적용 완료
+  - Ref 기반 상태 관리로 클로저 문제 해결
