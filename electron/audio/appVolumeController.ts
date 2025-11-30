@@ -105,7 +105,14 @@ export class AppVolumeController {
 
       this.cachedSessions = normalized;
       return normalized;
-    } catch (err) {
+    } catch (err: any) {
+      // 개발 모드에서는 에러를 조용히 처리
+      const isDev = !require('electron').app.isPackaged;
+      if (isDev) {
+        // 개발 모드에서는 경고만 출력하고 기존 캐시 반환
+        console.warn('[AppVolumeController] ⚠️ 개발 모드: Bridge가 없어 오디오 세션 조회를 건너뜁니다.');
+        return this.cachedSessions;
+      }
       console.error('[AppVolumeController] Failed to refresh audio sessions from C# bridge:', err);
       return this.cachedSessions;
     }

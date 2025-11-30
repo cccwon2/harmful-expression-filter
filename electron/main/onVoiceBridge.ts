@@ -40,7 +40,7 @@ function getBridgePath(): string {
   return path.resolve(exePath);
 }
 
-function spawnBridge() {
+function spawnBridge(): void {
   if (bridgeProcess) return;
 
   const exePath = getBridgePath();
@@ -53,8 +53,13 @@ function spawnBridge() {
     if (app.isPackaged) {
       console.error(`[OnVoiceBridge] 💡 배포 모드: process.resourcesPath = ${process.resourcesPath}`);
       console.error(`[OnVoiceBridge] 💡 예상 경로: ${path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe")}`);
+      throw new Error(errorMsg);
+    } else {
+      // 개발 모드에서는 에러를 throw하지 않고 경고만 출력
+      console.warn(`[OnVoiceBridge] ⚠️ 개발 모드: Bridge 실행 파일을 찾을 수 없습니다. 계속 진행합니다.`);
+      bridgeProcess = null;
+      return;
     }
-    throw new Error(errorMsg);
   }
 
   try {
@@ -364,7 +369,12 @@ export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
     }
     if (result && Array.isArray(result.sessions)) return result.sessions as BridgeAudioSession[];
     return [];
-  } catch (error) {
+  } catch (error: any) {
+    // 개발 모드에서는 에러를 무시하고 빈 배열 반환
+    if (!app.isPackaged) {
+      console.warn(`[OnVoiceBridge] ⚠️ 개발 모드: 오디오 세션 조회 실패를 무시합니다.`, error?.message || error);
+      return [];
+    }
     console.error(`[OnVoiceBridge] 오디오 세션 조회 실패`, error);
     return [];
   }
