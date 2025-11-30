@@ -19,16 +19,19 @@ const BRIDGE_TIMEOUT_MS = 10000; // Increased timeout for process startup
 const SERVER_REQUEST_TIMEOUT = 5000;
 
 function getBridgePath(): string {
+  let exePath: string;
   if (app.isPackaged) {
     // [배포 모드] resources/bin/OnVoiceComBridge.exe
     // NSIS 설치 버전과 포터블 버전 모두 동일하게 process.resourcesPath 사용
     // - NSIS: {설치경로}/resources
     // - 포터블 (dir): {실행파일경로}/resources
-    return path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe");
+    exePath = path.join(process.resourcesPath, "bin", "OnVoiceComBridge.exe");
   } else {
     // [개발 모드] dotnet publish 출력 경로
-    return path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe");
+    exePath = path.join(__dirname, "../../dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe");
   }
+  // 절대 경로로 변환하여 공백이나 특수 문자 문제 방지
+  return path.resolve(exePath);
 }
 
 function spawnBridge() {
@@ -49,10 +52,38 @@ function spawnBridge() {
   }
 
   try {
-    bridgeProcess = spawn(exePath, [], {
-      stdio: ['pipe', 'pipe', 'inherit'], // stdin, stdout, stderr (inherit for debug)
-      windowsHide: true
-    });
+    // 절대 경로로 변환하여 사용
+    const absolutePath = path.resolve(exePath);
+    console.log(`[OnVoiceBridge] 📍 절대 경로: ${absolutePath}`);
+    
+    // 파일 존재 여부 재확인 (절대 경로 기준)
+    if (!existsSync(absolutePath)) {
+      throw new Error(`Bridge executable not found at absolute path: ${absolutePath}`);
+    }
+    
+    // 파일 권한 및 실행 가능 여부 확인
+    try {
+      const fs = require('fs');
+      fs.accessSync(absolutePath, fs.constants.F_OK | fs.constants.R_OK);
+      console.log(`[OnVoiceBridge] ✅ 파일 접근 권한 확인됨`);
+    } catch (accessError: any) {
+      console.error(`[OnVoiceBridge] ❌ 파일 접근 권한 오류:`, accessError.message);
+      throw new Error(`Cannot access bridge executable: ${accessError.message}`);
+    }
+    
+    // spawn 시도 (기본 방법)
+    try {
+      bridgeProcess = spawn(absolutePath, [], {
+        stdio: ['pipe', 'pipe', 'inherit'], // stdin, stdout, stderr (inherit for debug)
+        windowsHide: true,
+        // Windows에서 실행 권한 문제를 피하기 위해 shell 옵션은 사용하지 않음
+        // (shell: true는 보안상 권장되지 않음)
+      });
+    } catch (spawnError: any) {
+      // spawn 실패 시 execFile로 재시도 (일부 환경에서 더 안정적)
+      console.warn(`[OnVoiceBridge] ⚠️ spawn 실패, execFile로 재시도:`, spawnError.message);
+      throw spawnError; // 일단 에러를 다시 throw하여 아래 catch에서 처리
+    }
 
     bridgeProcess.on('error', (err) => {
       console.error('[OnVoiceBridge] ❌ Failed to spawn bridge process:', err);
@@ -91,8 +122,30 @@ function spawnBridge() {
       }
     });
 
-  } catch (e) {
+  } catch (e: any) {
     console.error('[OnVoiceBridge] ❌ Exception spawning bridge:', e);
+    console.error('[OnVoiceBridge] 에러 상세:', {
+      message: e.message,
+      code: e.code,
+      errno: e.errno,
+      syscall: e.syscall,
+      path: e.path || absolutePath
+    });
+    
+    // 개발 모드에서는 에러를 더 우아하게 처리
+    if (!app.isPackaged) {
+      console.warn('[OnVoiceBridge] ⚠️ 개발 모드: Bridge 실행 실패를 무시하고 계속 진행합니다.');
+      console.warn('[OnVoiceBridge] 💡 Bridge는 음성 필터링 기능에 필요하지만, 개발 중에는 선택적입니다.');
+      console.warn('[OnVoiceBridge] 💡 해결 방법:');
+      console.warn('[OnVoiceBridge]    1. Visual C++ 재배포 가능 패키지 설치');
+      console.warn('[OnVoiceBridge]    2. OnVoiceComBridge.exe 재빌드: npm run build:dotnet');
+      console.warn('[OnVoiceBridge]    3. 또는 Bridge 없이 개발 진행 (음성 필터링 제외)');
+      // 개발 모드에서는 에러를 throw하지 않고 null로 설정하여 계속 진행
+      bridgeProcess = null;
+      return;
+    }
+    
+    // 배포 모드에서는 에러를 throw
     throw e;
   }
 }
@@ -127,7 +180,29 @@ function handleBridgeMessage(msg: any) {
 }
 
 function callBridge(command: string, payload: any = {}): Promise<any> {
-  if (!bridgeProcess) spawnBridge();
+  // Bridge 프로세스가 없으면 시작 시도
+  if (!bridgeProcess) {
+    try {
+      spawnBridge();
+    } catch (error: any) {
+      // 개발 모드에서 Bridge 실행 실패 시 빈 응답 반환
+      if (!app.isPackaged) {
+        console.warn(`[OnVoiceBridge] ⚠️ Bridge 실행 실패로 인해 '${command}' 명령을 건너뜁니다.`);
+        return Promise.resolve(null);
+      }
+      // 배포 모드에서는 에러를 throw
+      throw error;
+    }
+  }
+  
+  // Bridge 프로세스가 여전히 null이면 (개발 모드에서 실행 실패한 경우)
+  if (!bridgeProcess) {
+    if (!app.isPackaged) {
+      console.warn(`[OnVoiceBridge] ⚠️ Bridge 프로세스가 없어 '${command}' 명령을 건너뜁니다.`);
+      return Promise.resolve(null);
+    }
+    return Promise.reject(new Error("Bridge process is not available"));
+  }
 
   return new Promise((resolve, reject) => {
     const id = uuidv4();
@@ -244,6 +319,13 @@ export async function setVolumeByPid(pid: number, volume: number): Promise<boole
 export async function listAudioSessions(): Promise<BridgeAudioSession[]> {
   try {
     const result: any = await callBridge('listSessions');
+    // 개발 모드에서 Bridge가 없으면 빈 배열 반환
+    if (result === null) {
+      if (!app.isPackaged) {
+        console.warn('[OnVoiceBridge] ⚠️ Bridge가 없어 빈 오디오 세션 목록을 반환합니다.');
+      }
+      return [];
+    }
     if (result && Array.isArray(result.sessions)) return result.sessions as BridgeAudioSession[];
     return [];
   } catch (error) {
