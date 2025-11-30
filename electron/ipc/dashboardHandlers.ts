@@ -51,6 +51,19 @@ export function registerDashboardHandlers(): void {
     if (mode === 'ocr') {
       // OCR 모드 선택
       isOcrEnabled = true;
+      isVoiceEnabled = false; // 음성 모드 비활성화
+      
+      // 음성 스트리밍이 활성화되어 있으면 중지
+      try {
+        const AudioManager = (await import("../main/AudioManager")).default;
+        const audioManager = AudioManager.getInstance();
+        if (audioManager.getStatus().isStreaming) {
+          await audioManager.stopStream();
+          console.log("[Dashboard] ✅ 음성 스트리밍 중지됨 (OCR 모드로 전환)");
+        }
+      } catch (error: any) {
+        console.error("[Dashboard] 음성 스트리밍 중지 실패:", error.message);
+      }
       
       // 오버레이 윈도우가 없으면 생성
       if (!overlayWindow || overlayWindow.isDestroyed()) {
