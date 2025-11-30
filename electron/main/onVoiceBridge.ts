@@ -193,6 +193,11 @@ function spawnBridge(): void {
     bridgeReadline.on("line", (line) => {
       if (!line || !line.trim()) return;
 
+      // 0자 추출 OCR 로그 필터링
+      if (line.includes("[OnVoiceComBridge] OCR 완료: 0자 추출")) {
+        return; // 0자 추출 로그는 출력하지 않음
+      }
+
       // C++ COM DLL의 로그 패턴 감지 (JSON이 아닌 로그는 필터링)
       // 이 로그들은 COM DLL 내부의 디버그 메시지로, JSON 파싱에서 제외해야 합니다
       const cppLogPatterns = [
@@ -375,6 +380,7 @@ export interface OnVoiceBridge {
 
 const events = new EventEmitter();
 let envLoaded = false;
+let lastAnalyzedText = ""; // 중복 텍스트 필터링을 위한 변수 (서버 전송 방지)
 
 // .env 로드 함수
 function ensureEnvLoaded() {
@@ -552,6 +558,21 @@ export const onVoiceBridge: OnVoiceBridge = {
 
       let analysisResult = { isHarmful: false, confidence: 0.0 };
       if (extractedText.trim().length > 0) {
+        // 중복 텍스트 필터링: 같은 텍스트가 연속으로 나오면 서버 분석 건너뜀
+        if (extractedText === lastAnalyzedText) {
+          // 중복 텍스트는 서버로 전송하지 않음 (DB 저장 방지)
+          return {
+            ok: true,
+            text: extractedText,
+            isHarmful: false, // 중복이므로 유해하지 않은 것으로 간주
+            matchedKeywords: [],
+            confidence: 0.0,
+            blurredImage: undefined,
+          };
+        }
+
+        // 새로운 텍스트인 경우에만 서버 분석 수행
+        lastAnalyzedText = extractedText;
         analysisResult = await analyzeTextWithServer(extractedText);
         // 유해 표현 감지 시에만 로그 출력
         if (analysisResult.isHarmful) {
@@ -561,6 +582,8 @@ export const onVoiceBridge: OnVoiceBridge = {
             }" (confidence: ${analysisResult.confidence.toFixed(3)})`
           );
         }
+      } else {
+        // 빈 텍스트인 경우 lastAnalyzedText 초기화하지 않음 (이전 텍스트 유지)
       }
 
       return {
