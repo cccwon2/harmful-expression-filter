@@ -31,7 +31,7 @@ if (app.isPackaged && process.env.NODE_ENV !== "production") {
   process.env.NODE_ENV = "production";
 }
 
-const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격
+const CAPTURE_INTERVAL_MS = 300; // 0.3초 간격 (더 빠른 반응을 위해)
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
@@ -428,19 +428,9 @@ app.whenReady().then(async () => {
       const result = await sendImageToServer(imageBuffer);
       const ocrElapsed = Date.now() - ocrStartTime;
 
-      // OCR 결과 항상 로그 출력
+      // OCR 결과 처리
       if (result.success && result.data) {
-        const { texts, is_harmful, harmful_words } = result.data;
-
-        // 추출된 텍스트 로그 출력
-        if (texts && texts.length > 0) {
-          console.log(`[OCR] 추출 텍스트 (${ocrElapsed}ms): ${texts.join(" ")}`);
-        } else {
-          console.log(`[OCR] 텍스트 추출 없음 (${ocrElapsed}ms)`);
-        }
-
-        // is_harmful 값 로그 출력 (디버깅용)
-        console.log(`[OCR] 서버 AI 분석 결과: is_harmful=${is_harmful}, 타입=${typeof is_harmful}`);
+        const { texts, is_harmful } = result.data;
 
         // 5. 유해성 감지 시 알림 (서버 AI 모델 기반)
         // overlayWindow는 state/editMode.ts에서 가져오기 (dashboardHandlers에서 생성한 윈도우도 포함)
@@ -450,24 +440,20 @@ app.whenReady().then(async () => {
           const isHarmful = is_harmful === true;
           
           if (isHarmful) {
-            console.warn(`[OCR] 🚨 유해 표현 감지 (AI 모델)`);
+            // 유해 표현 감지 시에만 상세 로그 출력
+            const extractedText = texts && texts.length > 0 ? texts.join(" ") : "(텍스트 없음)";
+            console.warn(`[OCR] 🚨 유해 표현 감지 (${ocrElapsed}ms): "${extractedText}"`);
             currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: true,
               words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
             });
-            console.log(`[OCR] ✅ ALERT_FROM_SERVER 전송 완료 (harmful=true)`);
           } else {
-            // harmful=false도 전송하여 블라인드 해제 타이머 시작
+            // harmful=false는 조용히 전송 (로그 없음)
             currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: false,
               words: [],
             });
-            console.log(`[OCR] ✅ ALERT_FROM_SERVER 전송 완료 (harmful=false)`);
           }
-        } else {
-          console.warn(`[OCR] ⚠️ 오버레이 윈도우가 없거나 파괴됨 - ALERT_FROM_SERVER 전송 불가`);
-          console.warn(`[OCR] main.ts overlayWindow:`, overlayWindow ? "존재" : "null");
-          console.warn(`[OCR] state/editMode overlayWindow:`, getOverlayWindow() ? "존재" : "null");
         }
 
         if (!isMonitoring || !currentROI) {
@@ -560,32 +546,26 @@ app.whenReady().then(async () => {
     isMonitoring = true;
     pushOverlayState({ mode: "detect", roi: currentROI });
 
-    // 재귀적으로 캡처 실행 (이전 작업 완료 후에만 다음 작업 시작)
+    // 재귀적으로 캡처 실행 (비동기 처리로 지연 최소화)
     const scheduleNextCapture = async () => {
       if (!isMonitoring || !currentROI) {
         monitoringInterval = null;
         return;
       }
 
-      const captureStartTime = Date.now();
-      try {
-        await captureAndProcessROI();
-        const captureElapsed = Date.now() - captureStartTime;
-
-        if (captureElapsed > CAPTURE_INTERVAL_MS) {
-          // console.warn(`[OCR] 캡처 처리 시간 (${captureElapsed}ms)이 간격 (${CAPTURE_INTERVAL_MS}ms)보다 깁니다.`);
-        }
-      } catch (error: any) {
-        const errorMessage = error?.message || String(error);
-        console.error(`[OCR] 캡처 루프 오류 (${Date.now() - captureStartTime}ms):`, errorMessage);
-      } finally {
-        // 에러 발생(타임아웃 등) 여부와 관계없이 다음 캡처 스케줄링 보장
-        if (isMonitoring && currentROI) {
-          monitoringInterval = setTimeout(scheduleNextCapture, CAPTURE_INTERVAL_MS) as any;
-        } else {
-          monitoringInterval = null;
-        }
+      // 다음 캡처를 먼저 스케줄링하여 간격 보장
+      if (isMonitoring && currentROI) {
+        monitoringInterval = setTimeout(scheduleNextCapture, CAPTURE_INTERVAL_MS) as any;
       }
+
+      // 현재 캡처는 비동기로 실행 (다음 스케줄링을 막지 않음)
+      captureAndProcessROI().catch((error: any) => {
+        const errorMessage = error?.message || String(error);
+        // 유해 표현 감지 관련이 아닌 경우에만 에러 로그 출력
+        if (!errorMessage.includes('timeout') && !errorMessage.includes('ECONNABORTED')) {
+          console.error(`[OCR] 캡처 루프 오류:`, errorMessage);
+        }
+      });
     };
 
     // 즉시 한 번 실행 후 스케줄링 시작

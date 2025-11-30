@@ -207,12 +207,9 @@ try {
       onStatePush: (callback: (state: OverlayState) => void) => {
         console.log('[Preload] overlay.onStatePush() listener registered');
         const listener = (_event: unknown, state: OverlayState) => {
-          // 모든 상태 업데이트 처리 (harmful 여부와 무관하게)
-          // harmful 상태는 onServerAlert에서 별도로 관리
+          // 유해 표현 감지 시에만 로그 출력
           if (state.harmful) {
-            console.warn('[Preload] State push received (harmful):', state);
-          } else {
-            console.log('[Preload] State push received (non-harmful):', state);
+            console.warn('[Preload] 🚨 State push received (harmful):', state);
           }
           callback(state);
         };
@@ -251,20 +248,15 @@ try {
         };
       },
       onServerAlert: (callback: (harmful: boolean) => void) => {
-        console.log('[Preload] overlay.onServerAlert() listener registered');
         const listener = (_event: unknown, payload: { harmful: boolean }) => {
-          // harmful=true와 harmful=false 모두 처리해야 함
-          // harmful=false도 렌더러로 전달하여 블라인드 해제 타이머를 시작할 수 있도록 함
+          // 유해 표현 감지 시에만 로그 출력
           if (payload.harmful) {
-            console.warn('[Preload] Harmful server alert received (harmful=true)');
-          } else {
-            console.log('[Preload] Non-harmful server alert received (harmful=false)');
+            console.warn('[Preload] 🚨 Harmful server alert received');
           }
           callback(payload.harmful);
         };
         ipcRenderer.on(IPC_CHANNELS.ALERT_FROM_SERVER, listener);
         return () => {
-          console.log('[Preload] overlay.onServerAlert() listener removed');
           ipcRenderer.removeListener(IPC_CHANNELS.ALERT_FROM_SERVER, listener);
         };
       },

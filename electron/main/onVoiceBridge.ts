@@ -21,7 +21,8 @@ const pendingRequests = new Map<
   { resolve: (value: any) => void; reject: (reason?: any) => void; timer: NodeJS.Timeout }
 >();
 const BRIDGE_TIMEOUT_MS = 10000; // Increased timeout for process startup
-const SERVER_REQUEST_TIMEOUT = 5000;
+const SERVER_REQUEST_TIMEOUT = 3000; // OCR은 1초 이내 유해 판독 및 블러 처리가 목표이므로 3초로 설정
+const SERVER_REQUEST_RETRY_COUNT = 1; // 재시도 횟수 (타임아웃이 짧으므로 1회만 재시도)
 
 function getBridgePath(): string {
   let exePath: string;
@@ -405,32 +406,67 @@ function getServerUrl(): string {
 
 async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean; confidence: number }> {
   if (!text || !text.trim()) return { isHarmful: false, confidence: 0.0 };
-  try {
-    const serverUrl = getServerUrl();
-    const response = await axios.post<{
-      has_violation: boolean | number;
-      ai_analysis: { is_harmful: boolean | number; confidence: number } | null;
-    }>(`${serverUrl}/analyze`, { text: text.trim(), use_ai: true }, { timeout: SERVER_REQUEST_TIMEOUT });
 
-    console.log(`[OnVoiceBridge] 서버 AI 분석 응답:`, JSON.stringify(response.data, null, 2));
+  const serverUrl = getServerUrl();
+  let lastError: any = null;
 
-    if (response.data.ai_analysis) {
-      const isHarmful = response.data.ai_analysis.is_harmful === true || response.data.ai_analysis.is_harmful === 1;
+  // 재시도 로직
+  for (let attempt = 0; attempt <= SERVER_REQUEST_RETRY_COUNT; attempt++) {
+    try {
+      if (attempt > 0) {
+        // 재시도 전에 짧은 대기 (빠른 재시도를 위해 100ms)
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      const response = await axios.post<{
+        has_violation: boolean | number;
+        ai_analysis: { is_harmful: boolean | number; confidence: number } | null;
+      }>(`${serverUrl}/analyze`, { text: text.trim(), use_ai: true }, { timeout: SERVER_REQUEST_TIMEOUT });
+
+      // 유해 표현 감지 시에만 상세 로그 출력
+      const isHarmfulFromResponse = response.data.ai_analysis
+        ? response.data.ai_analysis.is_harmful === true || response.data.ai_analysis.is_harmful === 1
+        : response.data.has_violation === true || response.data.has_violation === 1;
+
+      if (isHarmfulFromResponse) {
+        console.log(`[OnVoiceBridge] 서버 AI 분석 응답:`, JSON.stringify(response.data, null, 2));
+      }
+
+      if (response.data.ai_analysis) {
+        const isHarmful = response.data.ai_analysis.is_harmful === true || response.data.ai_analysis.is_harmful === 1;
+        return {
+          isHarmful,
+          confidence: response.data.ai_analysis.confidence || 0.0,
+        };
+      }
+
+      const isHarmful = response.data.has_violation === true || response.data.has_violation === 1;
       return {
         isHarmful,
-        confidence: response.data.ai_analysis.confidence || 0.0,
+        confidence: isHarmful ? 1.0 : 0.0,
       };
-    }
+    } catch (error: any) {
+      lastError = error;
+      const isTimeout = error.code === "ECONNABORTED" || error.message?.includes("timeout");
 
-    const isHarmful = response.data.has_violation === true || response.data.has_violation === 1;
-    return {
-      isHarmful,
-      confidence: isHarmful ? 1.0 : 0.0,
-    };
-  } catch (error: any) {
-    console.error(`[OnVoiceBridge] 서버 AI 분석 실패:`, error.message || error);
-    return { isHarmful: false, confidence: 0.0 };
+      if (isTimeout && attempt < SERVER_REQUEST_RETRY_COUNT) {
+        // 재시도는 조용히 진행 (로그 없음)
+        continue; // 재시도
+      } else {
+        // 마지막 시도 실패 시에만 에러 로그 출력
+        if (attempt === SERVER_REQUEST_RETRY_COUNT) {
+          console.error(
+            `[OnVoiceBridge] ⚠️ 서버 AI 분석 실패 (${SERVER_REQUEST_TIMEOUT}ms 타임아웃):`,
+            error.message || error
+          );
+        }
+        break; // 재시도 중단
+      }
+    }
   }
+
+  // 모든 재시도 실패 시 false 반환
+  return { isHarmful: false, confidence: 0.0 };
 }
 
 export async function setVolumeByPid(pid: number, volume: number): Promise<boolean> {
@@ -510,16 +546,18 @@ export const onVoiceBridge: OnVoiceBridge = {
       if (!result || result.ok === false) return { ok: false, error: result?.error || "OCR 실패" };
 
       const extractedText = result.text || "";
-      console.log(
-        `[OnVoiceBridge] 📝 OCR 텍스트: "${extractedText.substring(0, 50)}${extractedText.length > 50 ? "..." : ""}"`
-      );
 
       let analysisResult = { isHarmful: false, confidence: 0.0 };
       if (extractedText.trim().length > 0) {
         analysisResult = await analyzeTextWithServer(extractedText);
-        console.log(
-          `[OnVoiceBridge] AI 분석 결과: isHarmful=${analysisResult.isHarmful}, confidence=${analysisResult.confidence}`
-        );
+        // 유해 표현 감지 시에만 로그 출력
+        if (analysisResult.isHarmful) {
+          console.warn(
+            `[OnVoiceBridge] 🚨 유해 표현 감지: "${extractedText.substring(0, 50)}${
+              extractedText.length > 50 ? "..." : ""
+            }" (confidence: ${analysisResult.confidence.toFixed(3)})`
+          );
+        }
       }
 
       return {

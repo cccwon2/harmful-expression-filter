@@ -170,6 +170,7 @@ export const OverlayApp: React.FC = () => {
 
           if (nextHarmful) {
             // 유해 감지: 타이머 취소, 즉시 블러 처리
+            console.warn(`[Overlay] 🚨 유해 표현 감지 - 블러 처리 시작`);
             if (blindTimerRef.current) {
               clearTimeout(blindTimerRef.current);
               blindTimerRef.current = null;
@@ -177,7 +178,7 @@ export const OverlayApp: React.FC = () => {
             setHarmful(true);
             setMode("alert");
           } else {
-            // 비유해 감지: harmful 해제, 타이머 시작
+            // 비유해 감지: harmful 해제, 타이머 시작 (로그 없음)
             setHarmful(false);
             if (current.mode === "alert" && !blindTimerRef.current) {
               blindTimerRef.current = setTimeout(() => {
