@@ -736,15 +736,17 @@ async def analyze_text(
     
     # [Task 46] 유해 표현 감지 시 또는 모든 요청에 대해 로그 저장
     # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
-    if is_harmful_ai and classifier:
+    # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
+    if classifier:
         model_display = getattr(app.state, "model_type_display", "Unknown")
+        # 실제 판단 결과를 저장 (is_harmful_ai 값 사용)
         background_tasks.add_task(
             save_detection_log,
             text=request.text,
             confidence=ai_confidence,
             threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
             model=model_display,
-            is_harmful=True,
+            is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
             user_id=None  # 추후 Auth 연동 시 추가
         )
     
