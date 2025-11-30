@@ -14,6 +14,7 @@ import { existsSync } from "fs";
 
 let bridgeProcess: ChildProcess | null = null;
 let bridgeReadline: readline.Interface | null = null;
+let bridgeSpawnFailed = false; // 개발 모드에서 spawn 실패 플래그
 const pendingRequests = new Map<
   string,
   { resolve: (value: any) => void; reject: (reason?: any) => void; timer: NodeJS.Timeout }
@@ -42,6 +43,11 @@ function getBridgePath(): string {
 
 function spawnBridge(): void {
   if (bridgeProcess) return;
+
+  // 개발 모드에서 이미 spawn이 실패한 경우 재시도하지 않음
+  if (!app.isPackaged && bridgeSpawnFailed) {
+    return;
+  }
 
   const exePath = getBridgePath();
   console.log(`[OnVoiceBridge] 🚀 Spawning Bridge Process: ${exePath}`);
@@ -104,20 +110,20 @@ function spawnBridge(): void {
       });
     } catch (spawnError: any) {
       // spawn이 동기적으로 실패한 경우 (예: UNKNOWN 에러)
-      console.error(`[OnVoiceBridge] ❌ spawn 동기 에러:`, spawnError);
 
-      // 개발 모드에서는 더 자세한 진단 정보 제공
+      // 개발 모드에서는 더 자세한 진단 정보 제공 (한 번만)
       if (!app.isPackaged) {
-        console.error(`[OnVoiceBridge] 💡 개발 모드: Bridge 실행 실패 진단`);
-        console.error(`[OnVoiceBridge]    에러 코드: ${spawnError.code || "N/A"}`);
-        console.error(`[OnVoiceBridge]    에러 번호: ${spawnError.errno || "N/A"}`);
-        console.error(`[OnVoiceBridge]    시스템 호출: ${spawnError.syscall || "N/A"}`);
-        console.error(`[OnVoiceBridge] 💡 오디오 필터링을 사용하려면 다음을 해결하세요:`);
-        console.error(`[OnVoiceBridge]    1. Visual C++ Redistributable 설치 (필수):`);
-        console.error(`[OnVoiceBridge]       https://aka.ms/vs/17/release/vc_redist.x64.exe`);
-        console.error(`[OnVoiceBridge]    2. 설치 후 앱을 재시작하세요`);
-        console.error(`[OnVoiceBridge]    3. 또는 Bridge 재빌드: npm run build:dotnet`);
-        console.warn("[OnVoiceBridge] ⚠️ 개발 모드: Bridge 없이 계속 진행합니다. (오디오 필터링 비활성화)");
+        if (!bridgeSpawnFailed) {
+          // 첫 번째 실패 시에만 상세 정보 출력
+          console.warn(`[OnVoiceBridge] ⚠️ 개발 모드: Bridge 실행 실패 (에러 코드: ${spawnError.code || "UNKNOWN"})`);
+          console.warn(`[OnVoiceBridge] 💡 오디오 필터링을 사용하려면 다음을 해결하세요:`);
+          console.warn(`[OnVoiceBridge]    1. Visual C++ Redistributable 설치 (필수):`);
+          console.warn(`[OnVoiceBridge]       https://aka.ms/vs/17/release/vc_redist.x64.exe`);
+          console.warn(`[OnVoiceBridge]    2. 설치 후 앱을 재시작하세요`);
+          console.warn(`[OnVoiceBridge]    3. 또는 Bridge 재빌드: npm run build:dotnet`);
+          console.warn("[OnVoiceBridge] ⚠️ 개발 모드: Bridge 없이 계속 진행합니다. (오디오 필터링 비활성화)");
+          bridgeSpawnFailed = true; // 플래그 설정하여 재시도 방지
+        }
         bridgeProcess = null;
         return; // 에러를 throw하지 않고 함수 종료
       }
@@ -395,9 +401,25 @@ export const onVoiceBridge: OnVoiceBridge = {
   onAudioDataCallback: undefined,
   async init(onAudioData: (pcm: Buffer, timestamp?: number) => void): Promise<void> {
     this.onAudioDataCallback = onAudioData;
-    spawnBridge();
-    await callBridge("init");
-    console.log("[OnVoiceBridge] 초기화 완료 (Separate Process)");
+
+    // 개발 모드에서 이미 spawn이 실패한 경우 초기화를 건너뜀
+    if (!app.isPackaged && bridgeSpawnFailed) {
+      console.warn("[OnVoiceBridge] ⚠️ 개발 모드: Bridge 초기화를 건너뜁니다. (이전 spawn 실패)");
+      return;
+    }
+
+    try {
+      spawnBridge();
+      await callBridge("init");
+      console.log("[OnVoiceBridge] 초기화 완료 (Separate Process)");
+    } catch (error: any) {
+      // 개발 모드에서는 에러를 무시하고 계속 진행
+      if (!app.isPackaged) {
+        console.warn("[OnVoiceBridge] ⚠️ 개발 모드: Bridge 초기화 실패를 무시합니다.");
+        return;
+      }
+      throw error;
+    }
   },
   async findProcess(target: string): Promise<number> {
     const result = await callBridge("find", { target });

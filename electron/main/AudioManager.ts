@@ -64,7 +64,14 @@ class AudioManager {
       });
       this.isInitialized = true;
       console.log("[AudioManager] ✅ 초기화 완료");
-    } catch (error) {
+    } catch (error: any) {
+      // 개발 모드에서는 에러를 무시하고 계속 진행
+      const isDev = !require('electron').app.isPackaged;
+      if (isDev) {
+        console.warn("[AudioManager] ⚠️ 개발 모드: Bridge 초기화 실패를 무시합니다. (오디오 필터링 비활성화)");
+        this.isInitialized = false; // 초기화되지 않음으로 표시
+        return; // 에러를 throw하지 않고 계속 진행
+      }
       console.error("[AudioManager] 초기화 실패:", error);
       throw error;
     }
