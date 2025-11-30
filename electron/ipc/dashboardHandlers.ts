@@ -43,7 +43,9 @@ export function registerDashboardHandlers(): void {
 
   // 모드 선택 (OCR 또는 음성)
   ipcMain.on(DASHBOARD_CHANNELS.SELECT_MODE, async (event, mode: 'ocr' | 'voice') => {
-    console.log(`[Dashboard] 모드 선택: ${mode}`);
+    console.log(`[Dashboard] 모드 선택 핸들러 호출됨: ${mode}`);
+    console.log(`[Dashboard] 현재 overlayWindow:`, overlayWindow ? '존재' : 'null');
+    console.log(`[Dashboard] 현재 mainWindow:`, mainWindow ? '존재' : 'null');
     
     if (mode === 'ocr') {
       // OCR 모드 선택

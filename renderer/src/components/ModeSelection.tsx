@@ -6,9 +6,16 @@ export const ModeSelection: React.FC = () => {
   const [selectedMode, setSelectedMode] = React.useState<Mode | null>(null);
 
   const handleModeSelect = (mode: Mode) => {
+    console.log('[ModeSelection] 모드 선택 시도:', mode);
+    console.log('[ModeSelection] window.api:', window.api);
+    console.log('[ModeSelection] window.api.dashboard:', window.api?.dashboard);
+    
     if (window.api?.dashboard?.selectMode) {
+      console.log('[ModeSelection] selectMode 호출:', mode);
       window.api.dashboard.selectMode(mode);
       setSelectedMode(mode);
+    } else {
+      console.error('[ModeSelection] selectMode API를 사용할 수 없습니다');
     }
   };
 

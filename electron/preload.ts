@@ -45,6 +45,7 @@ const ONVOICE_CHANNELS = {
 } as const;
 
 const DASHBOARD_CHANNELS = {
+  SELECT_MODE: 'dashboard:select-mode',         // 모드 선택 (ocr | voice)
   TOGGLE_OCR: 'dashboard:toggle-ocr',
   TOGGLE_VOICE: 'dashboard:toggle-voice',
   GET_WINDOW_STATUS: 'dashboard:get-window-status',

@@ -9,7 +9,7 @@
 
 import { BrowserWindow } from "electron";
 import WebSocket from "ws";
-import { createOnVoiceCapture, OnVoiceCaptureHandle } from "./onvoiceBridgeAdapter";
+import { createOnVoiceCapture, OnVoiceCaptureHandle } from "./onVoiceBridgeAdapter";
 import { sendTextForAnalysis, AnalysisResult } from "../utils/harmfulAnalysisClient";
 import { IPC_CHANNELS } from "../ipc/channels";
 import { findProcessByType } from "../utils/processFinder";
