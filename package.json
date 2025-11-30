@@ -80,6 +80,7 @@
       "dist-electron/**/*",
       "dist/renderer/**/*",
       "package.json",
+      "electron/OnVoice.exe.manifest",
       "!server/**/*",
       "!dotnet/**/*",
       "!native/**/*",
@@ -89,14 +90,28 @@
       "!**/*.tsx",
       "!vite.config.ts"
     ],
+    "extraFiles": [
+      {
+        "from": "electron/OnVoice.exe.manifest",
+        "to": "OnVoice.exe.manifest"
+      }
+    ],
     "extraResources": [
       {
         "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe",
         "to": "bin/OnVoiceComBridge.exe"
       },
       {
+        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe.manifest",
+        "to": "bin/OnVoiceComBridge.exe.manifest"
+      },
+      {
         "from": "native/OnVoiceAudioBridge.dll",
         "to": "native/OnVoiceAudioBridge.dll"
+      },
+      {
+        "from": "native/OnVoiceAudioBridge.dll.manifest",
+        "to": "native/OnVoiceAudioBridge.dll.manifest"
       },
       {
         "from": ".env.production",
