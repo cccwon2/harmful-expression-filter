@@ -57,13 +57,18 @@ function getBridgePath(): string {
 }
 
 function spawnBridge(): void {
-  if (bridgeProcess) return;
+  if (bridgeProcess) {
+    console.log(`[OnVoiceBridge] ℹ️ Bridge 프로세스가 이미 실행 중입니다.`);
+    return;
+  }
 
   // 개발 모드에서 이미 spawn이 실패한 경우 재시도하지 않음
   // 단, bridgeSpawnFailed 플래그를 리셋할 수 있는 옵션 제공 (디버깅용)
   if (!app.isPackaged && bridgeSpawnFailed) {
     // 개발 모드에서 재시도하려면 bridgeSpawnFailed를 false로 설정하거나
     // 앱을 재시작하면 다시 시도됩니다
+    console.warn(`[OnVoiceBridge] ⚠️ 이전에 Bridge spawn이 실패하여 재시도를 건너뜁니다.`);
+    console.warn(`[OnVoiceBridge] 💡 앱을 재시작하거나 Bridge 문제를 해결한 후 다시 시도하세요.`);
     return;
   }
 
@@ -314,11 +319,16 @@ function callBridge(command: string, payload: any = {}): Promise<any> {
   // Bridge 프로세스가 없으면 시작 시도
   if (!bridgeProcess) {
     try {
+      console.log(`[OnVoiceBridge] 🔍 Bridge 프로세스가 없어 spawn 시도 중... (명령: ${command})`);
       spawnBridge();
+      
+      // spawnBridge() 호출 후 짧은 대기 (프로세스 시작 시간 확보)
+      // 하지만 동기적으로 확인할 수 없으므로, 다음 체크에서 처리
     } catch (error: any) {
       // 개발 모드에서 Bridge 실행 실패 시 빈 응답 반환
       if (!app.isPackaged) {
         console.warn(`[OnVoiceBridge] ⚠️ Bridge 실행 실패로 인해 '${command}' 명령을 건너뜁니다.`);
+        console.warn(`[OnVoiceBridge] 에러 상세:`, error.message || error);
         return Promise.resolve(null);
       }
       // 배포 모드에서는 에러를 throw
@@ -331,9 +341,23 @@ function callBridge(command: string, payload: any = {}): Promise<any> {
     if (!app.isPackaged) {
       // 개발 모드에서 경고 메시지는 한 번만 출력
       if (!bridgeWarningShown) {
+        const bridgePath = getBridgePath();
+        const pathExists = existsSync(bridgePath);
         console.warn(
           `[OnVoiceBridge] ⚠️ 개발 모드: Bridge 프로세스가 없어 명령을 건너뜁니다. (오디오 필터링 비활성화)`
         );
+        console.warn(`[OnVoiceBridge] 🔍 Bridge 실행 파일 경로: ${bridgePath}`);
+        console.warn(`[OnVoiceBridge] 🔍 파일 존재 여부: ${pathExists ? "✅ 존재" : "❌ 없음"}`);
+        if (!pathExists) {
+          console.warn(`[OnVoiceBridge] 💡 Bridge 실행 파일을 찾을 수 없습니다. 다음을 확인하세요:`);
+          console.warn(`[OnVoiceBridge]    1. npm run build:dotnet 실행하여 Bridge 빌드`);
+          console.warn(`[OnVoiceBridge]    2. 경로 확인: ${bridgePath}`);
+        } else {
+          console.warn(`[OnVoiceBridge] 💡 파일은 존재하지만 실행에 실패했습니다. 다음을 확인하세요:`);
+          console.warn(`[OnVoiceBridge]    1. Visual C++ Redistributable 설치`);
+          console.warn(`[OnVoiceBridge]    2. 관리자 권한으로 실행 시도`);
+          console.warn(`[OnVoiceBridge]    3. 바이러스 백신 소프트웨어 확인`);
+        }
         bridgeWarningShown = true;
       }
       return Promise.resolve(null);
