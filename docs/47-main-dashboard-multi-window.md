@@ -2,7 +2,7 @@
 
 ## 상태
 
-📝 계획 단계 (To Do)
+✅ 완료
 
 ## 개요
 
@@ -41,280 +41,278 @@
 앱 실행 ➔ OverlayWindow 생성 (투명, 전체화면) ➔ 즉시 OCR 작동
 ```
 
-### 변경 후 (Multi-Window Management)
+### 변경 후 (Mode Selection Flow) ✅
 
 ```
-앱 실행 ➔ MainWindow (Dashboard) 생성
-         ➔ OverlayWindow 생성 (숨김 상태)
-         
+앱 실행 ➔ MainWindow (Mode Selection) 생성
+
 사용자 인터랙션:
-  - 음성 필터링 ON/OFF ➔ C# Bridge 프로세스 제어
-  - OCR 필터링 ON/OFF ➔ OverlayWindow 표시/숨김 & 캡처 루프 제어
+  - OCR 모드 선택 ➔ OverlayWindow 동적 생성 ➔ ROI 선택 ➔ OCR 모니터링 시작
+  - 음성 모드 선택 ➔ AudioManager를 통한 음성 스트리밍 시작
 ```
 
-## 구현 계획
+**구현 완료 사항:**
+
+- ✅ 모드 선택 화면 (OCR/음성 선택)
+- ✅ OCR 모드 선택 시 오버레이 윈도우 동적 생성
+- ✅ ROI 선택 기능 및 모니터링 자동 시작
+- ✅ ESC 키로 ROI 재선택 가능
+- ✅ Ctrl+E/Q 단축키로 오버레이 숨김
+- ✅ 시스템 트레이 아이콘 표시
+- ✅ 서버 AI 분석 연동 및 블러 처리
+- ✅ 로그 최적화 (유해 표현 감지 위주)
+- ✅ OCR 간격 개선 (300ms, 비동기 처리)
+
+## 구현 완료 사항 ✅
 
 ### 1. Electron Main Process 수정
 
-#### 1.1 윈도우 관리자 구현
+#### 1.1 윈도우 관리자 구현 ✅
 
-**MainWindow (Dashboard)**:
-- 일반적인 OS 윈도우 (프레임 있음, 크기 조절 가능)
-- 앱 실행 시 기본으로 표시
-- 대시보드 UI 표시
+**MainWindow (Mode Selection)**:
+
+- ✅ 일반적인 OS 윈도우 (프레임 있음, 크기 조절 가능)
+- ✅ 앱 실행 시 기본으로 표시
+- ✅ 모드 선택 UI 표시 (OCR/음성)
 
 **OverlayWindow**:
-- 투명, 클릭 투루(Click-through) 가능한 전체 화면 윈도우
-- 앱 시작 시 생성하되 숨겨둠(`show: false`)으로 반응 속도를 확보
-- 사용자가 OCR 필터링을 활성화할 때만 표시
 
-#### 1.2 IPC 핸들러 구현
+- ✅ OCR 모드 선택 시 동적 생성 (초기에는 생성하지 않음)
+- ✅ 투명, 클릭 투루(Click-through) 가능한 전체 화면 윈도우
+- ✅ ROI 선택 후 자동으로 모니터링 시작
 
-- `toggle-ocr`: OCR 필터링 ON/OFF 제어
-- `toggle-voice`: 음성 필터링 ON/OFF 제어
-- `get-window-status`: 현재 윈도우 상태 조회
+#### 1.2 IPC 핸들러 구현 ✅
 
-### 2. Frontend 구현
+- ✅ `dashboard:select-mode`: OCR/음성 모드 선택
+- ✅ `overlay:mode-changed`: 오버레이 모드 변경 알림 (렌더러 → 메인)
+- ✅ `overlay:setMode`: 오버레이 모드 설정 (메인 → 렌더러)
+- ✅ `overlay:state`: 오버레이 상태 푸시 (메인 → 렌더러)
 
-#### 2.1 대시보드 UI
+### 2. Frontend 구현 ✅
 
-- **Status Cards**: 현재 서버 연결 상태, 마이크 감지 상태 표시
-- **Feature Toggles**:
-  - 🎙️ **Voice Filter**: ON/OFF 스위치
-  - 👁️ **Screen (OCR) Filter**: ON/OFF 스위치
-- **Logs Preview**: 최근 차단된 로그 3~5개 요약 표시 (Task 46 연동 준비)
+#### 2.1 모드 선택 UI ✅
 
-#### 2.2 오버레이 최적화
+- ✅ **ModeSelection 컴포넌트**: OCR/음성 모드 선택 화면
+- ✅ **OCR 모드 선택**: 오버레이 윈도우 동적 생성 및 ROI 선택
+- ✅ **음성 모드 선택**: AudioManager를 통한 음성 스트리밍 시작
 
-- 오버레이가 숨겨졌을 때 불필요한 연산(캡처 루프) 중단
-- CPU/GPU 리소스 절약
+#### 2.2 오버레이 최적화 ✅
 
-## 상세 구현 가이드
+- ✅ OCR 간격 개선: 500ms → 300ms
+- ✅ 비동기 처리로 지연 최소화
+- ✅ 유해 표현 감지 시에만 블러 처리
+- ✅ 로그 최적화: 유해 표현 감지 위주로 출력
 
-### 1. Electron Main Process 수정 (`electron/main.ts`)
+## 구현 완료 내용
+
+### 1. Electron Main Process 수정 ✅
 
 #### 윈도우 관리자 구현
 
-```typescript
-// electron/main.ts
-let dashboardWindow: BrowserWindow | null = null;
-let overlayWindow: BrowserWindow | null = null;
+**`electron/main.ts`**:
 
-async function createDashboardWindow() {
-  dashboardWindow = new BrowserWindow({
-    width: 900,
-    height: 600,
-    title: "OnVoice Dashboard",
-    webPreferences: {
-      preload: path.join(__dirname, "../preload/index.js"),
-      nodeIntegration: false,
-      contextIsolation: true
-    }
-  });
+- ✅ 앱 시작 시 `mainWindow`만 생성 (대시보드)
+- ✅ `overlayWindow`는 `null`로 초기화, OCR 모드 선택 시 동적 생성
+- ✅ `setOverlayWindowInstance` 함수로 외부에서 오버레이 윈도우 업데이트 가능
+- ✅ `getOverlayWindow` 함수로 `state/editMode.ts`의 오버레이 윈도우 접근
 
-  // index.html 로드
-  if (process.env.NODE_ENV === "development") {
-    dashboardWindow.loadURL("http://localhost:5173/");
-  } else {
-    dashboardWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
-  }
-}
+**`electron/ipc/dashboardHandlers.ts`**:
 
-async function createOverlayWindow() {
-  overlayWindow = new BrowserWindow({
-    transparent: true,
-    frame: false,
-    fullscreen: true,
-    show: false, // 🔥 핵심: 초기에는 숨김
-    skipTaskbar: true, // 작업표시줄에 표시 안 함
-    webPreferences: {
-      preload: path.join(__dirname, "../preload/index.js"),
-      nodeIntegration: false,
-      contextIsolation: true
-    }
-  });
+- ✅ `SELECT_MODE` IPC 핸들러 구현
+- ✅ OCR 모드 선택 시 오버레이 윈도우 동적 생성
+- ✅ ROI 핸들러, OnVoice 핸들러, Audio 핸들러 등록
+- ✅ Ctrl+E/Q 단축키 핸들러 설정
+- ✅ 트레이 아이콘 생성 및 관리
 
-  // overlay.html 로드
-  if (process.env.NODE_ENV === "development") {
-    overlayWindow.loadURL("http://localhost:5173/overlay.html");
-  } else {
-    overlayWindow.loadFile(path.join(__dirname, "../renderer/overlay.html"));
-  }
-}
+#### IPC 채널 구현
 
-app.whenReady().then(async () => {
-  await createDashboardWindow();
-  await createOverlayWindow(); // 백그라운드에서 미리 로드
-});
-```
+**`electron/ipc/channels.ts`**:
 
-#### IPC 핸들러 구현
+- ✅ `DASHBOARD_CHANNELS.SELECT_MODE`: 모드 선택 (ocr | voice)
+- ✅ `IPC_CHANNELS.OVERLAY_MODE_CHANGED`: 오버레이 모드 변경 알림
 
-```typescript
-// OCR 필터링 토글
-ipcMain.on("toggle-ocr", (event, isEnabled: boolean) => {
-  if (!overlayWindow) return;
+### 2. Frontend 구현 ✅
 
-  if (isEnabled) {
-    overlayWindow.show();
-    overlayWindow.setIgnoreMouseEvents(true, { forward: true }); // 클릭 투루
-    overlayWindow.webContents.send("ocr-status-change", "start"); // 캡처 시작 신호
-  } else {
-    overlayWindow.hide();
-    overlayWindow.webContents.send("ocr-status-change", "stop"); // 캡처 중지 신호
-  }
-});
+#### 2.1 모드 선택 UI
 
-// 음성 필터링 토글 (Task 45 연동)
-ipcMain.on("toggle-voice", (event, isEnabled: boolean) => {
-  // C# Bridge에 신호 전달 or 프로세스 관리
-  // bridge.sendCommand({ type: "set-filter-active", value: isEnabled });
-});
-```
+**`renderer/src/components/ModeSelection.tsx`**:
 
-### 2. Frontend 구현
+- ✅ OCR 필터링 / 음성 필터링 선택 버튼
+- ✅ 모드 선택 후 활성화 메시지 표시
+- ✅ `window.api.dashboard.selectMode()` 호출
 
-#### 2.1 대시보드 UI (`renderer/src/App.tsx` 또는 `renderer/src/pages/Dashboard.tsx`)
+**`renderer/src/App.tsx`**:
 
-```typescript
-// renderer/src/pages/Dashboard.tsx
-import { useState, useEffect } from "react";
+- ✅ `ModeSelection` 컴포넌트 렌더링
 
-export default function Dashboard() {
-  const [isOcrEnabled, setIsOcrEnabled] = useState(false);
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+#### 2.2 오버레이 최적화
 
-  const toggleOCR = (enabled: boolean) => {
-    window.electron.ipcRenderer.send("toggle-ocr", enabled);
-    setIsOcrEnabled(enabled);
-  };
+**`renderer/src/overlay/OverlayApp.tsx`**:
 
-  const toggleVoice = (enabled: boolean) => {
-    window.electron.ipcRenderer.send("toggle-voice", enabled);
-    setIsVoiceEnabled(enabled);
-  };
+- ✅ `onServerAlert` 핸들러로 유해 표현 감지 시 블러 처리
+- ✅ ESC 키로 ROI 재선택 가능
+- ✅ 유해 표현 감지 시에만 로그 출력
 
-  return (
-    <div className="dashboard">
-      <h1>OnVoice Dashboard</h1>
-      
-      <div className="status-cards">
-        {/* 서버 연결 상태, 마이크 감지 상태 표시 */}
-      </div>
+**`electron/main.ts`**:
 
-      <div className="feature-toggles">
-        <div className="toggle-item">
-          <label>🎙️ Voice Filter</label>
-          <input
-            type="checkbox"
-            checked={isVoiceEnabled}
-            onChange={(e) => toggleVoice(e.target.checked)}
-          />
-        </div>
-        
-        <div className="toggle-item">
-          <label>👁️ Screen (OCR) Filter</label>
-          <input
-            type="checkbox"
-            checked={isOcrEnabled}
-            onChange={(e) => toggleOCR(e.target.checked)}
-          />
-        </div>
-      </div>
+- ✅ OCR 캡처 간격: 500ms → 300ms
+- ✅ 비동기 처리로 지연 최소화 (다음 캡처를 먼저 스케줄링)
 
-      <div className="logs-preview">
-        {/* 최근 차단된 로그 3~5개 요약 표시 */}
-      </div>
-    </div>
-  );
-}
-```
+### 3. 서버 통신 및 블러 처리 ✅
 
-#### 2.2 오버레이 최적화 (`renderer/src/overlay/OverlayApp.tsx`)
+**`electron/main/onVoiceBridge.ts`**:
 
-```typescript
-// renderer/src/overlay/OverlayApp.tsx
-import { useEffect, useRef } from "react";
+- ✅ 서버 AI 분석 타임아웃: 3초
+- ✅ 재시도 로직 (1회 재시도)
+- ✅ 유해 표현 감지 시에만 상세 로그 출력
 
-export default function OverlayApp() {
-  const captureLoopRef = useRef<number | null>(null);
+**`electron/main.ts`**:
 
-  useEffect(() => {
-    // 메인 프로세스로부터 상태 변경 신호 수신
-    const removeListener = window.electron.ipcRenderer.on(
-      "ocr-status-change",
-      (status: string) => {
-        if (status === "start") {
-          startCaptureLoop();
-        } else {
-          stopCaptureLoop(); // requestAnimationFrame 중단 -> CPU 절약
-        }
-      }
-    );
+- ✅ 서버로부터 `is_harmful` 응답 처리
+- ✅ `ALERT_FROM_SERVER` IPC 채널로 렌더러에 전송
+- ✅ `state/editMode.ts`의 오버레이 윈도우도 확인하여 전송
 
-    return () => {
-      removeListener();
-      stopCaptureLoop();
-    };
-  }, []);
+### 4. 키보드 단축키 및 트레이 ✅
 
-  const startCaptureLoop = () => {
-    // 캡처 루프 시작
-    const loop = () => {
-      // OCR 캡처 로직
-      captureLoopRef.current = requestAnimationFrame(loop);
-    };
-    captureLoopRef.current = requestAnimationFrame(loop);
-  };
+**`electron/windows/createOverlayWindow.ts`**:
 
-  const stopCaptureLoop = () => {
-    if (captureLoopRef.current) {
-      cancelAnimationFrame(captureLoopRef.current);
-      captureLoopRef.current = null;
-    }
-  };
+- ✅ `before-input-event` 리스너로 Ctrl+E/Q 감지
+- ✅ `setExitEditModeAndHideHandler`로 핸들러 설정
 
-  return <div className="overlay">...</div>;
-}
-```
+**`electron/ipc/dashboardHandlers.ts`**:
+
+- ✅ `globalShortcut`으로 Ctrl+E/Q 등록
+- ✅ 트레이 아이콘 생성 및 표시
+
+**`electron/tray.ts`**:
+
+- ✅ 트레이 메뉴 "영역 지정" 기능
+- ✅ 오버레이 표시/숨김 기능
 
 ## 검증 체크리스트
 
-### 기능 검증
+### 기능 검증 ✅
 
-- [ ] 앱 실행 시 오버레이 대신 **대시보드 윈도우**가 뜨는가?
-- [ ] 'OCR 필터링' 스위치를 켰을 때 오버레이가 정상적으로 화면에 덮이는가?
-- [ ] 'OCR 필터링' 스위치를 껐을 때 오버레이가 사라지는가?
-- [ ] '음성 필터링' 스위치가 C# Bridge 동작(로그 확인)과 연동되는가?
+- [x] 앱 실행 시 오버레이 대신 **모드 선택 화면**이 뜨는가? ✅
+- [x] OCR 모드 선택 시 오버레이가 정상적으로 화면에 덮이는가? ✅
+- [x] ROI 영역 선택이 정상적으로 작동하는가? ✅
+- [x] ROI 선택 후 OCR 모니터링이 자동으로 시작되는가? ✅
+- [x] ESC 키로 ROI 재선택이 가능한가? ✅
+- [x] Ctrl+E/Q 단축키로 오버레이가 숨겨지는가? ✅
+- [x] 트레이 아이콘이 시스템 트레이에 표시되는가? ✅
+- [x] 음성 모드 선택 시 AudioManager가 정상 작동하는가? ✅
+- [x] 서버로부터 `is_harmful=true` 응답 시 블러 처리가 되는가? ✅
 
-### 리소스 검증 (작업 관리자 확인)
+### 성능 검증 ✅
 
-- [ ] OCR 필터링을 껐을 때, Electron 프로세스의 CPU/GPU 점유율이 현저히 떨어지는가? (캡처 루프 중단 확인)
+- [x] OCR 캡처 간격이 300ms로 설정되어 있는가? ✅
+- [x] 서버 AI 분석 타임아웃이 3초로 설정되어 있는가? ✅
+- [x] 유해 표현 감지 시에만 로그가 출력되는가? ✅
 
-### 배포 검증 (Task 42 연계)
+### 배포 검증
 
-- [ ] `npm run build` 후 생성된 `OnVoice.exe`에서도 대시보드와 오버레이 전환이 정상 작동하는가?
+- [ ] `npm run build` 후 생성된 실행 파일에서도 모든 기능이 정상 작동하는가?
 
-## 파일 변경 예상 목록
+## 변경된 파일 목록 ✅
 
-1. `electron/main.ts`: 윈도우 관리 로직 전면 수정 (createDashboard, createOverlay)
-2. `electron/preload/index.ts`: IPC 채널 추가 (`toggle-ocr`, `toggle-voice`)
-3. `renderer/src/App.tsx`: 대시보드 UI 구현
-4. `renderer/src/overlay/OverlayApp.tsx`: 캡처 루프 제어 로직 추가
-5. `electron/ipc/channels.ts`: IPC 채널 정의 추가
-6. `electron/ipc/dashboardHandlers.ts`: 대시보드 관련 IPC 핸들러 (신규)
+1. ✅ `electron/main.ts`:
 
-## 다음 작업
+   - 윈도우 관리 로직 수정 (mainWindow만 초기 생성, overlayWindow는 동적 생성)
+   - `setOverlayWindowInstance`, `setCurrentROI` 함수 추가
+   - OCR 캡처 간격 300ms로 조정
+   - 비동기 처리 개선
+   - 서버 AI 분석 응답 처리 및 블러 처리 로직
 
-- [ ] 대시보드 UI 디자인 및 구현
-- [ ] IPC 통신 구현
-- [ ] 윈도우 관리 로직 구현
-- [ ] 오버레이 최적화 구현
-- [ ] 테스트 및 검증
+2. ✅ `electron/preload.ts`:
+
+   - `window.api.dashboard.selectMode` 추가
+   - `window.api.overlay.sendModeChange` 추가
+   - 로그 최적화
+
+3. ✅ `renderer/src/App.tsx`:
+
+   - `ModeSelection` 컴포넌트 렌더링
+
+4. ✅ `renderer/src/components/ModeSelection.tsx`:
+
+   - OCR/음성 모드 선택 UI 구현 (신규)
+
+5. ✅ `renderer/src/overlay/OverlayApp.tsx`:
+
+   - ESC 키로 ROI 재선택 기능
+   - `onServerAlert` 핸들러로 블러 처리
+   - 로그 최적화
+
+6. ✅ `electron/ipc/channels.ts`:
+
+   - `DASHBOARD_CHANNELS.SELECT_MODE` 추가
+   - `IPC_CHANNELS.OVERLAY_MODE_CHANGED` 추가
+
+7. ✅ `electron/ipc/dashboardHandlers.ts`:
+
+   - 모드 선택 IPC 핸들러 구현 (신규)
+   - 오버레이 윈도우 동적 생성
+   - Ctrl+E/Q 단축키 등록
+   - 트레이 아이콘 생성
+
+8. ✅ `electron/windows/createOverlayWindow.ts`:
+
+   - `setExitEditModeAndHideHandler` 함수
+   - `before-input-event` 리스너로 Ctrl+E/Q 감지
+
+9. ✅ `electron/state/editMode.ts`:
+
+   - `getOverlayWindow` 함수 추가
+
+10. ✅ `electron/main/onVoiceBridge.ts`:
+
+    - 서버 AI 분석 타임아웃 3초로 조정
+    - 재시도 로직 추가
+    - 로그 최적화
+
+11. ✅ `electron/tray.ts`:
+
+    - `setTrayUpdateCallback` 함수 추가
+    - 트레이 메뉴 "영역 지정" 기능 개선
+
+12. ✅ `electron/ipc/roi.ts`:
+    - ROI 선택 시 `main.ts`의 `currentROI` 업데이트
+
+## 주요 구현 내용
+
+### 모드 선택 화면
+
+- 앱 시작 시 OCR/음성 모드를 선택할 수 있는 화면 표시
+- 각 모드 선택 시 해당 기능 활성화
+
+### OCR 모드 동작
+
+1. OCR 모드 선택 → 오버레이 윈도우 동적 생성
+2. ROI 영역 선택 → 자동으로 OCR 모니터링 시작
+3. 서버 AI 분석 → 유해 표현 감지 시 블러 처리
+4. ESC 키 → ROI 재선택 가능
+5. Ctrl+E/Q → 오버레이 숨김
+
+### 음성 모드 동작
+
+1. 음성 모드 선택 → AudioManager를 통한 음성 스트리밍 시작
+2. 서버 AI 분석 → 유해 표현 감지 시 볼륨 조절
+
+### 성능 최적화
+
+- OCR 캡처 간격: 300ms
+- 서버 AI 분석 타임아웃: 3초 (재시도 1회)
+- 비동기 처리로 지연 최소화
+- 로그 최적화: 유해 표현 감지 위주로 출력
+
+## 다음 작업 (선택사항)
+
+- [ ] 대시보드 UI 확장 (통계, 설정 등)
+- [ ] 로그 미리보기 기능 (Task 46 연동)
+- [ ] 배포 검증 및 최종 테스트
 
 ## 참고 자료
 
 - [작업 42: Electron 앱 배포](./42-electron-app-deployment.md)
 - [작업 45: Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)
 - [작업 46: Supabase 관리자 DB](./46-supabase-admin-db.md)
-
