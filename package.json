@@ -4,7 +4,7 @@
   "description": "OnVoice - Voice Overlay Application",
   "main": "./dist-electron/entry.js",
   "scripts": {
-    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o bin/Release/net6.0/win-x64/publish",
+    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o bin/Release/net6.0/win-x64/publish",
     "copy:dll": "node scripts/copy-dll.js",
     "build:native": "node scripts/build-native.js",
     "copy:native": "node scripts/copy-native-dll.js",
@@ -14,6 +14,8 @@
     "dev:renderer": "vite",
     "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
     "typecheck": "tsc --noEmit",
+    "check:dll": "node scripts/check-dll-build-mode.js",
+    "register:com": "powershell -ExecutionPolicy Bypass -File scripts/register-com-dll.ps1",
     "start": "cross-env NODE_ENV=production DOTNET_ROOT=\"C:\\Program Files\\dotnet\" electron .",
     "build:renderer": "vite build",
     "build:electron": "electron-builder",
