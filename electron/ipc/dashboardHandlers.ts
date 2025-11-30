@@ -450,6 +450,16 @@ export function registerDashboardHandlers(): void {
         }
       } catch (error: any) {
         console.error("[Dashboard] 음성 필터링 시작 실패:", error.message);
+        if (error.stack) {
+          console.error("[Dashboard] 에러 스택:", error.stack);
+        }
+        // Bridge 프로세스 관련 에러인 경우 추가 정보 제공
+        if (error.message && error.message.includes("Bridge")) {
+          console.error("[Dashboard] 💡 Bridge 프로세스 문제 해결 방법:");
+          console.error("[Dashboard]    1. Visual C++ Redistributable 설치");
+          console.error("[Dashboard]    2. npm run build:dotnet 실행");
+          console.error("[Dashboard]    3. 앱 재시작");
+        }
       }
     }
   });

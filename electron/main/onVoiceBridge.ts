@@ -556,7 +556,24 @@ export const onVoiceBridge: OnVoiceBridge = {
   },
   async findProcess(target: string): Promise<number> {
     const result = await callBridge("find", { target });
-    if (!result || typeof result.pid !== "number") throw new Error("Process not found");
+    
+    // 개발 모드에서 Bridge 프로세스가 없을 때 더 명확한 에러 메시지 제공
+    if (!result) {
+      if (!app.isPackaged) {
+        throw new Error(
+          "Bridge 프로세스를 찾을 수 없습니다. 오디오 필터링을 사용하려면:\n" +
+          "1. Visual C++ Redistributable 설치: https://aka.ms/vs/17/release/vc_redist.x64.exe\n" +
+          "2. Bridge 재빌드: npm run build:dotnet\n" +
+          "3. 앱 재시작"
+        );
+      }
+      throw new Error("Process not found: Bridge process is not available");
+    }
+    
+    if (typeof result.pid !== "number") {
+      throw new Error(`Process not found: Invalid response from bridge (target: ${target})`);
+    }
+    
     return result.pid;
   },
   async startCapture(pid: number): Promise<void> {
