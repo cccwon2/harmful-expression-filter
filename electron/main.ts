@@ -17,6 +17,7 @@ import * as dotenv from "dotenv";
 import { registerServerHandlers, checkServerConnection } from "./ipc/serverHandlers";
 import { registerAudioHandlers, getAudioService } from "./ipc/audioHandlers";
 import { registerOnVoiceHandlers } from "./ipc/onVoiceHandlers";
+import { registerDashboardHandlers, setWindows } from "./ipc/dashboardHandlers";
 import { setTrayAudioUpdateCallback } from "./tray";
 import AudioManager from "./main/AudioManager";
 // 🔥 중요: onVoiceBridge를 최상단에서 정적 import 하여 중복 로드 방지
@@ -167,16 +168,22 @@ app.whenReady().then(async () => {
     console.error("[Main] AudioManager 초기화 실패:", error);
   }
 
-  // 메인 윈도우 생성 (AudioMonitor UI용 - 개발/디버깅 목적으로만 사용, 기본적으로 숨김)
+  // 메인 윈도우 생성 (대시보드 - 기본으로 표시)
   try {
     mainWindow = createMainWindow();
+    mainWindow.show(); // 대시보드를 기본으로 표시
+    console.log("[Main] 대시보드 윈도우 표시됨");
   } catch (err) {
     console.warn("[Main] Failed to create main window (non-critical):", err);
     mainWindow = null;
   }
 
-  // 오버레이 창 생성
+  // 오버레이 창 생성 (숨김 상태로 시작)
   overlayWindow = createOverlayWindow();
+  console.log("[Main] 오버레이 윈도우 생성됨 (숨김 상태)");
+  
+  // 대시보드 핸들러에 윈도우 참조 설정
+  setWindows(overlayWindow, mainWindow);
 
   // Edit Mode 상태 관리에 오버레이 창 등록
   if (overlayWindow) {
@@ -787,37 +794,22 @@ app.whenReady().then(async () => {
     setOverlayTrayUpdateCallback(trayUpdateFn);
     setTrayAudioUpdateCallback(trayUpdateFn);
 
+    // 오버레이 로드 완료 시 저장된 상태 복원 (하지만 자동으로 표시하지 않음)
     overlayWindow.webContents.once("did-finish-load", () => {
       const savedROI = getROI();
       const savedMode = getMode();
 
       if (savedROI && savedMode && savedMode !== "setup") {
-        console.log("[Main] Restoring saved state:", { savedROI, savedMode });
+        console.log("[Main] 저장된 상태 복원:", { savedROI, savedMode });
         currentROI = savedROI;
         setMode("detect");
-        setEditModeState(false, { hideOverlay: false });
+        setEditModeState(false, { hideOverlay: true }); // 오버레이 숨김 유지
 
-        const target = overlayWindow;
-        if (!target || target.isDestroyed()) {
-          enterSetupMode();
-          return;
-        }
-
-        target.show();
-        target.setSkipTaskbar(false);
-        target.setIgnoreMouseEvents(true, { forward: true });
-
-        sendOverlayMode("detect");
-        pushOverlayState({
-          mode: "detect",
-          roi: savedROI,
-          harmful: false,
-        });
-
-        startMonitoring();
+        // 오버레이는 사용자가 대시보드에서 활성화할 때까지 숨김 상태 유지
+        // 상태만 복원하고 표시하지 않음
+        console.log("[Main] 오버레이 상태 복원 완료 (사용자 활성화 대기 중)");
       } else {
-        console.log("[Main] Starting in setup mode (no saved state)");
-        enterSetupMode();
+        console.log("[Main] 저장된 상태 없음 - 대시보드에서 설정 필요");
       }
     });
   }

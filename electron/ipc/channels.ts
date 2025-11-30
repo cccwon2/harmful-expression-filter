@@ -55,3 +55,13 @@ export const ONVOICE_CHANNELS = {
 
 export type OnVoiceChannel = typeof ONVOICE_CHANNELS[keyof typeof ONVOICE_CHANNELS];
 
+// 대시보드 및 멀티 윈도우 관리 IPC 채널
+export const DASHBOARD_CHANNELS = {
+  TOGGLE_OCR: 'dashboard:toggle-ocr',           // OCR 필터링 ON/OFF
+  TOGGLE_VOICE: 'dashboard:toggle-voice',       // 음성 필터링 ON/OFF
+  GET_WINDOW_STATUS: 'dashboard:get-window-status', // 현재 윈도우 상태 조회
+  OCR_STATUS_CHANGE: 'dashboard:ocr-status-change', // OCR 상태 변경 알림 (main -> renderer)
+} as const;
+
+export type DashboardChannel = typeof DASHBOARD_CHANNELS[keyof typeof DASHBOARD_CHANNELS];
+

@@ -11,7 +11,8 @@ export function createMainWindow(): BrowserWindow {
     width: 1000,
     height: 700,
     backgroundColor: '#121212',
-    show: false, // 기본적으로 숨김 (오버레이 창이 메인)
+    title: "OnVoice Dashboard",
+    show: true, // 대시보드를 기본으로 표시
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
