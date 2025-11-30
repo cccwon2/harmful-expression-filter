@@ -111,6 +111,9 @@ app.whenReady().then(async () => {
   console.log("[Main] NODE_ENV:", process.env.NODE_ENV || "(설정 안 됨)");
 
   registerServerHandlers();
+  
+  // 대시보드 IPC 핸들러 등록
+  registerDashboardHandlers();
 
   // COM DLL 등록 확인 및 자동 등록 시도 (Registration-Free COM 또는 레지스트리 등록 방식 지원)
   const isRegistered = await checkComDllRegistered();
