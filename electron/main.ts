@@ -31,7 +31,7 @@ if (app.isPackaged && process.env.NODE_ENV !== "production") {
   process.env.NODE_ENV = "production";
 }
 
-const CAPTURE_INTERVAL_MS = 300; // 0.3초 간격 (더 빠른 반응을 위해)
+const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격 (안정적인 텍스트 추출을 위해)
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
@@ -93,6 +93,8 @@ export function setOverlayWindowInstance(window: BrowserWindow | null) {
 let monitoringInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;
 let isCaptureInProgress = false;
+let lastExtractedText = ""; // 중복 텍스트 필터링을 위한 변수
+let emptyTextCount = 0; // 연속으로 빈 텍스트가 나온 횟수
 
 // startMonitoring과 stopMonitoring 함수를 export하기 위한 전역 변수
 export let startMonitoring: (() => void) | null = null;
@@ -454,6 +456,35 @@ app.whenReady().then(async () => {
       // OCR 결과 처리
       if (result.success && result.data) {
         const { texts, is_harmful } = result.data;
+        const extractedText = texts && texts.length > 0 ? texts.join(" ") : "";
+
+        // 텍스트가 없는 경우 처리
+        if (!extractedText || extractedText.trim().length === 0) {
+          emptyTextCount++;
+          // 연속으로 빈 텍스트가 5번 이상 나오면 로그를 줄임
+          if (emptyTextCount <= 5) {
+            // 처음 몇 번은 로그 출력 (디버깅용)
+          } else if (emptyTextCount % 10 === 0) {
+            // 이후에는 10번마다 한 번씩만 로그 출력
+            console.log(`[OCR] 텍스트 없음 (연속 ${emptyTextCount}회)`);
+          }
+          // 빈 텍스트는 유해하지 않은 것으로 간주하고 상태 업데이트는 건너뜀
+          // (중복 상태 업데이트 방지)
+          return;
+        }
+
+        // 텍스트가 있으면 빈 텍스트 카운터 리셋
+        emptyTextCount = 0;
+
+        // 중복 텍스트 필터링: 같은 텍스트가 연속으로 나오면 건너뜀
+        if (extractedText === lastExtractedText) {
+          // 중복 텍스트는 건너뛰되, 유해 표현은 항상 처리
+          if (!is_harmful) {
+            return;
+          }
+        } else {
+          lastExtractedText = extractedText;
+        }
 
         // 5. 유해성 감지 시 알림 (서버 AI 모델 기반)
         // overlayWindow는 state/editMode.ts에서 가져오기 (dashboardHandlers에서 생성한 윈도우도 포함)
@@ -464,8 +495,7 @@ app.whenReady().then(async () => {
           
           if (isHarmful) {
             // 유해 표현 감지 시에만 상세 로그 출력
-            const extractedText = texts && texts.length > 0 ? texts.join(" ") : "(텍스트 없음)";
-            console.warn(`[OCR] 🚨 유해 표현 감지 (${ocrElapsed}ms): "${extractedText}"`);
+            console.warn(`[OCR] 🚨 유해 표현 감지 (${ocrElapsed}ms): "${extractedText.substring(0, 100)}${extractedText.length > 100 ? "..." : ""}"`);
             currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
               harmful: true,
               words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
@@ -529,6 +559,8 @@ app.whenReady().then(async () => {
     isMonitoring = false;
     currentROI = null;
     isCaptureInProgress = false;
+    lastExtractedText = ""; // 모니터링 중지 시 텍스트 초기화
+    emptyTextCount = 0; // 빈 텍스트 카운터 초기화
 
     broadcastStopMonitoring();
     sendOverlayMode("setup");
