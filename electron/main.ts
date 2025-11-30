@@ -78,6 +78,12 @@ export function setTrayInstance(trayInstance: ReturnType<typeof createTray> | nu
   tray = trayInstance;
 }
 let currentROI: ROI | null = null;
+
+// currentROI를 외부에서 업데이트할 수 있도록 export
+export function setCurrentROI(roi: ROI | null) {
+  currentROI = roi;
+  console.log("[Main] currentROI 업데이트:", roi);
+}
 let monitoringInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;
 let isCaptureInProgress = false;
@@ -506,6 +512,15 @@ app.whenReady().then(async () => {
   };
 
   startMonitoring = () => {
+    // 스토어에서 ROI 가져오기 (currentROI가 없을 경우)
+    if (!currentROI) {
+      const storedROI = getROI();
+      if (storedROI) {
+        currentROI = storedROI;
+        console.log("[OCR] 스토어에서 ROI 복원:", storedROI);
+      }
+    }
+    
     if (!currentROI) {
       console.warn("[OCR] 모니터링을 시작할 수 없습니다 - ROI가 정의되지 않음");
       return;

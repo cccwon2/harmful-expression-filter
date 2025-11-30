@@ -137,16 +137,35 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'normal',
         click: () => {
           console.log('[Tray] Select Region requested');
+          // 오버레이가 표시되지 않은 경우 먼저 표시
+          if (!overlayWindow.isVisible()) {
+            overlayWindow.show();
+            overlayWindow.setSkipTaskbar(false);
+            console.log('[Tray] Overlay shown for region selection');
+          }
+          
           if (handlers?.enterSetupMode) {
             handlers.enterSetupMode();
           } else {
-            overlayWindow.show();
-            overlayWindow.setSkipTaskbar(false);
             overlayWindow.setIgnoreMouseEvents(false);
+            overlayWindow.focus();
             overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+            const { getROI } = require('./store');
+            const storedROI = getROI();
             overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
               mode: 'setup',
+              ...(storedROI ? { roi: storedROI } : {}),
             });
+            console.log('[Tray] Setup mode activated via tray menu');
+            
+            // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
+            setTimeout(() => {
+              if (overlayWindow && overlayWindow.isVisible()) {
+                overlayWindow.focus();
+                overlayWindow.setIgnoreMouseEvents(false);
+                console.log('[Tray] Overlay focus and mouse events re-enabled after timeout (region selection)');
+              }
+            }, 100);
           }
           updateContextMenu();
         },

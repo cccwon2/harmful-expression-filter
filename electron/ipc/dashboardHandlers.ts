@@ -59,10 +59,17 @@ export function registerDashboardHandlers(): void {
         setOverlayWindow(overlayWindow);
         
         // ROI 핸들러 설정
-        const { startMonitoring: mainStartMonitoring, stopMonitoring: mainStopMonitoring } = await import("../main");
+        const { startMonitoring: mainStartMonitoring, stopMonitoring: mainStopMonitoring, setCurrentROI: mainSetCurrentROI } = await import("../main");
         const onROISelected = (roi: ROI) => {
           currentROI = roi;
           console.log("[Dashboard] ROI 선택됨:", roi);
+          
+          // main.ts의 currentROI도 업데이트
+          if (mainSetCurrentROI) {
+            mainSetCurrentROI(roi);
+            console.log("[Dashboard] main.ts의 currentROI 업데이트 완료");
+          }
+          
           if (mainStartMonitoring) {
             mainStartMonitoring();
           }

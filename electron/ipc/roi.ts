@@ -30,7 +30,7 @@ export function isROISelectingState(): boolean {
 }
 
 export function setupROIHandlers(overlayWindow: BrowserWindow, options?: ROIHandlersOptions) {
-  ipcMain.on(IPC_CHANNELS.ROI_SELECTED, (_event, rect: ROI) => {
+  ipcMain.on(IPC_CHANNELS.ROI_SELECTED, async (_event, rect: ROI) => {
     console.log('[ROI] ROI selected:', rect);
 
     if (rect.width < 4 || rect.height < 4) {
@@ -41,6 +41,17 @@ export function setupROIHandlers(overlayWindow: BrowserWindow, options?: ROIHand
     setROI(rect);
     setMode('detect');
     console.log('[ROI] Persisted ROI and mode=detect:', getStoreSnapshot());
+
+    // main.ts의 currentROI도 업데이트
+    try {
+      const mainModule = await import('../main');
+      if (typeof (mainModule as any).setCurrentROI === 'function') {
+        (mainModule as any).setCurrentROI(rect);
+        console.log('[ROI] main.ts의 currentROI 업데이트 완료');
+      }
+    } catch (error) {
+      console.warn('[ROI] main.ts의 currentROI 업데이트 실패:', error);
+    }
 
     setEditModeState(false, { hideOverlay: false });
     options?.onROISelected?.(rect);
