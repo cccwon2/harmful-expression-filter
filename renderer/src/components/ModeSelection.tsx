@@ -53,7 +53,7 @@ export const ModeSelection: React.FC = () => {
         background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)',
         color: '#ffffff',
         fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-        padding: '24px',
+        padding: '16px',
         position: 'relative',
         overflow: 'hidden',
       }}
@@ -85,15 +85,15 @@ export const ModeSelection: React.FC = () => {
       <header
         style={{
           textAlign: 'center',
-          marginBottom: '32px',
+          marginBottom: '20px',
           zIndex: 1,
         }}
       >
         <h1
           style={{
-            fontSize: '1.75rem',
+            fontSize: '1.25rem',
             fontWeight: 800,
-            margin: '0 0 8px 0',
+            margin: '0 0 4px 0',
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -103,7 +103,7 @@ export const ModeSelection: React.FC = () => {
         >
           OnVoice
         </h1>
-        <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0, fontWeight: 500 }}>
+        <p style={{ fontSize: '0.65rem', color: '#9ca3af', margin: 0, fontWeight: 500 }}>
           필터링 모드 선택
         </p>
       </header>
@@ -111,9 +111,9 @@ export const ModeSelection: React.FC = () => {
       <div
         style={{
           display: 'flex',
-          gap: '16px',
+          gap: '12px',
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: '320px',
           zIndex: 1,
         }}
       >
@@ -124,7 +124,7 @@ export const ModeSelection: React.FC = () => {
           onMouseLeave={() => setHoveredMode(null)}
           style={{
             flex: 1,
-            padding: '20px 16px',
+            padding: '14px 10px',
             background: hoveredMode === 'ocr' 
               ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)'
               : 'rgba(255, 255, 255, 0.05)',
@@ -133,25 +133,25 @@ export const ModeSelection: React.FC = () => {
             border: hoveredMode === 'ocr'
               ? '1.5px solid rgba(99, 102, 241, 0.6)'
               : '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '16px',
+            borderRadius: '12px',
             cursor: 'pointer',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '12px',
+            gap: '8px',
             color: '#ffffff',
-            fontSize: '0.875rem',
-            transform: hoveredMode === 'ocr' ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+            fontSize: '0.75rem',
+            transform: hoveredMode === 'ocr' ? 'translateY(-3px) scale(1.02)' : 'translateY(0) scale(1)',
             boxShadow: hoveredMode === 'ocr'
-              ? '0 8px 32px rgba(99, 102, 241, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.1)'
-              : '0 4px 16px rgba(0, 0, 0, 0.2)',
+              ? '0 6px 24px rgba(99, 102, 241, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.1)'
+              : '0 3px 12px rgba(0, 0, 0, 0.2)',
           }}
         >
           <div
             style={{
-              fontSize: '2rem',
-              filter: hoveredMode === 'ocr' ? 'drop-shadow(0 0 8px rgba(99, 102, 241, 0.6))' : 'none',
+              fontSize: '1.5rem',
+              filter: hoveredMode === 'ocr' ? 'drop-shadow(0 0 6px rgba(99, 102, 241, 0.6))' : 'none',
               transition: 'all 0.3s ease',
               animation: hoveredMode === 'ocr' ? 'float 2s ease-in-out infinite' : 'none',
             }}
@@ -161,9 +161,9 @@ export const ModeSelection: React.FC = () => {
           <div style={{ textAlign: 'center' }}>
             <h2
               style={{
-                fontSize: '0.875rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
-                margin: '0 0 4px 0',
+                margin: '0 0 2px 0',
                 letterSpacing: '-0.01em',
               }}
             >
@@ -171,10 +171,10 @@ export const ModeSelection: React.FC = () => {
             </h2>
             <p
               style={{
-                fontSize: '0.7rem',
+                fontSize: '0.6rem',
                 color: '#9ca3af',
                 margin: 0,
-                lineHeight: '1.4',
+                lineHeight: '1.3',
               }}
             >
               화면 텍스트<br />실시간 감지
@@ -189,7 +189,7 @@ export const ModeSelection: React.FC = () => {
           onMouseLeave={() => setHoveredMode(null)}
           style={{
             flex: 1,
-            padding: '20px 16px',
+            padding: '14px 10px',
             background: hoveredMode === 'voice'
               ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(219, 39, 119, 0.2) 100%)'
               : 'rgba(255, 255, 255, 0.05)',
@@ -198,25 +198,25 @@ export const ModeSelection: React.FC = () => {
             border: hoveredMode === 'voice'
               ? '1.5px solid rgba(236, 72, 153, 0.6)'
               : '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '16px',
+            borderRadius: '12px',
             cursor: 'pointer',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '12px',
+            gap: '8px',
             color: '#ffffff',
-            fontSize: '0.875rem',
-            transform: hoveredMode === 'voice' ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+            fontSize: '0.75rem',
+            transform: hoveredMode === 'voice' ? 'translateY(-3px) scale(1.02)' : 'translateY(0) scale(1)',
             boxShadow: hoveredMode === 'voice'
-              ? '0 8px 32px rgba(236, 72, 153, 0.3), 0 0 0 1px rgba(236, 72, 153, 0.1)'
-              : '0 4px 16px rgba(0, 0, 0, 0.2)',
+              ? '0 6px 24px rgba(236, 72, 153, 0.3), 0 0 0 1px rgba(236, 72, 153, 0.1)'
+              : '0 3px 12px rgba(0, 0, 0, 0.2)',
           }}
         >
           <div
             style={{
-              fontSize: '2rem',
-              filter: hoveredMode === 'voice' ? 'drop-shadow(0 0 8px rgba(236, 72, 153, 0.6))' : 'none',
+              fontSize: '1.5rem',
+              filter: hoveredMode === 'voice' ? 'drop-shadow(0 0 6px rgba(236, 72, 153, 0.6))' : 'none',
               transition: 'all 0.3s ease',
               animation: hoveredMode === 'voice' ? 'float 2s ease-in-out infinite' : 'none',
             }}
@@ -226,9 +226,9 @@ export const ModeSelection: React.FC = () => {
           <div style={{ textAlign: 'center' }}>
             <h2
               style={{
-                fontSize: '0.875rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
-                margin: '0 0 4px 0',
+                margin: '0 0 2px 0',
                 letterSpacing: '-0.01em',
               }}
             >
@@ -236,10 +236,10 @@ export const ModeSelection: React.FC = () => {
             </h2>
             <p
               style={{
-                fontSize: '0.7rem',
+                fontSize: '0.6rem',
                 color: '#9ca3af',
                 margin: 0,
-                lineHeight: '1.4',
+                lineHeight: '1.3',
               }}
             >
               음성 채팅<br />실시간 감지
