@@ -112,7 +112,7 @@ function spawnBridge(): void {
       // 이렇게 하면 COM DLL과 매니페스트 파일을 찾을 수 있습니다
       const bridgeDir = path.dirname(absolutePath);
       console.log(`[OnVoiceBridge] 📁 Bridge 작업 디렉토리: ${bridgeDir}`);
-      
+
       bridgeProcess = spawn(absolutePath, [], {
         stdio: ["pipe", "pipe", "inherit"], // stdin, stdout, stderr (inherit for debug)
         windowsHide: true,
@@ -191,10 +191,37 @@ function spawnBridge(): void {
 
     bridgeReadline.on("line", (line) => {
       if (!line || !line.trim()) return;
+
+      // C++ COM DLL의 로그 패턴 감지 (JSON이 아닌 로그는 필터링)
+      // 이 로그들은 COM DLL 내부의 디버그 메시지로, JSON 파싱에서 제외해야 합니다
+      const cppLogPatterns = [
+        /^\[COnVoiceCapture\]/,
+        /^\[ProcessHelper\]/,
+        /^\[Engine\]/,
+        /^\[GIT prep src/,
+        /^\[conn \d+\]/,
+        /^  \[GIT prep src/,
+        /^  \[conn \d+\]/,
+      ];
+
+      const isCppLog = cppLogPatterns.some((pattern) => pattern.test(line));
+
+      if (isCppLog) {
+        // C++ DLL의 로그는 stderr로 출력 (JSON 파싱하지 않음)
+        // 개발 모드에서만 출력하여 콘솔을 깔끔하게 유지
+        if (!app.isPackaged) {
+          console.error(`[COM DLL] ${line}`);
+        }
+        return;
+      }
+
+      // JSON 파싱 시도
       try {
         const msg = JSON.parse(line);
         handleBridgeMessage(msg);
       } catch (e) {
+        // JSON 파싱 실패 시에도 경고만 출력 (C++ 로그가 아닌 경우에만)
+        // C++ 로그는 이미 위에서 필터링되었으므로, 여기서는 실제 JSON 파싱 오류만 표시
         console.error("[OnVoiceBridge] ⚠️ Failed to parse JSON from bridge:", line);
       }
     });
