@@ -146,30 +146,13 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
           console.log('[Tray] Select Region requested - OCR 모드로 전환');
           
           try {
-            // OCR 모드로 전환 (음성 모드가 활성화되어 있으면 중지)
-            // ipcMain의 SELECT_MODE 핸들러를 직접 호출
-            // mainWindow.webContents.send는 renderer로 가므로 사용하지 않음
-            
-            // 가상의 이벤트 객체 생성 (ipcMain.on 핸들러가 기대하는 형식)
-            const fakeEvent = {
-              sender: {
-                send: (channel: string, ...args: any[]) => {
-                  console.log(`[Tray] Fake event sender.send: ${channel}`, args);
-                }
-              }
-            };
-            
-            // SELECT_MODE 핸들러 직접 호출
-            const listeners = (ipcMain as any).listeners(DASHBOARD_CHANNELS.SELECT_MODE);
-            if (listeners && listeners.length > 0) {
-              console.log('[Tray] ✅ SELECT_MODE 핸들러 발견, OCR 모드로 전환');
-              await listeners[0](fakeEvent, 'ocr');
-              console.log('[Tray] ✅ OCR 모드 전환 완료');
-            } else {
-              throw new Error('SELECT_MODE 핸들러를 찾을 수 없음. dashboardHandlers가 등록되지 않았을 수 있습니다.');
-            }
+            // dashboardHandlers의 switchToOcrMode 함수를 직접 호출
+            const { switchToOcrMode } = await import('./ipc/dashboardHandlers');
+            await switchToOcrMode();
+            console.log('[Tray] ✅ OCR 모드 전환 완료');
           } catch (error: any) {
             console.error('[Tray] OCR 모드 전환 실패:', error);
+            console.error('[Tray] 에러 상세:', error.message, error.stack);
             // 폴백: 기존 setup 모드 진입 로직
             console.log('[Tray] 폴백: Setup 모드로 진입');
             if (!overlayWindow.isVisible()) {
@@ -197,20 +180,31 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
       {
         label: '영역 재지정 (Re-setup)',
         type: 'normal',
-        click: () => {
-          console.log('[Tray] Reset to setup mode');
-          if (handlers?.resetToSetupMode) {
-            handlers.resetToSetupMode();
-          } else {
-            overlayWindow.show();
-            overlayWindow.setSkipTaskbar(false);
-            overlayWindow.setIgnoreMouseEvents(false);
-            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
-            overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
-              mode: 'setup',
-              harmful: false,
-            });
+        click: async () => {
+          console.log('[Tray] Reset to setup mode - OCR 모드로 전환');
+          
+          try {
+            // dashboardHandlers의 switchToOcrMode 함수를 직접 호출
+            const { switchToOcrMode } = await import('./ipc/dashboardHandlers');
+            await switchToOcrMode();
+            console.log('[Tray] ✅ OCR 모드 전환 완료 (재지정)');
+          } catch (error: any) {
+            console.error('[Tray] OCR 모드 전환 실패:', error);
+            // 폴백: 기존 resetToSetupMode 로직
+            if (handlers?.resetToSetupMode) {
+              handlers.resetToSetupMode();
+            } else {
+              overlayWindow.show();
+              overlayWindow.setSkipTaskbar(false);
+              overlayWindow.setIgnoreMouseEvents(false);
+              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
+                mode: 'setup',
+                harmful: false,
+              });
+            }
           }
+          
           updateContextMenu();
         },
       },
