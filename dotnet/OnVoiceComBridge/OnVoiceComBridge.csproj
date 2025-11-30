@@ -14,6 +14,10 @@
 
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <ApplicationManifest>OnVoiceComBridge.exe.manifest</ApplicationManifest>
+    <!-- Self-contained 빌드 시 네이티브 라이브러리 포함 -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Visual C++ 런타임 포함 -->
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

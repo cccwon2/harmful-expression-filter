@@ -105,9 +105,19 @@ function spawnBridge(): void {
     } catch (spawnError: any) {
       // spawn이 동기적으로 실패한 경우 (예: UNKNOWN 에러)
       console.error(`[OnVoiceBridge] ❌ spawn 동기 에러:`, spawnError);
-      // 개발 모드에서는 에러를 throw하지 않고 null로 설정
+
+      // 개발 모드에서는 더 자세한 진단 정보 제공
       if (!app.isPackaged) {
-        console.warn("[OnVoiceBridge] ⚠️ 개발 모드: spawn 동기 에러를 무시합니다.");
+        console.error(`[OnVoiceBridge] 💡 개발 모드: Bridge 실행 실패 진단`);
+        console.error(`[OnVoiceBridge]    에러 코드: ${spawnError.code || "N/A"}`);
+        console.error(`[OnVoiceBridge]    에러 번호: ${spawnError.errno || "N/A"}`);
+        console.error(`[OnVoiceBridge]    시스템 호출: ${spawnError.syscall || "N/A"}`);
+        console.error(`[OnVoiceBridge] 💡 오디오 필터링을 사용하려면 다음을 해결하세요:`);
+        console.error(`[OnVoiceBridge]    1. Visual C++ Redistributable 설치 (필수):`);
+        console.error(`[OnVoiceBridge]       https://aka.ms/vs/17/release/vc_redist.x64.exe`);
+        console.error(`[OnVoiceBridge]    2. 설치 후 앱을 재시작하세요`);
+        console.error(`[OnVoiceBridge]    3. 또는 Bridge 재빌드: npm run build:dotnet`);
+        console.warn("[OnVoiceBridge] ⚠️ 개발 모드: Bridge 없이 계속 진행합니다. (오디오 필터링 비활성화)");
         bridgeProcess = null;
         return; // 에러를 throw하지 않고 함수 종료
       }
