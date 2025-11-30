@@ -27,9 +27,22 @@ export class AppVolumeController {
   private isRefreshingSessions = false;
   private readonly DEFAULT_RESTORE_DELAY_MS = 5000; // 5초 유해 표현 감지 후 볼륨을 원래 값으로 돌리는 데 걸리는 시간
   private readonly MONITORING_INTERVAL_MS = 1000; // 1초 기본 출력 디바이스와 오디오 세션 목록을 더 자주 갱신
+  private isMonitoringStarted = false;
   
   constructor() {
-    this.startSessionMonitoring();
+    // Bridge 초기화 전에 모니터링을 시작하지 않음
+    // startSessionMonitoring()은 AudioManager.init() 완료 후 명시적으로 호출해야 함
+  }
+  
+  /**
+   * 세션 모니터링 시작 (명시적 호출)
+   * AudioManager.init() 완료 후 호출되어야 함
+   */
+  ensureMonitoringStarted(): void {
+    if (!this.isMonitoringStarted) {
+      this.startSessionMonitoring();
+      this.isMonitoringStarted = true;
+    }
   }
   
   /**
