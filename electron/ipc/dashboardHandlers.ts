@@ -93,46 +93,72 @@ export function registerDashboardHandlers(): void {
         // (오버레이 윈도우가 생성된 후 main.ts에서 트레이를 생성할 수 있도록 별도 처리 필요)
       }
       
-      // 오버레이 표시 및 setup 모드로 진입
-      overlayWindow.show();
-      overlayWindow.setSkipTaskbar(false);
-      
       // setup 모드로 진입하여 ROI 선택 가능하도록 설정
       setEditModeState(true);
       setMode("setup");
       
-      // 오버레이에 setup 모드 신호 전송
-      overlayWindow.webContents.once("did-finish-load", () => {
-        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
-        
-        const storedROI = getROI();
-        const statePayload = {
-          mode: "setup" as const,
-          harmful: false,
-          ...(storedROI ? { roi: storedROI } : {}),
-        };
-        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
-        
-        // 마우스 이벤트 활성화하여 ROI 선택 가능하도록
-        overlayWindow.setIgnoreMouseEvents(false);
-        overlayWindow.focus();
-        
-        console.log("[Dashboard] Setup 모드로 진입 완료 - ROI 선택 가능");
-      });
+      // 오버레이 표시
+      overlayWindow.show();
+      overlayWindow.setSkipTaskbar(false);
       
-      // 오버레이가 이미 로드된 경우 즉시 setup 모드로 설정
-      if (overlayWindow.webContents.isLoading() === false) {
-        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
-        const storedROI = getROI();
-        const statePayload = {
-          mode: "setup" as const,
-          harmful: false,
-          ...(storedROI ? { roi: storedROI } : {}),
-        };
-        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
-        overlayWindow.setIgnoreMouseEvents(false);
-        overlayWindow.focus();
-        console.log("[Dashboard] Setup 모드로 진입 완료 (이미 로드됨) - ROI 선택 가능");
+      // 오버레이가 완전히 로드되고 API가 준비될 때까지 기다린 후 setup 모드로 진입
+      const enterSetupMode = () => {
+        console.log("[Dashboard] 오버레이 준비 완료 - setup 모드로 진입");
+        
+        // 약간의 지연을 두어 렌더러가 완전히 준비될 때까지 대기
+        setTimeout(() => {
+          if (overlayWindow.isDestroyed()) {
+            console.warn("[Dashboard] 오버레이가 이미 파괴됨");
+            return;
+          }
+          
+          // setup 모드 신호 전송
+          overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
+          console.log("[Dashboard] OVERLAY_SET_MODE 전송: setup");
+          
+          const storedROI = getROI();
+          const statePayload = {
+            mode: "setup" as const,
+            harmful: false,
+            ...(storedROI ? { roi: storedROI } : {}),
+          };
+          overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
+          console.log("[Dashboard] OVERLAY_STATE_PUSH 전송:", statePayload);
+          
+          // 마우스 이벤트 활성화하여 ROI 선택 가능하도록
+          overlayWindow.setIgnoreMouseEvents(false);
+          console.log("[Dashboard] 마우스 이벤트 활성화됨");
+          
+          // 포커스 설정
+          overlayWindow.focus();
+          console.log("[Dashboard] ✅ Setup 모드로 진입 완료 - ROI 선택 가능");
+        }, 500); // 렌더러 API 준비를 위해 충분한 시간 대기
+      };
+      
+      // 오버레이가 이미 로드된 경우
+      if (!overlayWindow.webContents.isLoading()) {
+        console.log("[Dashboard] 오버레이 이미 로드됨 - setup 모드로 진입");
+        enterSetupMode();
+      } else {
+        // 오버레이가 아직 로드 중인 경우 로드 완료 대기
+        console.log("[Dashboard] 오버레이 로드 대기 중...");
+        
+        // did-finish-load 이벤트 대기
+        overlayWindow.webContents.once("did-finish-load", () => {
+          console.log("[Dashboard] 오버레이 로드 완료 (did-finish-load)");
+          enterSetupMode();
+        });
+        
+        // dom-ready 이벤트도 대기 (더 빠른 진입을 위해)
+        overlayWindow.webContents.once("dom-ready", () => {
+          console.log("[Dashboard] 오버레이 DOM 준비 완료 (dom-ready)");
+          // did-finish-load와 중복 방지를 위해 약간의 지연
+          setTimeout(() => {
+            if (!overlayWindow.isDestroyed() && !overlayWindow.webContents.isLoading()) {
+              enterSetupMode();
+            }
+          }, 300);
+        });
       }
       
       // 메인 윈도우 숨김
