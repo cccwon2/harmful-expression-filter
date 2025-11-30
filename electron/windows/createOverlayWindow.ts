@@ -42,16 +42,13 @@ export function createOverlayWindow(): BrowserWindow {
   console.log('[Overlay] Overlay window created');
 
   // 로드 실패 감지 (개발 단계에서 서버 미기동 등 문제 추적)
+  // did-fail-load 이벤트는 waitForDevServer에서 처리하므로 여기서는 로깅만
   overlayWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
-    console.error('[Overlay] did-fail-load:', { errorCode, errorDescription, validatedURL });
-    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-      console.log('[Overlay] Retrying overlay load after failure...');
-      setTimeout(() => {
-        overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
-          console.error('[Overlay] Retry loadURL failed:', err);
-        });
-      }, 500);
+    // ERR_CONNECTION_REFUSED는 waitForDevServer에서 처리 중이므로 무시
+    if (errorCode === -102) {
+      return;
     }
+    console.error('[Overlay] did-fail-load:', { errorCode, errorDescription, validatedURL });
   });
 
   overlayWindow.webContents.on('did-fail-provisional-load', (_event, errorCode, errorDescription, validatedURL) => {
@@ -342,25 +339,28 @@ export function createOverlayWindow(): BrowserWindow {
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
     // 🟢 개발 모드: Vite 개발 서버가 준비될 때까지 대기 후 로드
     const waitForDevServer = async (retries = 30, delay = 500) => {
-      const axios = require('axios');
       for (let i = 0; i < retries; i++) {
         try {
           await axios.get('http://localhost:5173', { timeout: 1000 });
           // 서버가 준비되었으면 로드 시도
+          console.log('[Overlay] ✅ Vite 개발 서버 준비 완료 - 오버레이 로드 중...');
           overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
             console.error('[Overlay] Failed to load overlay from development server:', err);
           });
-          console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
           return;
-        } catch (error) {
+        } catch (error: any) {
           if (i === 0) {
-            console.log('[Overlay] Vite 개발 서버 대기 중...');
+            console.log('[Overlay] Vite 개발 서버 대기 중... (최대 15초)');
           }
           if (i < retries - 1) {
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
-            console.error('[Overlay] ⚠️ Vite 개발 서버가 시작되지 않았습니다.');
+            console.error('[Overlay] ⚠️ Vite 개발 서버가 시작되지 않았습니다 (15초 타임아웃).');
             console.error('[Overlay] 해결 방법: "npm run dev"로 전체 개발 환경을 시작하세요.');
+            // 마지막 시도로 로드 시도 (서버가 방금 시작되었을 수 있음)
+            overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
+              console.error('[Overlay] 최종 로드 시도 실패:', err);
+            });
           }
         }
       }

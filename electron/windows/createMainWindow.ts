@@ -1,5 +1,6 @@
 import { BrowserWindow, app } from 'electron';
 import * as path from 'path';
+import axios from 'axios';
 
 export function createMainWindow(): BrowserWindow {
   // preload 경로 설정 (절대 경로 사용)
@@ -53,6 +54,10 @@ export function createMainWindow(): BrowserWindow {
 
   // 로드 실패 처리
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    // ERR_CONNECTION_REFUSED는 waitForDevServer에서 처리 중이므로 무시
+    if (errorCode === -102) {
+      return;
+    }
     // 메인 윈도우는 개발/디버깅용이므로 로드 실패를 조용히 처리
     // Vite 개발 서버가 실행되지 않은 경우를 대비
     if (errorCode === -105 || errorCode === -106) { // ERR_NAME_NOT_RESOLVED, ERR_INTERNET_DISCONNECTED
@@ -66,11 +71,11 @@ export function createMainWindow(): BrowserWindow {
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
     // Vite 개발 서버가 준비될 때까지 대기 후 로드
     const waitForDevServer = async (retries = 30, delay = 500) => {
-      const axios = require('axios');
       for (let i = 0; i < retries; i++) {
         try {
           await axios.get('http://localhost:5173', { timeout: 1000 });
           // 서버가 준비되었으면 로드 시도
+          console.log('[Main] ✅ Vite 개발 서버 준비 완료 - 윈도우 로드 중...');
           mainWindow.loadURL('http://localhost:5173').catch((err) => {
             if (err && typeof err === 'object' && 'code' in err && err.code === 'EPIPE') {
               return;
@@ -78,15 +83,19 @@ export function createMainWindow(): BrowserWindow {
             console.warn('[Main] Failed to load main window:', err);
           });
           return;
-        } catch (error) {
+        } catch (error: any) {
           if (i === 0) {
-            console.log('[Main] Vite 개발 서버 대기 중...');
+            console.log('[Main] Vite 개발 서버 대기 중... (최대 15초)');
           }
           if (i < retries - 1) {
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
-            console.error('[Main] ⚠️ Vite 개발 서버가 시작되지 않았습니다.');
+            console.error('[Main] ⚠️ Vite 개발 서버가 시작되지 않았습니다 (15초 타임아웃).');
             console.error('[Main] 해결 방법: "npm run dev"로 전체 개발 환경을 시작하세요.');
+            // 마지막 시도로 로드 시도 (서버가 방금 시작되었을 수 있음)
+            mainWindow.loadURL('http://localhost:5173').catch((err) => {
+              console.error('[Main] 최종 로드 시도 실패:', err);
+            });
           }
         }
       }
