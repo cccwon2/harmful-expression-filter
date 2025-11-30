@@ -413,6 +413,16 @@ export function registerDashboardHandlers(): void {
         if (!audioManager.getStatus().isStreaming) {
           await audioManager.startStream("chrome");
           console.log("[Dashboard] ✅ 음성 모드 활성화됨 (chrome)");
+          
+          // 스트리밍 시작 후 트레이 메뉴 업데이트
+          if (trayInstance && typeof (trayInstance as any).updateContextMenu === "function") {
+            try {
+              (trayInstance as any).updateContextMenu();
+              console.log("[Dashboard] ✅ 트레이 메뉴 업데이트 완료 (스트리밍 시작 후)");
+            } catch (err: any) {
+              console.error("[Dashboard] ❌ 트레이 메뉴 업데이트 실패:", err);
+            }
+          }
         }
       } catch (error: any) {
         console.error("[Dashboard] 음성 필터링 시작 실패:", error.message);

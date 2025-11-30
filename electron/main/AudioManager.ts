@@ -380,6 +380,17 @@ class AudioManager {
       this.currentTarget = target;
       this.currentPid = pid;
       console.log(`[AudioManager] ✅ 스트리밍 시작: ${target} (PID: ${pid})`);
+      
+      // 트레이 메뉴 업데이트 (순환 의존성 방지를 위해 동적 import)
+      try {
+        const { getTrayAudioUpdateCallback } = require("../tray");
+        const trayUpdateCallback = getTrayAudioUpdateCallback();
+        if (trayUpdateCallback && typeof trayUpdateCallback === "function") {
+          trayUpdateCallback();
+        }
+      } catch (err) {
+        // 트레이 업데이트 실패는 치명적이지 않음
+      }
     } catch (e) {
       console.error(e);
       throw e;
@@ -414,6 +425,17 @@ class AudioManager {
     this.currentPid = null;
     // 재연결 시도 횟수 초기화 (다음 스트리밍 시도 시)
     this.reconnectAttempts = 0;
+    
+    // 트레이 메뉴 업데이트 (순환 의존성 방지를 위해 동적 import)
+    try {
+      const { getTrayAudioUpdateCallback } = require("../tray");
+      const trayUpdateCallback = getTrayAudioUpdateCallback();
+      if (trayUpdateCallback && typeof trayUpdateCallback === "function") {
+        trayUpdateCallback();
+      }
+    } catch (err) {
+      // 트레이 업데이트 실패는 치명적이지 않음
+    }
   }
 
   public setWebSocketUrl(url: string): void {
