@@ -340,16 +340,32 @@ export function createOverlayWindow(): BrowserWindow {
 
   // 개발 모드와 프로덕션 모드 분기
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-    // 🟢 개발 모드: Vite 개발 서버 사용
-    overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'ERR_CONNECTION_REFUSED') {
-        console.error('[Overlay] ⚠️ Vite 개발 서버가 실행되지 않았습니다.');
-        console.error('[Overlay] 해결 방법: 다른 터미널에서 "npm run dev:renderer"를 실행하거나 "npm run dev"로 전체 개발 환경을 시작하세요.');
-      } else {
-        console.error('[Overlay] Failed to load overlay from development server:', err);
+    // 🟢 개발 모드: Vite 개발 서버가 준비될 때까지 대기 후 로드
+    const waitForDevServer = async (retries = 30, delay = 500) => {
+      const axios = require('axios');
+      for (let i = 0; i < retries; i++) {
+        try {
+          await axios.get('http://localhost:5173', { timeout: 1000 });
+          // 서버가 준비되었으면 로드 시도
+          overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
+            console.error('[Overlay] Failed to load overlay from development server:', err);
+          });
+          console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
+          return;
+        } catch (error) {
+          if (i === 0) {
+            console.log('[Overlay] Vite 개발 서버 대기 중...');
+          }
+          if (i < retries - 1) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            console.error('[Overlay] ⚠️ Vite 개발 서버가 시작되지 않았습니다.');
+            console.error('[Overlay] 해결 방법: "npm run dev"로 전체 개발 환경을 시작하세요.');
+          }
+        }
       }
-    });
-    console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
+    };
+    waitForDevServer();
   } else {
     // 🔴 배포 모드: file:// 프로토콜로 로컬 파일 로드
     // 패키지 환경에서 __dirname 은 dist-electron/windows 이므로

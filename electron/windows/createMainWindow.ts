@@ -64,23 +64,34 @@ export function createMainWindow(): BrowserWindow {
 
   // 개발 모드와 프로덕션 모드 분기
   if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-    // Vite 개발 서버가 실행 중일 때만 로드 시도
-    mainWindow.loadURL('http://localhost:5173').catch((err) => {
-      // EPIPE 오류는 무시 (파이프가 끊어진 경우)
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'EPIPE') {
-        return;
+    // Vite 개발 서버가 준비될 때까지 대기 후 로드
+    const waitForDevServer = async (retries = 30, delay = 500) => {
+      const axios = require('axios');
+      for (let i = 0; i < retries; i++) {
+        try {
+          await axios.get('http://localhost:5173', { timeout: 1000 });
+          // 서버가 준비되었으면 로드 시도
+          mainWindow.loadURL('http://localhost:5173').catch((err) => {
+            if (err && typeof err === 'object' && 'code' in err && err.code === 'EPIPE') {
+              return;
+            }
+            console.warn('[Main] Failed to load main window:', err);
+          });
+          return;
+        } catch (error) {
+          if (i === 0) {
+            console.log('[Main] Vite 개발 서버 대기 중...');
+          }
+          if (i < retries - 1) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            console.error('[Main] ⚠️ Vite 개발 서버가 시작되지 않았습니다.');
+            console.error('[Main] 해결 방법: "npm run dev"로 전체 개발 환경을 시작하세요.');
+          }
+        }
       }
-      // ERR_CONNECTION_REFUSED는 개발 서버가 실행되지 않았을 때 발생
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'ERR_CONNECTION_REFUSED') {
-        console.error('[Main] ⚠️ Vite 개발 서버가 실행되지 않았습니다.');
-        console.error('[Main] 해결 방법: 다른 터미널에서 "npm run dev:renderer"를 실행하거나 "npm run dev"로 전체 개발 환경을 시작하세요.');
-        return;
-      }
-      // 다른 오류는 경고만 출력
-      if (err && typeof err === 'object' && 'code' in err) {
-        console.warn('[Main] Failed to load main window:', err);
-      }
-    });
+    };
+    waitForDevServer();
   } else {
     // 패키지 환경에서 __dirname 은 dist-electron/windows 이므로
     // Vite build 결과(dist-electron/renderer)를 그대로 바라본다
