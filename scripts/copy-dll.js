@@ -1,9 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// ✅ [수정됨] bin/Debug 대신 bin/Publish 폴더를 바라보도록 수정
-// package.json의 build:dotnet 스크립트가 --output bin/Publish 로 설정되어 있기 때문입니다.
-const sourceDir = path.join(__dirname, '../dotnet/OnVoiceComBridge/bin/Publish');
+// ✅ [수정됨] package.json의 build:dotnet 스크립트가 -o bin/Release/net6.0/win-x64/publish 로 설정되어 있습니다.
+const sourceDir = path.join(__dirname, '../dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish');
 const targetDir = path.join(__dirname, '../dist-electron/dotnet');
 
 // 폴더가 없으면 에러 (빌드 순서 확인용)
