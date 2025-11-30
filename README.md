@@ -380,10 +380,17 @@ npm start
 - C++ COM DLL은 상대 경로(`../onvoice-com-bridge/phase3-com-dll/OnVoiceAudioBridge`)에서 자동 탐색
 - 빌드된 DLL은 `native/OnVoiceAudioBridge.dll`로 복사되어 electron-builder에 포함됨
 - **포터블 버전**: `npm run build:portable`로 설치 없이 실행 가능한 버전 생성
-  - 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+  - **Registration-Free COM 지원**: 관리자 권한 없이 실행 가능 (매니페스트 파일 포함)
+    - `OnVoice.exe.manifest`: Electron 앱 매니페스트
+    - `resources/native/OnVoiceAudioBridge.dll.manifest`: COM DLL 매니페스트
+    - `resources/bin/OnVoiceComBridge.exe.manifest`: C# Bridge 매니페스트
+  - 매니페스트 파일이 없으면 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
   - NSIS 설치 버전과 동일한 경로 구조 (`process.resourcesPath` 사용)
+  - 레지스트리 등록 없이 COM 객체 사용 가능
+  - 빌드 후 매니페스트 파일이 누락된 경우 수동으로 복사 필요할 수 있음
 - **설치 버전**: `npm run build:electron`로 NSIS 인스톨러 생성
   - 설치 시 자동으로 COM DLL 등록 (`build/installer.nsh`)
+  - Registration-Free COM 매니페스트도 포함되어 관리자 권한 없이 실행 가능
 - **C# Bridge**: `child_process.spawn` 방식으로 별도 프로세스 실행 (Task 45)
   - Self-contained `.exe` 파일로 배포 (`.NET 런타임 포함`)
   - Electron 버전과 무관하게 동작, 배포 안정성 향상

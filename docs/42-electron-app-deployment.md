@@ -59,6 +59,10 @@ Electron 애플리케이션을 Windows용 설치 패키지(NSIS 인스톨러)로
 - `build:dotnet` 스크립트에 `--output` 옵션 추가하여 일관된 경로(`bin/Release/net6.0/win-x64/publish`)에 출력
 - `extraResources`에서 `.exe` 파일을 `bin/OnVoiceComBridge.exe`로 정확히 복사
 - C++ COM DLL을 `native/OnVoiceAudioBridge.dll`로 포함
+- **Registration-Free COM 매니페스트 파일 포함**: `extraFiles`와 `extraResources`에 매니페스트 파일 추가
+  - `OnVoice.exe.manifest`: Electron 앱 매니페스트
+  - `OnVoiceComBridge.exe.manifest`: C# Bridge 매니페스트
+  - `OnVoiceAudioBridge.dll.manifest`: COM DLL 매니페스트
 
 ### 빌드 프로세스
 
@@ -125,9 +129,32 @@ npm run build:portable
 - 설치 과정 없이 바로 실행 가능
 - `dist/OnVoice-portable/` 폴더에 생성됨
 - `OnVoice.exe`를 직접 실행하여 사용
-- 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+- **Registration-Free COM 지원**: 관리자 권한 없이 실행 가능 (매니페스트 파일 포함)
+- 매니페스트 파일이 없으면 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
 
 **참고**: `build:portable` 스크립트는 `electron-builder --win dir`로 빌드한 후 `win-unpacked` 폴더를 `OnVoice-portable`로 이름을 변경합니다.
+
+**매니페스트 파일 포함**:
+
+포터블 버전 빌드 후 다음 매니페스트 파일들이 포함되어야 합니다:
+
+- `OnVoice.exe.manifest` - Electron 앱 매니페스트 (루트)
+- `resources/native/OnVoiceAudioBridge.dll.manifest` - COM DLL 매니페스트
+- `resources/bin/OnVoiceComBridge.exe.manifest` - C# Bridge 매니페스트
+
+빌드 후 매니페스트 파일이 누락된 경우 수동으로 복사해야 할 수 있습니다:
+
+```bash
+# 빌드 후 매니페스트 파일 확인 및 복사
+# OnVoice.exe.manifest
+copy electron\OnVoice.exe.manifest dist\OnVoice-portable\
+
+# DLL 매니페스트
+copy native\OnVoiceAudioBridge.dll.manifest dist\OnVoice-portable\resources\native\
+
+# Bridge 매니페스트
+copy dotnet\OnVoiceComBridge\bin\Release\net6.0\win-x64\publish\OnVoiceComBridge.exe.manifest dist\OnVoice-portable\resources\bin\
+```
 
 ### 통합 빌드 스크립트 (권장)
 
@@ -222,13 +249,16 @@ dist/
 ```
 dist/
 ├── OnVoice-portable/
-│   ├── OnVoice.exe           # 포터블 실행 파일
+│   ├── OnVoice.exe                    # 포터블 실행 파일
+│   ├── OnVoice.exe.manifest          # Electron 앱 매니페스트 (Registration-Free COM)
 │   ├── resources/
 │   │   ├── app.asar
 │   │   ├── bin/
-│   │   │   └── OnVoiceComBridge.exe
+│   │   │   ├── OnVoiceComBridge.exe
+│   │   │   └── OnVoiceComBridge.exe.manifest  # C# Bridge 매니페스트
 │   │   └── native/
-│   │       └── OnVoiceAudioBridge.dll
+│   │       ├── OnVoiceAudioBridge.dll
+│   │       └── OnVoiceAudioBridge.dll.manifest  # COM DLL 매니페스트
 │   └── ...
 └── builder-debug.yml
 ```
@@ -236,8 +266,9 @@ dist/
 **포터블 버전 사용 시**:
 
 - 설치 과정 없이 `OnVoice.exe`를 직접 실행
-- Registration-Free COM 매니페스트가 있으면 관리자 권한 없이 실행 가능
+- **Registration-Free COM 매니페스트가 있으면 관리자 권한 없이 실행 가능**
 - 매니페스트가 없으면 앱 시작 시 자동으로 COM DLL 등록 시도 (관리자 권한 필요할 수 있음)
+- 레지스트리 등록 없이 COM 객체 사용 가능
 
 ## 빌드 설정 상세
 
@@ -687,8 +718,12 @@ if (process.env.NODE_ENV === "production") {
 
 - [ ] `dist/` 폴더에 인스톨러가 생성되었는지 확인
 - [ ] `win-unpacked/OnVoice.exe`가 실행되는지 확인
-- [ ] C# DLL이 `resources/dotnet/`에 포함되었는지 확인
+- [ ] C# DLL이 `resources/bin/`에 포함되었는지 확인
 - [ ] **C++ COM DLL이 Release 빌드인지 확인** (Debug 빌드는 배포 불가)
+- [ ] **Registration-Free COM 매니페스트 파일이 포함되었는지 확인** (포터블 버전)
+  - [ ] `OnVoice.exe.manifest` (루트)
+  - [ ] `resources/native/OnVoiceAudioBridge.dll.manifest`
+  - [ ] `resources/bin/OnVoiceComBridge.exe.manifest`
 - [ ] 앱이 정상적으로 시작되는지 확인
 - [ ] 시스템 트레이 아이콘이 표시되는지 확인
 - [ ] 오디오 캡처 기능이 작동하는지 확인
@@ -699,7 +734,11 @@ if (process.env.NODE_ENV === "production") {
 - [ ] .NET 6 런타임이 설치되지 않은 환경에서 테스트 (필요 시)
 - [ ] 관리자 권한 없이 설치 가능한지 확인
 - [ ] 제거(Uninstall)가 정상적으로 작동하는지 확인
-- [ ] C++ COM DLL이 정상적으로 등록되었는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
+- [ ] **포터블 버전**: Registration-Free COM 테스트
+  - [ ] 관리자 권한 없이 실행 가능한지 확인
+  - [ ] 레지스트리에 등록되지 않았는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
+  - [ ] 콘솔에서 `[COM Registration] ✅ Registration-Free COM 매니페스트가 감지되었습니다` 메시지 확인
+- [ ] **설치 버전**: C++ COM DLL이 정상적으로 등록되었는지 확인 (`reg query "HKEY_CLASSES_ROOT\OnVoiceAudioBridge.OnVoiceCapture"`)
 - [ ] COM 객체를 통한 오디오 캡처가 정상 작동하는지 확인
 
 ## ⚠️ 중요: Debug vs Release 빌드
