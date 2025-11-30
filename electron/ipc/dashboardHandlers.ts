@@ -89,8 +89,45 @@ export function registerDashboardHandlers(): void {
         const { registerAudioHandlers } = await import("./audioHandlers");
         registerAudioHandlers(overlayWindow);
         
-        // 트레이는 main.ts에서 생성되므로 여기서는 생성하지 않음
-        // (오버레이 윈도우가 생성된 후 main.ts에서 트레이를 생성할 수 있도록 별도 처리 필요)
+        // 트레이 생성 (오버레이 윈도우가 생성된 후)
+        const { createTray } = await import("../tray");
+        const { setTrayUpdateCallback, setTrayAudioUpdateCallback } = await import("../tray");
+        const { setOverlayTrayUpdateCallback } = await import("../windows/createOverlayWindow");
+        
+        // main.ts의 함수들을 가져와서 트레이 핸들러에 전달
+        const mainModule = await import("../main");
+        const mainEnterSetupMode = (mainModule as any).enterSetupMode;
+        const mainResetToSetupMode = (mainModule as any).resetToSetupMode;
+        
+        // 트레이가 없으면 생성
+        let trayInstance = null;
+        try {
+          // main.ts의 전역 tray 변수 확인
+          const mainTray = (mainModule as any).tray;
+          if (!mainTray) {
+            trayInstance = createTray(overlayWindow, {
+              enterSetupMode: mainEnterSetupMode || (() => {}),
+              resetToSetupMode: mainResetToSetupMode || (() => {}),
+            });
+            // main.ts의 전역 tray 변수에 설정
+            (mainModule as any).tray = trayInstance;
+            console.log("[Dashboard] 트레이 생성 완료");
+          } else {
+            trayInstance = mainTray;
+            console.log("[Dashboard] 트레이가 이미 존재함");
+          }
+          
+          const trayUpdateFn = () => {
+            if (trayInstance && typeof (trayInstance as any).updateContextMenu === "function") {
+              (trayInstance as any).updateContextMenu();
+            }
+          };
+          setTrayUpdateCallback(trayUpdateFn);
+          setOverlayTrayUpdateCallback(trayUpdateFn);
+          setTrayAudioUpdateCallback(trayUpdateFn);
+        } catch (err) {
+          console.warn("[Dashboard] 트레이 생성 실패:", err);
+        }
       }
       
       // setup 모드로 진입하여 ROI 선택 가능하도록 설정

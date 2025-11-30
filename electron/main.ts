@@ -81,6 +81,10 @@ let isCaptureInProgress = false;
 export let startMonitoring: (() => void) | null = null;
 export let stopMonitoring: ((reason?: string) => void) | null = null;
 
+// enterSetupMode와 resetToSetupMode 함수를 export하기 위한 전역 변수
+export let enterSetupMode: (() => void) | null = null;
+export let resetToSetupMode: (() => void) | null = null;
+
 type OverlayMode = "setup" | "detect" | "alert";
 
 type OverlayStatePayload = {
@@ -232,9 +236,11 @@ app.whenReady().then(async () => {
     console.log("[Main] Sent OVERLAY_STATE_PUSH:", JSON.stringify(state));
   };
 
-  const resetToSetupMode = () => {
+  resetToSetupMode = () => {
     console.log("[Main] Reset to setup mode request received");
-    enterSetupMode();
+    if (enterSetupMode) {
+      enterSetupMode();
+    }
   };
 
   const broadcastStopMonitoring = () => {
@@ -458,7 +464,17 @@ app.whenReady().then(async () => {
       monitoringInterval = null;
     }
 
-    if (!isMonitoring && !currentROI) {
+    // 모니터링이 활성화되어 있거나 ROI가 설정되어 있으면 중지
+    const wasMonitoring = isMonitoring || currentROI !== null;
+    
+    if (!wasMonitoring) {
+      // 모니터링이 없어도 setup 모드로 전환하고 Edit Mode 활성화 (ESC 키 등)
+      console.log("[OCR] Setup 모드로 전환 (모니터링 없음)", reason ? `(${reason})` : "");
+      setEditModeState(true);
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.setIgnoreMouseEvents(false);
+        console.log("[Main] Mouse events enabled for setup mode");
+      }
       return;
     }
 
@@ -542,7 +558,7 @@ app.whenReady().then(async () => {
   // ROI 핸들러는 오버레이 윈도우가 생성될 때 설정됨 (dashboardHandlers.ts에서)
   // 여기서는 설정하지 않음
 
-  const enterSetupMode = () => {
+  enterSetupMode = () => {
     const target = overlayWindow;
     if (!target || target.isDestroyed()) {
       console.warn("[Main] Cannot enter setup mode - overlay window is unavailable");
@@ -650,16 +666,29 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.OVERLAY_MODE_CHANGED, (_event, mode: OverlayMode) => {
     console.log("[Main] OVERLAY_MODE_CHANGED received from renderer:", mode);
     if (mode === "setup") {
-      // setup 모드로 전환 시 모니터링 중지 및 Edit Mode 활성화
+      // setup 모드로 전환 시 모니터링 중지
       if (stopMonitoring) {
         stopMonitoring("Renderer changed mode to setup");
       }
       
-      // Edit Mode 활성화 및 마우스 이벤트 활성화
+      // Edit Mode 활성화 및 마우스 이벤트 활성화 (stopMonitoring이 early return하는 경우를 대비)
       setEditModeState(true);
       if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.setIgnoreMouseEvents(false);
         console.log("[Main] Edit Mode 활성화 및 마우스 이벤트 활성화됨 (ESC 키로 setup 모드 전환)");
+        
+        // 오버레이에 setup 모드 신호 전송
+        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, "setup");
+        const storedROI = getROI();
+        const statePayload = {
+          mode: "setup" as const,
+          harmful: false,
+          ...(storedROI ? { roi: storedROI } : {}),
+        };
+        overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
+        
+        // 포커스 설정
+        overlayWindow.focus();
       }
     }
   });
