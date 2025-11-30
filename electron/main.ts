@@ -281,7 +281,10 @@ app.whenReady().then(async () => {
       return;
     }
     currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, state);
-    console.log("[Main] Sent OVERLAY_STATE_PUSH:", JSON.stringify(state));
+    // 유해 표현 감지 시에만 로그 출력
+    if (state.harmful === true) {
+      console.warn("[Main] 🚨 Sent OVERLAY_STATE_PUSH (harmful):", JSON.stringify(state));
+    }
   };
 
   resetToSetupMode = () => {
@@ -344,19 +347,8 @@ app.whenReady().then(async () => {
       const rawText = result.text || "";
       const texts = rawText ? rawText.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
 
-      // OCR 결과 로그 (항상 출력하여 디버깅 가능하도록)
-      if (texts.length === 0 && rawText.length === 0) {
-        console.log(`[OCR] Windows OCR 완료 (${requestTime}ms): 텍스트 없음`);
-      } else if (texts.length === 0 && rawText.length > 0) {
-        console.log(
-          `[OCR] Windows OCR 완료 (${requestTime}ms): 원본 텍스트는 있으나 유효한 라인 없음 - "${rawText.substring(
-            0,
-            50
-          )}..."`
-        );
-      } else {
-        console.log(`[OCR] Windows OCR 완료 (${requestTime}ms): ${texts.length}개 텍스트 추출`);
-      }
+      // OCR 결과 로그는 유해 표현 감지 시에만 출력 (중복 텍스트는 제외)
+      // 로그는 captureAndProcessROI에서 유해 표현 감지 시에만 출력
 
       return {
         success: true,
