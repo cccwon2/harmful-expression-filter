@@ -549,7 +549,9 @@ app.whenReady().then(async () => {
       return;
     }
 
-    stopMonitoring("Entering setup mode");
+    if (stopMonitoring) {
+      stopMonitoring("Entering setup mode");
+    }
 
     console.log("[Main] Entering overlay setup mode");
 
@@ -599,7 +601,9 @@ app.whenReady().then(async () => {
       overlayWindow.hide();
       overlayWindow.setSkipTaskbar(true);
       setEditModeState(false);
-      stopMonitoring("Overlay hide request");
+      if (stopMonitoring) {
+        stopMonitoring("Overlay hide request");
+      }
       // 트레이 메뉴 업데이트
       if (tray && typeof (tray as any).updateContextMenu === "function") {
         (tray as any).updateContextMenu();
@@ -614,7 +618,9 @@ app.whenReady().then(async () => {
       setEditModeState(false);
       overlayWindow.hide();
       overlayWindow.setSkipTaskbar(true);
-      stopMonitoring("Exit edit mode and hide overlay request");
+      if (stopMonitoring) {
+        stopMonitoring("Exit edit mode and hide overlay request");
+      }
       // 트레이 메뉴 업데이트
       if (tray && typeof (tray as any).updateContextMenu === "function") {
         (tray as any).updateContextMenu();
@@ -635,29 +641,37 @@ app.whenReady().then(async () => {
 
   ipcMain.on(IPC_CHANNELS.OVERLAY_SET_MODE, (_event, mode: OverlayMode) => {
     console.log("[Main] OVERLAY_SET_MODE requested by renderer:", mode);
-    if (mode === "setup") {
+    if (mode === "setup" && stopMonitoring) {
       stopMonitoring("Renderer requested setup mode");
     }
   });
 
   ipcMain.on(IPC_CHANNELS.OCR_START, () => {
     console.log("[OCR] OCR 모니터링 시작 요청");
-    startMonitoring();
+    if (startMonitoring) {
+      startMonitoring();
+    }
   });
 
   ipcMain.on(IPC_CHANNELS.OCR_STOP, () => {
     console.log("[OCR] OCR 모니터링 중지 요청");
-    stopMonitoring("Renderer request");
+    if (stopMonitoring) {
+      stopMonitoring("Renderer request");
+    }
   });
 
   ipcMain.on(IPC_CHANNELS.START_MONITORING, () => {
     console.log("[Main] START_MONITORING request received");
-    startMonitoring();
+    if (startMonitoring) {
+      startMonitoring();
+    }
   });
 
   ipcMain.on(IPC_CHANNELS.STOP_MONITORING, () => {
     console.log("[Main] STOP_MONITORING request received");
-    stopMonitoring("Renderer request");
+    if (stopMonitoring) {
+      stopMonitoring("Renderer request");
+    }
   });
 
   // Edit Mode 종료 및 오버레이 숨김 함수 (메인 프로세스에서 직접 호출용)
@@ -667,7 +681,9 @@ app.whenReady().then(async () => {
       setEditModeState(false);
       overlayWindow.hide();
       overlayWindow.setSkipTaskbar(true);
-      stopMonitoring("Direct exit edit mode and hide");
+      if (stopMonitoring) {
+        stopMonitoring("Direct exit edit mode and hide");
+      }
       // 트레이 메뉴 업데이트
       if (tray && typeof (tray as any).updateContextMenu === "function") {
         (tray as any).updateContextMenu();
@@ -782,7 +798,8 @@ app.whenReady().then(async () => {
     setTrayAudioUpdateCallback(trayUpdateFn);
 
     // 오버레이 로드 완료 시 저장된 상태 복원 (하지만 자동으로 표시하지 않음)
-    overlayWindow.webContents.once("did-finish-load", () => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.once("did-finish-load", () => {
       const savedROI = getROI();
       const savedMode = getMode();
 
@@ -798,11 +815,14 @@ app.whenReady().then(async () => {
       } else {
         console.log("[Main] 저장된 상태 없음 - 대시보드에서 설정 필요");
       }
-    });
+      });
+    }
   }
 
   app.on("before-quit", () => {
-    stopMonitoring("Application quitting");
+    if (stopMonitoring) {
+      stopMonitoring("Application quitting");
+    }
 
     const { getAudioService } = require("./ipc/audioHandlers");
     const audioService = getAudioService();
