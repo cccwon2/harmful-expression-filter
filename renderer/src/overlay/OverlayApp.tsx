@@ -21,6 +21,8 @@ export const OverlayApp: React.FC = () => {
   const mousePositionRef = useRef<{ x: number; y: number } | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const isSelectingRef = useRef<boolean>(false);
+  // 선택 상태를 ref에도 저장 (null 체크 방지)
+  const selectionStateRef = useRef<SelectionState | null>(null);
 
   // 최신 상태를 항상 참조할 수 있는 Ref
   const latestStateRef = useRef({
@@ -42,6 +44,11 @@ export const OverlayApp: React.FC = () => {
     };
     (window as any).__overlayState = { mode, roi, harmful };
   }, [mode, roi, harmful, isMonitoring, isSelectionComplete]);
+  
+  // selectionState ref 동기화
+  useEffect(() => {
+    selectionStateRef.current = selectionState;
+  }, [selectionState]);
 
   // --- Logging ---
   useEffect(() => {
@@ -212,6 +219,7 @@ export const OverlayApp: React.FC = () => {
         if (isSelectingRef.current) {
           console.log("[Overlay] ROI 선택 중 취소");
           setSelectionState(null);
+          selectionStateRef.current = null;
           setIsSelectionComplete(false);
           isSelectingRef.current = false;
           window.api?.roi?.sendCancelSelection();
@@ -263,13 +271,15 @@ export const OverlayApp: React.FC = () => {
       setIsMonitoring(false);
       setRoi(undefined);
       isSelectingRef.current = true;
-      setSelectionState({
+      const newSelectionState = {
         isSelecting: true,
         startX: e.clientX,
         startY: e.clientY,
         currentX: e.clientX,
         currentY: e.clientY,
-      });
+      };
+      selectionStateRef.current = newSelectionState;
+      setSelectionState(newSelectionState);
       window.api?.roi?.sendStartSelection();
     };
 
@@ -282,15 +292,14 @@ export const OverlayApp: React.FC = () => {
       // requestAnimationFrame으로 상태 업데이트 스케줄링 (렌더링 최적화)
       if (rafIdRef.current === null) {
         rafIdRef.current = requestAnimationFrame(() => {
-          if (mousePositionRef.current && isSelectingRef.current) {
-            setSelectionState((prev) => {
-              if (!prev || !prev.isSelecting) return prev;
-              return { 
-                ...prev, 
-                currentX: mousePositionRef.current!.x, 
-                currentY: mousePositionRef.current!.y 
-              };
-            });
+          if (mousePositionRef.current && isSelectingRef.current && selectionStateRef.current) {
+            const updatedState = {
+              ...selectionStateRef.current,
+              currentX: mousePositionRef.current.x,
+              currentY: mousePositionRef.current.y,
+            };
+            selectionStateRef.current = updatedState;
+            setSelectionState(updatedState);
           }
           rafIdRef.current = null;
         });
@@ -299,16 +308,23 @@ export const OverlayApp: React.FC = () => {
 
     const handleMouseUp = () => {
       if (!isSelectingRef.current) return;
+      const currentSelectionState = selectionStateRef.current;
+      if (!currentSelectionState) {
+        console.warn('[Overlay] handleMouseUp: selectionState가 null입니다');
+        isSelectingRef.current = false;
+        return;
+      }
       isSelectingRef.current = false;
       const rect: ROI = {
-        x: Math.min(selectionState.startX, selectionState.currentX),
-        y: Math.min(selectionState.startY, selectionState.currentY),
-        width: Math.abs(selectionState.currentX - selectionState.startX),
-        height: Math.abs(selectionState.currentY - selectionState.startY),
+        x: Math.min(currentSelectionState.startX, currentSelectionState.currentX),
+        y: Math.min(currentSelectionState.startY, currentSelectionState.currentY),
+        width: Math.abs(currentSelectionState.currentX - currentSelectionState.startX),
+        height: Math.abs(currentSelectionState.currentY - currentSelectionState.startY),
       };
 
       if (rect.width < 10 || rect.height < 10) {
         setSelectionState(null);
+        selectionStateRef.current = null;
         isSelectingRef.current = false;
         window.api?.roi?.sendCancelSelection();
         return;
@@ -318,6 +334,7 @@ export const OverlayApp: React.FC = () => {
       setMode("detect");
       setIsSelectionComplete(true);
       setSelectionState(null);
+      selectionStateRef.current = null;
       isSelectingRef.current = false;
       window.api?.overlay?.startMonitoring?.();
       setIsMonitoring(true);
@@ -337,15 +354,17 @@ export const OverlayApp: React.FC = () => {
       }
       mousePositionRef.current = null;
       isSelectingRef.current = false;
+      selectionStateRef.current = null;
     };
   }, []); // selectionState 의존성 제거 - ref 사용으로 클로저 문제 해결
 
-  const selectionRect = selectionState
+  // selectionState가 null일 수 있으므로 안전하게 처리
+  const selectionRect = selectionStateRef.current
     ? {
-        left: Math.min(selectionState.startX, selectionState.currentX),
-        top: Math.min(selectionState.startY, selectionState.currentY),
-        width: Math.abs(selectionState.currentX - selectionState.startX),
-        height: Math.abs(selectionState.currentY - selectionState.startY),
+        left: Math.min(selectionStateRef.current.startX, selectionStateRef.current.currentX),
+        top: Math.min(selectionStateRef.current.startY, selectionStateRef.current.currentY),
+        width: Math.abs(selectionStateRef.current.currentX - selectionStateRef.current.startX),
+        height: Math.abs(selectionStateRef.current.currentY - selectionStateRef.current.startY),
       }
     : null;
 
