@@ -798,8 +798,9 @@ app.whenReady().then(async () => {
     setTrayAudioUpdateCallback(trayUpdateFn);
 
     // 오버레이 로드 완료 시 저장된 상태 복원 (하지만 자동으로 표시하지 않음)
-    const currentOverlayWindow = overlayWindow;
-    if (currentOverlayWindow && !currentOverlayWindow.isDestroyed()) {
+    // overlayWindow는 이미 null 체크를 통과했으므로 BrowserWindow 타입임
+    const currentOverlayWindow: BrowserWindow = overlayWindow;
+    if (!currentOverlayWindow.isDestroyed()) {
       currentOverlayWindow.webContents.once("did-finish-load", () => {
       const savedROI = getROI();
       const savedMode = getMode();
