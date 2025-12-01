@@ -30,7 +30,12 @@ if (app.isPackaged && process.env.NODE_ENV !== "production") {
   process.env.NODE_ENV = "production";
 }
 
-const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격
+const CAPTURE_INTERVAL_MS = 500; // 0.5초 간격 (기본값, 레거시 호환용)
+
+// 🔥 [최적화] 적응형 인터벌 상수
+const MIN_INTERVAL_MS = 500; // 최소 간격 (활성 상태)
+const MAX_INTERVAL_MS = 2000; // 최대 간격 (유휴 상태)
+const IDLE_INCREMENT_MS = 200; // 유휴 시 증가폭
 
 // 콘솔 로그 필터링: 반복되는 COM 객체 로그 제거
 const originalConsoleLog = console.log;
@@ -101,6 +106,10 @@ let isMonitoring = false;
 let isCaptureInProgress = false;
 let lastExtractedText = ""; // 중복 텍스트 필터링을 위한 변수
 let emptyTextCount = 0; // 연속으로 빈 텍스트가 나온 횟수
+
+// 🔥 [최적화] 적응형 인터벌 변수
+let currentInterval = MIN_INTERVAL_MS; // 현재 적용된 인터벌
+let consecutiveIdleCount = 0; // 연속 유휴 카운트
 
 // startMonitoring과 stopMonitoring 함수를 export하기 위한 전역 변수
 export let startMonitoring: (() => void) | null = null;
@@ -559,7 +568,10 @@ app.whenReady().then(async () => {
         const { texts, is_harmful } = result.data;
         const extractedText = texts && texts.length > 0 ? texts.join(" ") : "";
 
-        // 텍스트가 없는 경우 처리
+        // 🔥 [최적화] 적응형 인터벌 로직 적용
+        let isTextChanged = false;
+
+        // 1. 텍스트 없음 처리
         if (!extractedText || extractedText.trim().length === 0) {
           emptyTextCount++;
           // 연속으로 빈 텍스트가 5번 이상 나오면 로그를 줄임
@@ -569,22 +581,58 @@ app.whenReady().then(async () => {
             // 이후에는 10번마다 한 번씩만 로그 출력
             console.log(`[OCR] 텍스트 없음 (연속 ${emptyTextCount}회)`);
           }
+          // 텍스트가 없으면 변화가 없는 것으로 간주 -> 인터벌 증가
+          isTextChanged = false;
           // 빈 텍스트는 유해하지 않은 것으로 간주하고 상태 업데이트는 건너뜀
           // (중복 상태 업데이트 방지)
+          // 하지만 인터벌 조정은 수행해야 하므로 return 전에 처리
+        } else {
+          // 텍스트가 있으면 빈 텍스트 카운터 리셋
+          emptyTextCount = 0;
+
+          // 2. 텍스트 변경 여부 확인
+          if (extractedText !== lastExtractedText) {
+            lastExtractedText = extractedText;
+            isTextChanged = true;
+          } else {
+            // 중복 텍스트는 건너뛰되, 유해 표현은 항상 처리
+            isTextChanged = false;
+            if (!is_harmful) {
+              // 유해하지 않은 중복 텍스트는 인터벌 조정만 하고 return
+              // 인터벌 조정 로직은 아래에서 수행
+            } else {
+              // 유해 표현은 처리해야 하므로 isTextChanged는 false지만 계속 진행
+            }
+          }
+        }
+
+        // 3. 인터벌 조정 (Adaptive Interval)
+        if (isTextChanged) {
+          // 변화 감지! -> 즉시 깨어남 (최소 인터벌로 복귀)
+          currentInterval = MIN_INTERVAL_MS;
+          consecutiveIdleCount = 0;
+          // console.log(`[OCR] ⚡ Active: ${currentInterval}ms`);
+        } else {
+          // 변화 없음 -> 점진적으로 슬립 모드 진입
+          consecutiveIdleCount++;
+          if (currentInterval < MAX_INTERVAL_MS) {
+            currentInterval = Math.min(
+              MAX_INTERVAL_MS,
+              MIN_INTERVAL_MS + (consecutiveIdleCount * IDLE_INCREMENT_MS)
+            );
+            // 디버깅용 로그 (필요시 주석 해제)
+            // if (consecutiveIdleCount % 5 === 0) console.log(`[OCR] 💤 Idle: ${currentInterval}ms`);
+          }
+        }
+
+        // 빈 텍스트인 경우 인터벌 조정 후 return
+        if (!extractedText || extractedText.trim().length === 0) {
           return;
         }
 
-        // 텍스트가 있으면 빈 텍스트 카운터 리셋
-        emptyTextCount = 0;
-
-        // 중복 텍스트 필터링: 같은 텍스트가 연속으로 나오면 건너뜀
-        if (extractedText === lastExtractedText) {
-          // 중복 텍스트는 건너뛰되, 유해 표현은 항상 처리
-          if (!is_harmful) {
-            return;
-          }
-        } else {
-          lastExtractedText = extractedText;
+        // 중복 텍스트이고 유해하지 않은 경우 인터벌 조정 후 return
+        if (!isTextChanged && !is_harmful) {
+          return;
         }
 
         // 5. 유해성 감지 시 알림 (서버 AI 모델 기반)
@@ -686,9 +734,11 @@ app.whenReady().then(async () => {
     lastExtractedText = ""; // 모니터링 중지 시 텍스트 초기화
     emptyTextCount = 0; // 빈 텍스트 카운터 초기화
 
-    // [최적화] 모니터링 중지 시 상태 캐시 초기화 (다음에 시작할 때 확실히 전송되도록)
+    // [최적화] 모니터링 중지 시 상태 캐시 및 인터벌 초기화
     lastSentOverlayState = null;
     lastSentAlertState = null;
+    currentInterval = MIN_INTERVAL_MS;
+    consecutiveIdleCount = 0;
 
     broadcastStopMonitoring();
     sendOverlayMode("setup");
@@ -728,9 +778,11 @@ app.whenReady().then(async () => {
 
     isMonitoring = true;
 
-    // 모니터링 시작 시 캐시 초기화 (확실한 상태 동기화)
+    // 모니터링 시작 시 캐시 및 인터벌 초기화 (확실한 상태 동기화)
     lastSentOverlayState = null;
     lastSentAlertState = null;
+    currentInterval = MIN_INTERVAL_MS;
+    consecutiveIdleCount = 0;
 
     pushOverlayState({ mode: "detect", roi: currentROI });
 
@@ -741,9 +793,10 @@ app.whenReady().then(async () => {
         return;
       }
 
+      // 🔥 [최적화] 고정값(CAPTURE_INTERVAL_MS) 대신 가변값(currentInterval) 사용
       // 다음 캡처를 먼저 스케줄링하여 간격 보장
       if (isMonitoring && currentROI) {
-        monitoringInterval = setTimeout(scheduleNextCapture, CAPTURE_INTERVAL_MS) as any;
+        monitoringInterval = setTimeout(scheduleNextCapture, currentInterval) as any;
       }
 
       // 현재 캡처는 비동기로 실행 (다음 스케줄링을 막지 않음)
