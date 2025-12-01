@@ -29,7 +29,7 @@ const STYLES = {
     backdropFilter: "blur(40px)",
     WebkitBackdropFilter: "blur(40px)",
     // 2. 배경을 어둡고 진하게 변경
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.85)",
     // 3. 테두리
     border: "2px solid rgba(255, 0, 0, 0.5)",
     // 4. 그림자
