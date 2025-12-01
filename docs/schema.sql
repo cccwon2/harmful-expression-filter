@@ -10,6 +10,7 @@ create table public.detection_logs (
   threshold_used float not null,        -- 당시 적용된 임계값
   model_version text,                   -- 사용된 모델 (koelectra/kanana)
   is_harmful boolean default true,      -- 유해 여부
+  filter_mode text default 'ocr',       -- 필터 모드 (ocr | voice 등)
   user_id uuid default null,            -- (선택) 요청한 사용자 ID
   metadata jsonb default '{}'::jsonb    -- 추가 정보 (IP, 클라이언트 버전 등)
 );

@@ -23,12 +23,13 @@ else:
 
 
 async def save_detection_log(
-    text: str, 
-    confidence: float, 
-    threshold: float, 
-    model: str, 
+    text: str,
+    confidence: float,
+    threshold: float,
+    model: str,
     is_harmful: bool,
-    user_id: str = None
+    user_id: str = None,
+    filter_mode: str | None = None,
 ):
     """
     유해 표현 감지 로그를 비동기로 저장합니다.
@@ -44,7 +45,9 @@ async def save_detection_log(
             "threshold_used": threshold,
             "model_version": model,
             "is_harmful": is_harmful,
-            "user_id": user_id
+            "user_id": user_id,
+            # filter_mode는 NULL 가능, 미지정 시 기본값(ocr)이 적용되도록 서버 쿼리에서 처리
+            "filter_mode": filter_mode,
         }
         # execute()는 동기 함수지만, 별도 스레드 풀이나 BackgroundTasks 내부에서 실행 시 안전
         supabase.table("detection_logs").insert(data).execute()

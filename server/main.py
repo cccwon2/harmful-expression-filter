@@ -626,6 +626,8 @@ class AnalyzeRequest(BaseModel):
     text: str
     # ✅ 일렉트론 앱의 디바이스 UUID 또는 Supabase User ID
     user_id: Optional[str] = None
+    # ✅ 필터 모드: 'ocr' | 'voice' 등 (기본값: ocr)
+    filter_mode: Optional[str] = "ocr"
 
 
 class ThresholdUpdateRequest(BaseModel):
@@ -750,7 +752,9 @@ async def analyze_text(
             model=model_display,
             is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
             # ✅ 일렉트론에서 전달된 device UUID 또는 User ID
-            user_id=request.user_id
+            user_id=request.user_id,
+            # ✅ 필터 모드(ocr / voice 등) 저장
+            filter_mode=request.filter_mode or "ocr",
         )
     
     return response

@@ -108,7 +108,7 @@ export function registerServerHandlers(): void {
 
   ipcMain.handle(
     SERVER_CHANNELS.ANALYZE_TEXT,
-    async (_event, text: string, userId?: string): Promise<AnalyzeResponse | ErrorResponse> => {
+    async (_event, text: string, userId?: string, filterMode?: "ocr" | "voice"): Promise<AnalyzeResponse | ErrorResponse> => {
       try {
         if (!text || text.trim().length === 0) {
           return {
@@ -130,7 +130,12 @@ export function registerServerHandlers(): void {
         
         const response = await axios.post<AnalyzeResponse>(
           url,
-          { text, user_id: userId },
+          {
+            text,
+            user_id: userId,
+            // ✅ 필터 모드(ocr / voice 등)를 함께 전달
+            filter_mode: filterMode,
+          },
           {
             timeout: REQUEST_TIMEOUT,
             headers: { "Content-Type": "application/json" },
