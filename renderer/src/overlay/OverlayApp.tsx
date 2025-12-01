@@ -1,5 +1,155 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ROI, SelectionState, OverlayMode } from "./roiTypes";
+
+// ==========================================
+// 1. 하위 컴포넌트 분리 및 메모이제이션
+// ==========================================
+
+// 스타일 상수
+const STYLES = {
+  container: {
+    position: "fixed" as const,
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
+    backgroundColor: "transparent",
+    outline: "none",
+  },
+  selectionBox: {
+    position: "absolute" as const,
+    border: "2px solid #00ff00",
+    backgroundColor: "rgba(0, 255, 0, 0.1)",
+    zIndex: 1000,
+    pointerEvents: "none" as const, // 드래그 중 간섭 방지
+  },
+  blurOverlay: {
+    position: "absolute" as const,
+    // 1. 블러 강도 대폭 증가
+    backdropFilter: "blur(40px)",
+    WebkitBackdropFilter: "blur(40px)",
+    // 2. 배경을 어둡고 진하게 변경
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    // 3. 테두리
+    border: "2px solid rgba(255, 0, 0, 0.5)",
+    // 4. 그림자
+    boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
+    zIndex: 1003,
+    transition: "all 0.3s ease",
+    pointerEvents: "none" as const,
+  },
+  monitoringBadge: {
+    position: "absolute" as const,
+    border: "3px solid #ff0000",
+    pointerEvents: "none" as const,
+    zIndex: 1002,
+  },
+  toast: {
+    position: "fixed" as const,
+    top: 20,
+    left: "50%",
+    transform: "translateX(-50%)",
+    padding: "12px 20px",
+    backgroundColor: "rgba(16, 185, 129, 0.9)",
+    color: "white",
+    borderRadius: 8,
+    fontWeight: "bold",
+    zIndex: 1001,
+    textAlign: "center" as const,
+  },
+  badgeText: {
+    position: "absolute" as const,
+    top: -30,
+    left: "50%",
+    transform: "translateX(-50%)",
+    backgroundColor: "red",
+    color: "white",
+    padding: "2px 8px",
+    borderRadius: 12,
+    fontSize: 12,
+  },
+  instruction: {
+    position: "fixed" as const,
+    top: 20,
+    left: "50%",
+    transform: "translateX(-50%)",
+    padding: "16px 24px",
+    backgroundColor: "rgba(37, 99, 235, 0.9)",
+    color: "white",
+    borderRadius: 8,
+    zIndex: 1001,
+    textAlign: "center" as const,
+  },
+};
+
+// [Component] 드래그 중인 선택 영역 (가장 빈번하게 렌더링됨)
+const SelectionBox = React.memo(({ rect }: { rect: { left: number; top: number; width: number; height: number } | null }) => {
+  if (!rect) return null;
+
+  return (
+    <div
+      style={{
+        ...STYLES.selectionBox,
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      }}
+    />
+  );
+});
+
+// [Component] 유해 감지 블러 오버레이
+const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
+  return (
+    <div
+      style={{
+        ...STYLES.blurOverlay,
+        left: roi.x,
+        top: roi.y,
+        width: roi.width,
+        height: roi.height,
+      }}
+    />
+  );
+});
+
+// [Component] 감시 중 표시 (빨간 테두리)
+const MonitoringOverlay = React.memo(({ roi }: { roi: ROI }) => {
+  return (
+    <div
+      style={{
+        ...STYLES.monitoringBadge,
+        left: roi.x,
+        top: roi.y,
+        width: roi.width,
+        height: roi.height,
+      }}
+    >
+      <div style={STYLES.badgeText}>🔴 감시 중</div>
+    </div>
+  );
+});
+
+// [Component] 안내 메시지
+const InstructionMessage = React.memo(() => (
+  <div style={STYLES.instruction}>
+    🖱️ 마우스를 드래그하여 영역을 선택하세요
+    <div style={{ fontSize: "0.8em", marginTop: 5, opacity: 0.8 }}>ESC: 취소 / Ctrl+Q: 종료</div>
+  </div>
+));
+
+// [Component] 완료 토스트
+const SuccessToast = React.memo(() => (
+  <div style={STYLES.toast}>
+    ✅ ROI 영역 선택 완료 <br />
+    <span style={{ fontSize: "0.8em", opacity: 0.8 }}>ESC로 취소</span>
+  </div>
+));
+
+// ==========================================
+// 2. Main Component
+// ==========================================
 
 export const OverlayApp: React.FC = () => {
   // --- State Definitions ---
@@ -358,153 +508,47 @@ export const OverlayApp: React.FC = () => {
     };
   }, []); // selectionState 의존성 제거 - ref 사용으로 클로저 문제 해결
 
-  // selectionState가 null일 수 있으므로 안전하게 처리
-  const selectionRect = selectionStateRef.current
-    ? {
-        left: Math.min(selectionStateRef.current.startX, selectionStateRef.current.currentX),
-        top: Math.min(selectionStateRef.current.startY, selectionStateRef.current.currentY),
-        width: Math.abs(selectionStateRef.current.currentX - selectionStateRef.current.startX),
-        height: Math.abs(selectionStateRef.current.currentY - selectionStateRef.current.startY),
-      }
-    : null;
+  // --- Render Helpers (useMemo) ---
+  // 선택 영역 좌표 계산 최적화
+  const selectionRect = useMemo(() => {
+    if (!selectionState) return null;
+
+    return {
+      left: Math.min(selectionState.startX, selectionState.currentX),
+      top: Math.min(selectionState.startY, selectionState.currentY),
+      width: Math.abs(selectionState.currentX - selectionState.startX),
+      height: Math.abs(selectionState.currentY - selectionState.startY),
+    };
+  }, [selectionState]);
+
+  // 포인터 이벤트 제어
+  const containerPointerEvents = isSelectionComplete || isMonitoring ? "none" : "auto";
+  const containerCursor = selectionState?.isSelecting ? "crosshair" : "default";
 
   return (
     <div
       ref={overlayRef}
       tabIndex={-1}
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
-        backgroundColor: "transparent",
-        pointerEvents: isSelectionComplete || isMonitoring ? "none" : "auto",
-        cursor: selectionState?.isSelecting ? "crosshair" : "default",
-        outline: "none",
+        ...STYLES.container,
+        pointerEvents: containerPointerEvents,
+        cursor: containerCursor,
       }}
     >
-      {/* 선택 영역 드래그 박스 */}
-      {selectionRect && (
-        <div
-          style={{
-            position: "absolute",
-            left: selectionRect.left,
-            top: selectionRect.top,
-            width: selectionRect.width,
-            height: selectionRect.height,
-            border: "2px solid #00ff00",
-            backgroundColor: "rgba(0, 255, 0, 0.1)",
-            zIndex: 1000,
-          }}
-        />
-      )}
+      {/* 1. 선택 영역 박스 (자주 변경됨) */}
+      <SelectionBox rect={selectionRect} />
 
-      {/* 선택 완료 메시지 */}
-      {isSelectionComplete && (
-        <div style={styles.toast}>
-          ✅ ROI 영역 선택 완료 <br />
-          <span style={{ fontSize: "0.8em", opacity: 0.8 }}>ESC로 취소</span>
-        </div>
-      )}
+      {/* 2. 완료 메시지 */}
+      {isSelectionComplete && <SuccessToast />}
 
-      {/* 감시 중 표시 (Detect 모드) */}
-      {isMonitoring && roi && mode !== "alert" && (
-        <div
-          style={{
-            position: "absolute",
-            left: roi.x,
-            top: roi.y,
-            width: roi.width,
-            height: roi.height,
-            border: "3px solid #ff0000",
-            pointerEvents: "none",
-            zIndex: 1002,
-          }}
-        >
-          <div style={styles.badge}>🔴 감시 중</div>
-        </div>
-      )}
+      {/* 3. 감시 중 표시 */}
+      {isMonitoring && roi && mode !== "alert" && <MonitoringOverlay roi={roi} />}
 
-      {/* 🔥 [수정됨] 블러 효과 오버레이 (Alert 모드) */}
-      {mode === "alert" && roi && (
-        <div
-          style={{
-            position: "absolute",
-            left: roi.x,
-            top: roi.y,
-            width: roi.width,
-            height: roi.height,
+      {/* 4. 블러 오버레이 */}
+      {mode === "alert" && roi && <BlurOverlay roi={roi} />}
 
-            // 1. 블러 강도 대폭 증가 (15px -> 40px)
-            // 글자가 거의 식별 불가능하게 뭉개집니다.
-            backdropFilter: "blur(40px)",
-            WebkitBackdropFilter: "blur(40px)",
-
-            // 2. 배경을 어둡고 진하게 변경 (흰색 -> 검은색 투명도 60%)
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-
-            // 3. 테두리는 유지하되 약간 더 선명하게 (영역 구분용)
-            border: "2px solid rgba(255, 0, 0, 0.5)",
-
-            // 4. 그림자 효과로 깊이감 추가
-            boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
-
-            zIndex: 1003,
-            transition: "all 0.3s ease",
-            pointerEvents: "none",
-
-            // 이모티콘 제거로 인해 flex 관련 속성 삭제
-          }}
-        />
-      )}
-
-      {/* Setup 안내 */}
-      {mode === "setup" && !selectionState && !isSelectionComplete && (
-        <div style={styles.instruction}>
-          🖱️ 마우스를 드래그하여 영역을 선택하세요
-          <div style={{ fontSize: "0.8em", marginTop: 5, opacity: 0.8 }}>ESC: 취소 / Ctrl+Q: 종료</div>
-        </div>
-      )}
+      {/* 5. Setup 안내 */}
+      {mode === "setup" && !selectionState && !isSelectionComplete && <InstructionMessage />}
     </div>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  toast: {
-    position: "fixed",
-    top: 20,
-    left: "50%",
-    transform: "translateX(-50%)",
-    padding: "12px 20px",
-    backgroundColor: "rgba(16, 185, 129, 0.9)",
-    color: "white",
-    borderRadius: 8,
-    fontWeight: "bold",
-    zIndex: 1001,
-    textAlign: "center",
-  },
-  badge: {
-    position: "absolute",
-    top: -30,
-    left: "50%",
-    transform: "translateX(-50%)",
-    backgroundColor: "red",
-    color: "white",
-    padding: "2px 8px",
-    borderRadius: 12,
-    fontSize: 12,
-  },
-  instruction: {
-    position: "fixed",
-    top: 20,
-    left: "50%",
-    transform: "translateX(-50%)",
-    padding: "16px 24px",
-    backgroundColor: "rgba(37, 99, 235, 0.9)",
-    color: "white",
-    borderRadius: 8,
-    zIndex: 1001,
-    textAlign: "center",
-  },
 };
