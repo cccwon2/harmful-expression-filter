@@ -459,6 +459,9 @@ app.whenReady().then(async () => {
       // 1. 화면 캡처 (ROI 영역보다 약간 큰 크기만 캡처하여 성능 최적화)
       const primaryDisplay = screen.getPrimaryDisplay();
       const displaySize = primaryDisplay.size;
+      
+      // DPI 스케일링 팩터 가져오기 (고해상도 디스플레이 지원)
+      const scaleFactor = primaryDisplay.scaleFactor;
 
       // ROI 영역을 기준으로 캡처 영역 계산 (ROI보다 20% 큰 영역만 캡처)
       const captureMargin = 0.2; // 20% 여유
@@ -468,10 +471,16 @@ app.whenReady().then(async () => {
       const captureHeight = Math.min(displaySize.height - captureY, Math.floor(roi.height * (1 + captureMargin * 2)));
 
       // 최적화된 썸네일 크기 (ROI 영역보다 약간 큰 크기만)
-      const optimizedThumbnailSize = {
-        width: Math.min(displaySize.width, Math.max(roi.width * 1.5, 800)),
-        height: Math.min(displaySize.height, Math.max(roi.height * 1.5, 600)),
+      // ⚠️ 중요: thumbnailSize는 반드시 정수(Integer)여야 합니다.
+      // 소수점 값이 전달되면 Electron의 C++ 바인딩에서 크래시가 발생합니다.
+      let optimizedThumbnailSize = {
+        width: Math.round(Math.min(displaySize.width, Math.max(roi.width * 1.5, 800)) * scaleFactor),
+        height: Math.round(Math.min(displaySize.height, Math.max(roi.height * 1.5, 600)) * scaleFactor),
       };
+      
+      // 최소값 1 보장 (안전장치)
+      if (optimizedThumbnailSize.width === 0) optimizedThumbnailSize.width = 1;
+      if (optimizedThumbnailSize.height === 0) optimizedThumbnailSize.height = 1;
 
       const sources = await desktopCapturer.getSources({
         types: ["screen"],
