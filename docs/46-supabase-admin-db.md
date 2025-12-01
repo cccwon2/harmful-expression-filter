@@ -131,13 +131,14 @@ create policy "Authenticated Admins Update Settings" on public.app_settings
 ```text
 supabase>=2.0.0
 gotrue>=1.0.0
+websockets>=13.0
 ```
 
 **실행 명령**:
 
 ```bash
 cd server
-pip install supabase>=2.0.0 gotrue>=1.0.0
+pip install supabase>=2.0.0 gotrue>=1.0.0 websockets>=13.0
 ```
 
 #### 2.2 환경 변수 설정
