@@ -84,10 +84,17 @@ export function setCurrentROI(roi: ROI | null) {
   console.log("[Main] currentROI 업데이트:", roi);
 }
 
+// [최적화] 상태 변경 감지를 위한 변수 추가
+let lastSentOverlayState: string | null = null; // 마지막으로 전송된 오버레이 상태 (JSON 문자열)
+let lastSentAlertState: boolean | null = null; // 마지막으로 전송된 유해 알림 상태
+
 // overlayWindow를 외부에서 업데이트할 수 있도록 export
 export function setOverlayWindowInstance(window: BrowserWindow | null) {
   overlayWindow = window;
   console.log("[Main] overlayWindow 업데이트:", window ? "설정됨" : "null");
+  // 윈도우가 새로 설정되면 상태 캐시 초기화 (새 윈도우는 상태를 모르므로)
+  lastSentOverlayState = null;
+  lastSentAlertState = null;
 }
 let monitoringInterval: NodeJS.Timeout | null = null;
 let isMonitoring = false;
@@ -312,6 +319,7 @@ app.whenReady().then(async () => {
     console.log("[Main] Sent OVERLAY_SET_MODE:", mode);
   };
 
+  // 🔥 [최적화] pushOverlayState 함수 수정: 변경된 경우에만 전송 (Deep Compare)
   const pushOverlayState = (state: OverlayStatePayload) => {
     // overlayWindow는 state/editMode.ts에서 가져오기 (dashboardHandlers에서 생성한 윈도우도 포함)
     const currentOverlayWindow = overlayWindow || getOverlayWindow();
@@ -335,10 +343,24 @@ app.whenReady().then(async () => {
           },
         }),
       };
+
+      // 상태 직렬화
+      const serializedState = JSON.stringify(safeState);
+
+      // 🔥 이전 상태와 비교 (IPC 통신 최적화)
+      if (serializedState === lastSentOverlayState) {
+        // 변경사항이 없으면 전송하지 않음
+        return;
+      }
+
       currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, safeState);
+
+      // 상태 캐시 업데이트
+      lastSentOverlayState = serializedState;
+
       // 유해 표현 감지 시에만 로그 출력
       if (state.harmful === true) {
-        console.warn("[Main] 🚨 Sent OVERLAY_STATE_PUSH (harmful):", JSON.stringify(safeState));
+        console.warn("[Main] 🚨 Sent OVERLAY_STATE_PUSH (harmful changed):", serializedState);
       }
     } catch (error: any) {
       console.error("[Main] pushOverlayState 실패:", error?.message || error);
@@ -572,30 +594,27 @@ app.whenReady().then(async () => {
           // is_harmful이 true인지 명확히 확인 (boolean 값)
           const isHarmful = is_harmful === true;
 
-          if (isHarmful) {
-            // 유해 표현 감지 시에만 상세 로그 출력
-            console.warn(
-              `[OCR] 🚨 유해 표현 감지 (${ocrElapsed}ms): "${extractedText.substring(0, 100)}${
-                extractedText.length > 100 ? "..." : ""
-              }"`
-            );
+          // 🔥 [최적화] ALERT_FROM_SERVER 중복 전송 방지
+          if (lastSentAlertState !== isHarmful) {
+            if (isHarmful) {
+              // 유해 표현 감지 시에만 상세 로그 출력
+              console.warn(
+                `[OCR] 🚨 유해 표현 감지 (${ocrElapsed}ms): "${extractedText.substring(0, 100)}${
+                  extractedText.length > 100 ? "..." : ""
+                }"`
+              );
+            }
+
             try {
               currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
-                harmful: true,
+                harmful: isHarmful,
                 words: [], // 서버 AI 모델 기반으로만 동작하므로 키워드는 사용하지 않음
               });
+              lastSentAlertState = isHarmful; // 상태 캐시 업데이트
             } catch (sendError: any) {
-              console.error("[OCR] ALERT_FROM_SERVER 전송 실패:", sendError?.message || sendError);
-            }
-          } else {
-            // harmful=false는 조용히 전송 (로그 없음)
-            try {
-              currentOverlayWindow.webContents.send(IPC_CHANNELS.ALERT_FROM_SERVER, {
-                harmful: false,
-                words: [],
-              });
-            } catch (sendError: any) {
-              // 조용히 실패 (로그 없음)
+              if (isHarmful) {
+                console.error("[OCR] ALERT_FROM_SERVER 전송 실패:", sendError?.message || sendError);
+              }
             }
           }
         }
@@ -667,10 +686,14 @@ app.whenReady().then(async () => {
     lastExtractedText = ""; // 모니터링 중지 시 텍스트 초기화
     emptyTextCount = 0; // 빈 텍스트 카운터 초기화
 
+    // [최적화] 모니터링 중지 시 상태 캐시 초기화 (다음에 시작할 때 확실히 전송되도록)
+    lastSentOverlayState = null;
+    lastSentAlertState = null;
+
     broadcastStopMonitoring();
     sendOverlayMode("setup");
     setMode("setup");
-    pushOverlayState({ mode: "setup" });
+    pushOverlayState({ mode: "setup" }); // 캐시가 초기화되었으므로 즉시 전송됨
     setEditModeState(true);
 
     if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -704,6 +727,11 @@ app.whenReady().then(async () => {
     }
 
     isMonitoring = true;
+
+    // 모니터링 시작 시 캐시 초기화 (확실한 상태 동기화)
+    lastSentOverlayState = null;
+    lastSentAlertState = null;
+
     pushOverlayState({ mode: "detect", roi: currentROI });
 
     // 재귀적으로 캡처 실행 (비동기 처리로 지연 최소화)
@@ -768,6 +796,9 @@ app.whenReady().then(async () => {
     setEditModeState(true);
 
     sendOverlayMode("setup");
+
+    // setup 모드 진입 시에도 캐시 초기화하여 상태 전송 보장
+    lastSentOverlayState = null;
 
     const storedROI = getROI();
     const statePayload: OverlayStatePayload = {
