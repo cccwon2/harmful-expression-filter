@@ -263,7 +263,9 @@ try {
     },
     server: {
       healthCheck: () => ipcRenderer.invoke(SERVER_CHANNELS.HEALTH_CHECK),
-      analyzeText: (text: string) => ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text),
+      // ✅ device UUID 또는 User ID를 함께 전달할 수 있도록 인자 추가
+      analyzeText: (text: string, userId?: string) =>
+        ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text, userId),
       getKeywords: () => ipcRenderer.invoke(SERVER_CHANNELS.GET_KEYWORDS),
       ocrImage: (imageBuffer: Buffer) => ipcRenderer.invoke(SERVER_CHANNELS.OCR_IMAGE, imageBuffer),
       ocrAndAnalyze: (imageBuffer: Buffer) => ipcRenderer.invoke(SERVER_CHANNELS.OCR_AND_ANALYZE, imageBuffer),

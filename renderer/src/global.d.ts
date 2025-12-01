@@ -23,7 +23,7 @@ interface ServerAPI {
       }
     | { error: true; message: string; code?: string; status?: number }
   >;
-  analyzeText: (text: string) => Promise<
+  analyzeText: (text: string, userId?: string) => Promise<
     | {
         has_violation: boolean;
         confidence: number;

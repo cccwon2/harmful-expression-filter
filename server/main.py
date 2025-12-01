@@ -624,6 +624,8 @@ async def get_keywords():
 
 class AnalyzeRequest(BaseModel):
     text: str
+    # ✅ 일렉트론 앱의 디바이스 UUID 또는 Supabase User ID
+    user_id: Optional[str] = None
 
 
 class ThresholdUpdateRequest(BaseModel):
@@ -747,7 +749,8 @@ async def analyze_text(
             threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
             model=model_display,
             is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
-            user_id=None  # 추후 Auth 연동 시 추가
+            # ✅ 일렉트론에서 전달된 device UUID 또는 User ID
+            user_id=request.user_id
         )
     
     return response

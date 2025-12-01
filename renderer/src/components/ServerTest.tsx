@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getDeviceId } from '../utils/deviceId';
 
 type EmptyObject = Record<string, never>;
 
@@ -40,7 +41,8 @@ export const ServerTest: React.FC<EmptyObject> = () => {
 
     setLoading(true);
     try {
-      const result = await window.api.server.analyzeText(testText);
+      const deviceId = getDeviceId();
+      const result = await window.api.server.analyzeText(testText, deviceId);
 
       if ('error' in result) {
         setAnalyzeResult(`ERROR: ${result.message}`);

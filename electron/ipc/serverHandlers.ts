@@ -108,7 +108,7 @@ export function registerServerHandlers(): void {
 
   ipcMain.handle(
     SERVER_CHANNELS.ANALYZE_TEXT,
-    async (_event, text: string): Promise<AnalyzeResponse | ErrorResponse> => {
+    async (_event, text: string, userId?: string): Promise<AnalyzeResponse | ErrorResponse> => {
       try {
         if (!text || text.trim().length === 0) {
           return {
@@ -130,7 +130,7 @@ export function registerServerHandlers(): void {
         
         const response = await axios.post<AnalyzeResponse>(
           url,
-          { text },
+          { text, user_id: userId },
           {
             timeout: REQUEST_TIMEOUT,
             headers: { "Content-Type": "application/json" },
