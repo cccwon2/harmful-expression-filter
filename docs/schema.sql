@@ -42,6 +42,16 @@ create policy "Public Read Only" on public.detection_logs
 create policy "Authenticated Admins Update Settings" on public.app_settings
   for update to authenticated using (true);
 
+-- user_feedback 테이블도 RLS 활성화
+alter table public.user_feedback enable row level security;
+
+-- 모든 사용자(익명 포함)가 user_feedback을 조회/작성 가능
+create policy "Public Read Feedback" on public.user_feedback
+  for select using (true);
+
+create policy "Public Insert Feedback" on public.user_feedback
+  for insert with check (true);
+
 -- 4. 인덱스 추가 (검색 성능 향상)
 create index idx_detection_logs_created_at on public.detection_logs(created_at desc);
 create index idx_detection_logs_is_harmful on public.detection_logs(is_harmful);
