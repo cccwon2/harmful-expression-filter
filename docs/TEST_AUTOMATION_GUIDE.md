@@ -99,6 +99,18 @@ npm run build:renderer
 npm test
 ```
 
+이 명령어는 유닛 테스트(블러 강도 + 성능)와 E2E 테스트를 순차적으로 실행합니다.
+
+### 성능 테스트만 실행
+
+```bash
+# 성능 유닛 테스트만 실행
+npm run test:unit -- performance.test.ts
+
+# 또는 Jest 패턴 매칭
+npm run test:unit -- --testPathPattern=performance
+```
+
 이 명령어는 유닛 테스트와 E2E 테스트를 순차적으로 실행합니다.
 
 ### 유닛 테스트만 실행
@@ -163,9 +175,11 @@ npm run test:report
 │   │   ├── task49-blur.spec.ts      # E2E 테스트 (브라우저 시뮬레이션)
 │   │   └── task49-blur-electron.spec.ts  # E2E 테스트 (실제 Electron 앱)
 │   ├── unit/
-│   │   └── blurIntensity.test.ts    # 유닛 테스트
+│   │   ├── blurIntensity.test.ts    # 유닛 테스트 (Task 49)
+│   │   └── performance.test.ts      # 성능 테스트 (Task 48) 🆕
 │   └── helpers/
 │       ├── ocr-simulator.ts          # 테스트 헬퍼
+│       ├── performance-helpers.ts    # 성능 테스트 헬퍼 🆕
 │       └── electron-launcher.ts      # Electron 앱 실행 헬퍼
 └── scripts/
     └── quick-start-test.bat         # 빠른 시작 스크립트
@@ -196,6 +210,40 @@ npm run test:report
 - ✅ 블러 오버레이 경고 아이콘 표시
 - ✅ 블러 오버레이 안내 메시지 표시
 - ✅ GPU 가속 적용
+
+### 성능 최적화 테스트 그룹 (Task 48) 🆕
+
+#### 1. React 렌더링 최적화 테스트 (5개)
+
+- ✅ 메모이제이션 효과 테스트
+- ✅ 상태 변경 시에만 리렌더링 확인
+- ✅ requestAnimationFrame 사용 확인
+- ✅ requestAnimationFrame 성능 측정 (60 FPS 이상)
+- ✅ 불필요한 리렌더링 최소화 확인
+
+#### 2. IPC 통신 최적화 테스트 (4개)
+
+- ✅ 중복 상태 전송 방지 확인
+- ✅ 상태 변경 시에만 전송 확인
+- ✅ IPC 스로틀링 적용 확인
+- ✅ 중복 전송 방지 효과 측정
+
+#### 3. OCR 처리 최적화 테스트 (3개)
+
+- ✅ 적응형 인터벌: 텍스트 변경 시 최소 간격(500ms)으로 리셋
+- ✅ 적응형 인터벌: 텍스트 동일 시 간격 점진적 증가
+- ✅ 간격이 최대 2000ms를 초과하지 않음 확인
+
+#### 4. 메모리 최적화 테스트 (3개)
+
+- ✅ cleanup 함수 호출 시 이벤트 리스너 제거 확인
+- ✅ 컴포넌트 언마운트 시 모든 리스너 정리 확인
+- ✅ 타이머 및 requestAnimationFrame 정리 확인
+
+#### 5. 렌더링 최적화 테스트 (2개)
+
+- ✅ GPU 가속 CSS 속성 적용 확인
+- ✅ GPU 가속 상세 정보 확인
 
 ### E2E 테스트 그룹
 

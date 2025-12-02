@@ -23,12 +23,9 @@
 
 ## 🎯 구현 목표
 
-1. **유닛 테스트 (Jest)**: 15개의 테스트 케이스
-   - 블러 강도 유효성 검증
-   - 블러 강도 설정 저장/로드
-   - IPC 통신 테스트
-   - OCR 시뮬레이션
-   - 유해 표현 감지
+1. **유닛 테스트 (Jest)**: 32개의 테스트 케이스 (15개 + 17개 🆕)
+   - **Task 49 (15개)**: 블러 강도 유효성 검증, IPC 통신 테스트, OCR 시뮬레이션, 유해 표현 감지
+   - **Task 48 (17개)**: React 렌더링 최적화, IPC 통신 최적화, OCR 처리 최적화, 메모리 최적화, 렌더링 최적화 🆕
 
 2. **E2E 테스트 (Playwright)**: 20개의 테스트 케이스
    - **브라우저 시뮬레이션 테스트**: 10개 (`task49-blur.spec.ts`)
@@ -92,9 +89,11 @@
 │   │   ├── task49-blur.spec.ts      # E2E 테스트 (브라우저 시뮬레이션)
 │   │   └── task49-blur-electron.spec.ts  # E2E 테스트 (실제 Electron 앱)
 │   ├── unit/
-│   │   └── blurIntensity.test.ts    # 유닛 테스트
+│   │   ├── blurIntensity.test.ts    # 유닛 테스트 (Task 49)
+│   │   └── performance.test.ts      # 성능 테스트 (Task 48) 🆕
 │   └── helpers/
 │       ├── ocr-simulator.ts          # 테스트 헬퍼
+│       ├── performance-helpers.ts    # 성능 테스트 헬퍼 🆕
 │       └── electron-launcher.ts      # Electron 앱 실행 헬퍼
 └── scripts/
     └── quick-start-test.bat         # 빠른 시작 스크립트
@@ -135,6 +134,12 @@ ls playwright.config.ts jest.config.js
    - `OCRSimulator` 클래스
    - `BlurIntensityTester` 클래스
    - `IPCMockHelper` 클래스
+2. `tests/helpers/performance-helpers.ts` 생성 (Task 48) 🆕
+   - `IPCPerformanceTester` 클래스
+   - `ReactPerformanceTester` 클래스
+   - `OCRPerformanceTester` 클래스
+   - `GPUAccelerationTester` 클래스
+   - `MemoryLeakTester` 클래스
 
 **주요 기능**:
 - OCR 텍스트 추출 시뮬레이션
@@ -153,10 +158,13 @@ npx tsc --noEmit tests/helpers/ocr-simulator.ts
 
 ### Phase 3: 유닛 테스트 작성 (우선순위: 높음)
 
-**목표**: 15개의 유닛 테스트 케이스 구현
+**목표**: 32개의 유닛 테스트 케이스 구현 (15개 + 17개 🆕)
 
 **작업 내용**:
-1. `tests/unit/blurIntensity.test.ts` 생성
+1. `tests/unit/blurIntensity.test.ts` 생성 (Task 49)
+2. `tests/unit/performance.test.ts` 생성 (Task 48 성능 최적화) 🆕
+2. `tests/unit/performance.test.ts` 생성 (Task 48 성능 최적화) 🆕
+3. `tests/helpers/performance-helpers.ts` 생성 (성능 테스트 헬퍼) 🆕
 
 **테스트 그룹**:
 
@@ -181,6 +189,35 @@ npx tsc --noEmit tests/helpers/ocr-simulator.ts
 - ✅ 블러 오버레이 안내 메시지 표시
 - ✅ GPU 가속 적용
 
+#### 3.4 성능 최적화 테스트 (Task 48) (17개) 🆕
+
+**React 렌더링 최적화 테스트 (5개)**
+- ✅ 메모이제이션 효과 테스트
+- ✅ 상태 변경 시에만 리렌더링 확인
+- ✅ requestAnimationFrame 사용 확인
+- ✅ requestAnimationFrame 성능 측정 (60 FPS 이상)
+- ✅ 불필요한 리렌더링 최소화 확인
+
+**IPC 통신 최적화 테스트 (4개)**
+- ✅ 중복 상태 전송 방지 확인
+- ✅ 상태 변경 시에만 전송 확인
+- ✅ IPC 스로틀링 적용 확인
+- ✅ 중복 전송 방지 효과 측정
+
+**OCR 처리 최적화 테스트 (3개)**
+- ✅ 적응형 인터벌: 텍스트 변경 시 최소 간격(500ms)으로 리셋
+- ✅ 적응형 인터벌: 텍스트 동일 시 간격 점진적 증가
+- ✅ 간격이 최대 2000ms를 초과하지 않음 확인
+
+**메모리 최적화 테스트 (3개)**
+- ✅ cleanup 함수 호출 시 이벤트 리스너 제거 확인
+- ✅ 컴포넌트 언마운트 시 모든 리스너 정리 확인
+- ✅ 타이머 및 requestAnimationFrame 정리 확인
+
+**렌더링 최적화 테스트 (2개)**
+- ✅ GPU 가속 CSS 속성 적용 확인
+- ✅ GPU 가속 상세 정보 확인
+
 **검증 방법**:
 ```bash
 npm run test:unit
@@ -188,9 +225,11 @@ npm run test:unit
 
 **예상 출력**:
 ```
-Test Suites: 1 passed, 1 total
-Tests:       15 passed, 15 total
-Time:        2.5s
+Test Suites: 2 passed, 2 total
+Tests:       32 passed, 32 total
+  - blurIntensity.test.ts: 15 passed
+  - performance.test.ts: 17 passed 🆕
+Time:        3.5s
 ```
 
 ---
@@ -574,14 +613,18 @@ npm run test:report
 - [x] `OCRSimulator` 클래스 구현
 - [x] `BlurIntensityTester` 클래스 구현
 - [x] `IPCMockHelper` 클래스 구현
+- [x] `tests/helpers/performance-helpers.ts` 파일 생성 🆕
+- [x] 성능 테스트 헬퍼 클래스 구현 🆕
 - [x] `tests/helpers/electron-launcher.ts` 파일 생성 ✅
 - [x] TypeScript 컴파일 오류 없음
 
 ### Phase 3: 유닛 테스트
 - [x] `tests/unit/blurIntensity.test.ts` 파일 생성
 - [x] 15개 테스트 케이스 구현
+- [x] `tests/unit/performance.test.ts` 파일 생성 🆕
+- [x] 17개 성능 테스트 케이스 구현 🆕
 - [x] `npm run test:unit` 실행 성공
-- [x] 모든 테스트 통과 (15/15) ✅
+- [x] 모든 테스트 통과 (32/32) ✅
 
 ### Phase 4: E2E 테스트
 - [x] `tests/e2e/task49-blur.spec.ts` 파일 생성 (브라우저 시뮬레이션)
