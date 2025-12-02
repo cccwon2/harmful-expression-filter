@@ -34,7 +34,7 @@ export const ModeSelection: React.FC = () => {
       >
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '1rem', marginBottom: '8px', fontWeight: 600 }}>
-            {selectedMode === 'ocr' ? '👁️ OCR 모드' : '🎙️ 음성 모드'} 활성화됨
+            {selectedMode === 'ocr' ? '👁️ 채팅 모드' : '🎙️ 음성 모드'} 활성화됨
           </h2>
           <p style={{ color: '#9ca3af', fontSize: '0.75rem', margin: 0 }}>필터링이 시작되었습니다.</p>
         </div>
