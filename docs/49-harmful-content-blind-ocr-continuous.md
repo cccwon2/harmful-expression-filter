@@ -2,7 +2,7 @@
 
 ## 상태
 
-✅ Phase 1, 2, 3 완료 (테스트 필요)
+✅ Phase 1, 2, 3 완료 (트레이 메뉴 블러 강도 설정 추가 완료, 테스트 필요)
 
 ## 📋 작업 개요
 
@@ -43,6 +43,11 @@
 - 설정 스키마에 `blurIntensity` 추가
 - IPC로 설정 전달 및 동적 적용
 - 사용자 설정에 따라 15px, 25px, 40px 중 선택 가능
+- **트레이 메뉴에 블러 강도 설정 추가** (15px, 25px, 40px 선택 가능)
+- 트레이 메뉴에서 설정 변경 시 즉시 오버레이에 반영
+- "영역 재지정" 메뉴 제거 (기능 중복 제거)
+- **트레이 메뉴에 블러 강도 설정 추가** (15px, 25px, 40px 선택 가능)
+- 트레이 메뉴에서 설정 변경 시 즉시 오버레이에 반영
 
 ---
 
@@ -336,13 +341,13 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 
 ---
 
-### Phase 3: 블러 강도 조정 가능 (우선순위: 낮음)
+### Phase 3: 블러 강도 조정 가능 (우선순위: 낮음) ✅
 
 **목표**: 사용자 설정에서 블러 강도 조정 가능하도록
 
 **구현 위치**: 
 - 설정 저장: `electron/store.ts`
-- UI: 대시보드 설정 화면
+- UI: 트레이 메뉴 (✅ 완료)
 - 적용: `renderer/src/overlay/OverlayApp.tsx`
 
 **구현 완료**:
@@ -350,6 +355,7 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 - ✅ `getBlurIntensity()`, `setBlurIntensity()` 함수 구현
 - ✅ IPC로 설정 전달 (`OVERLAY_STATE_PUSH`에 포함)
 - ✅ 동적 스타일 적용 (렌더러에서 `blurIntensity` 상태로 관리)
+- ✅ **트레이 메뉴에 블러 강도 설정 추가** (15px, 25px, 40px 선택 가능)
 - ⏳ 대시보드에 블러 강도 슬라이더 추가 (향후 구현)
 
 **방법**:
@@ -385,6 +391,11 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 - [x] `getBlurIntensity()`, `setBlurIntensity()` 함수 구현
 - [x] IPC로 설정 전달 (`OVERLAY_STATE_PUSH`에 포함)
 - [x] 동적 스타일 적용 (렌더러에서 `blurIntensity` 상태로 관리)
+- [x] **트레이 메뉴에 블러 강도 설정 추가** (`electron/tray.ts`)
+  - 현재 블러 강도 표시
+  - 서브메뉴로 15px, 25px, 40px 선택 가능
+  - 라디오 버튼으로 현재 선택값 표시
+  - 설정 변경 시 즉시 오버레이에 반영
 - [ ] 대시보드에 블러 강도 슬라이더 추가 (향후 구현)
 
 ---
@@ -500,6 +511,110 @@ const pushOverlayState = (state: OverlayStatePayload) => {
   currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, safeState);
 };
 ```
+
+### 4. 트레이 메뉴에 블러 강도 설정 추가 (✅ 구현 완료)
+
+```typescript
+// electron/tray.ts
+import { getBlurIntensity, setBlurIntensity } from './store';
+import { getOverlayWindow } from './state/editMode';
+
+// 트레이 메뉴 생성 시
+const currentBlurIntensity = getBlurIntensity();
+
+const contextMenu = Menu.buildFromTemplate([
+  // ... 기타 메뉴 항목
+  {
+    type: 'separator',
+  },
+  {
+    label: '--- 블러 강도 설정 (Blur Intensity) ---',
+    enabled: false,
+  },
+  {
+    label: `현재 블러 강도: ${currentBlurIntensity}px`,
+    enabled: false,
+  },
+  {
+    label: '블러 강도 설정',
+    submenu: [
+      {
+        label: '15px (약함)',
+        type: 'radio',
+        checked: currentBlurIntensity === 15,
+        click: () => {
+          setTrayBlurIntensity(15);
+          updateContextMenu();
+        },
+      },
+      {
+        label: '25px (보통)',
+        type: 'radio',
+        checked: currentBlurIntensity === 25,
+        click: () => {
+          setTrayBlurIntensity(25);
+          updateContextMenu();
+        },
+      },
+      {
+        label: '40px (강함)',
+        type: 'radio',
+        checked: currentBlurIntensity === 40,
+        click: () => {
+          setTrayBlurIntensity(40);
+          updateContextMenu();
+        },
+      },
+    ],
+  },
+  // ... 기타 메뉴 항목
+]);
+
+/**
+ * 트레이 메뉴에서 블러 강도 설정 (Task 49)
+ */
+function setTrayBlurIntensity(intensity: number): void {
+  try {
+    // 설정 저장
+    setBlurIntensity(intensity);
+    console.log(`[Tray] Blur intensity set to: ${intensity}px`);
+
+    // 🔥 [Task 49] 오버레이 윈도우에 새로운 블러 강도 전달
+    const currentOverlayWindow = getOverlayWindow();
+    if (currentOverlayWindow && !currentOverlayWindow.isDestroyed()) {
+      const { getROI, getMode } = require('./store');
+      const currentROI = getROI();
+      const currentMode = getMode();
+      
+      try {
+        // 현재 상태를 가져와서 blurIntensity 포함하여 전송
+        const statePayload = {
+          mode: currentMode,
+          blurIntensity: intensity, // 🔥 [Task 49] 새로운 블러 강도
+          ...(currentROI ? { roi: currentROI } : {}),
+        };
+        
+        currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
+        console.log(`[Tray] ✅ 블러 강도 설정 전달: ${intensity}px`);
+      } catch (err: any) {
+        console.warn('[Tray] 블러 강도 설정 전달 실패:', err?.message || err);
+      }
+    }
+  } catch (err) {
+    console.error('[Tray] Failed to set blur intensity:', err);
+  }
+}
+```
+
+**구현 내용**:
+- 트레이 메뉴에 "블러 강도 설정" 섹션 추가
+- 현재 블러 강도 표시 (예: "현재 블러 강도: 40px")
+- 서브메뉴로 3가지 옵션 제공: 15px (약함), 25px (보통), 40px (강함)
+- 라디오 버튼으로 현재 선택된 값 표시
+- 설정 변경 시 즉시 오버레이에 반영 (IPC 전송)
+
+**추가 개선사항**:
+- "영역 재지정" 메뉴 제거 (기능이 "영역 지정"과 동일하여 중복 제거)
 
 ---
 
