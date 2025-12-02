@@ -58,6 +58,7 @@
 45. **[애플리케이션 성능 최적화](./48-performance-optimization.md)** ✅ 완료
 46. **[유해 표현 블라인드 처리 및 OCR 연속 감지](./49-harmful-content-blind-ocr-continuous.md)** ✅ 완료
 47. **[테스트 자동화 구현](./50-test-automation.md)** ✅ 완료 (성능 테스트 포함)
+48. **[PaddleOCR 전환, 대시보드 통합 및 UUID 식별](./51-paddleocr-dashboard-userid-integration.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -223,8 +224,25 @@
 | 애플리케이션 성능 최적화                | ✅ 완료        | 100%   | High     |
 | 유해 표현 블라인드 처리 및 OCR 연속 감지 | ✅ 완료        | 100%   | High     |
 | 테스트 자동화 구현                      | ✅ 완료        | 100%   | High     |
+| PaddleOCR 전환, 대시보드 통합 및 UUID 식별 | ✅ 완료        | 100%   | High     |
 
 ## 최근 변경 사항
+
+### 2025-01-XX: Task 51 - PaddleOCR 전환, 사용자 대시보드 통합 및 UUID 기반 사용자 식별
+
+- **서버 측 PaddleOCR 완전 전환**: Windows SDK OCR에서 서버 측 PaddleOCR로 완전 전환 완료
+  - 모든 OCR 요청을 `/api/ocr` 및 `/api/ocr-and-analyze` 엔드포인트로 전환
+  - Windows SDK OCR 의존성 완전 제거
+- **사용자 대시보드 통합**: 트레이 메뉴에 사용자 대시보드 바로가기 추가
+  - Electron BrowserWindow를 통한 대시보드 창 관리
+  - HTTP Header에 UUID 자동 포함
+  - 별도 세션 파티션으로 대시보드 세션 분리
+- **UUID 기반 사용자 식별 시스템 구축**: 
+  - UUID 영구 저장 로직 개선 (`store.ts` 저장소 시스템 활용)
+  - 앱 재시작 후에도 동일한 UUID 유지
+  - 모든 서버 요청에 `user-id` Header 자동 추가
+  - `detection_logs` 테이블에 `user_id` 정확히 저장
+- **디버깅 기능 강화**: Header 전송/수신 및 DB 저장 과정 로깅 추가
 
 ### 2025-01-XX: 서버 측 PaddleOCR 전환 완료
 

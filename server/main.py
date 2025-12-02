@@ -755,8 +755,34 @@ async def analyze_text(
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
     if classifier:
         # ✅ Header에서 user_id 가져오기 (우선순위: Header > Request Body)
-        user_id_from_header = http_request.headers.get("user_id")
+        # FastAPI/Starlette는 헤더를 소문자로 변환하고 하이픈을 언더스코어로 변환할 수 있음
+        # 모든 가능한 변형 확인
+        all_headers_dict = dict(http_request.headers)
+        all_header_keys = list(all_headers_dict.keys())
+        
+        # 여러 변형으로 시도 (HTTP 표준: 하이픈 사용, Starlette는 소문자로 변환할 수 있음)
+        user_id_from_header = None
+        # 우선순위: user-id > user_id > 다른 변형
+        for key_variant in ["user-id", "user_id", "User-Id", "USER_ID", "x-user-id", "x-user_id"]:
+            if key_variant in all_headers_dict:
+                user_id_from_header = all_headers_dict[key_variant]
+                LOGGER.debug(f"[Analyze] ✅ Header에서 user_id 발견: {key_variant} = {user_id_from_header}")
+                break
+        
+        # 대소문자 구분 없이 검색 (추가 시도)
+        if not user_id_from_header:
+            for key in all_header_keys:
+                if "user" in key.lower() and "id" in key.lower():
+                    user_id_from_header = all_headers_dict[key]
+                    LOGGER.debug(f"[Analyze] ✅ Header에서 user_id 발견 (부분 일치): {key} = {user_id_from_header}")
+                    break
+        
         user_id = user_id_from_header or request.user_id
+        
+        # 디버깅 로그
+        LOGGER.info(f"[Analyze] 🔍 user_id 추출: Header={user_id_from_header}, Request Body={request.user_id}, 최종={user_id}")
+        if not user_id_from_header:
+            LOGGER.warning(f"[Analyze] ⚠️ Header에서 user_id를 찾을 수 없습니다. 사용 가능한 헤더: {all_header_keys}")
         
         model_display = getattr(app.state, "model_type_display", "Unknown")
         # 실제 판단 결과를 저장 (is_harmful_ai 값 사용)
@@ -907,7 +933,33 @@ async def ocr_and_analyze_endpoint(
         # 유해 표현 감지 시 DB에 로그 저장
         if is_harmful and classifier:
             # ✅ Header에서 user_id 가져오기
-            user_id = http_request.headers.get("user_id") if http_request else None
+            # FastAPI/Starlette는 헤더를 소문자로 변환하고 하이픈을 언더스코어로 변환할 수 있음
+            user_id = None
+            if http_request:
+                all_headers_dict = dict(http_request.headers)
+                all_header_keys = list(all_headers_dict.keys())
+                
+                # 여러 변형으로 시도 (HTTP 표준: 하이픈 사용, Starlette는 소문자로 변환할 수 있음)
+                # 우선순위: user-id > user_id > 다른 변형
+                for key_variant in ["user-id", "user_id", "User-Id", "USER_ID", "x-user-id", "x-user_id"]:
+                    if key_variant in all_headers_dict:
+                        user_id = all_headers_dict[key_variant]
+                        LOGGER.debug(f"[OCR+Analyze] ✅ Header에서 user_id 발견: {key_variant} = {user_id}")
+                        break
+                
+                # 대소문자 구분 없이 검색 (추가 시도)
+                if not user_id:
+                    for key in all_header_keys:
+                        if "user" in key.lower() and "id" in key.lower():
+                            user_id = all_headers_dict[key]
+                            LOGGER.debug(f"[OCR+Analyze] ✅ Header에서 user_id 발견 (부분 일치): {key} = {user_id}")
+                            break
+            
+            # 디버깅 로그
+            LOGGER.info(f"[OCR+Analyze] 🔍 user_id 추출: Header={user_id}")
+            if not user_id and http_request:
+                all_header_keys = list(dict(http_request.headers).keys())
+                LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 user_id를 찾을 수 없습니다. 사용 가능한 헤더: {all_header_keys}")
             
             model_display = getattr(app.state, "model_type_display", "Unknown")
             background_tasks.add_task(

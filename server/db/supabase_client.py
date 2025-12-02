@@ -45,15 +45,22 @@ async def save_detection_log(
             "threshold_used": threshold,
             "model_version": model,
             "is_harmful": is_harmful,
-            "user_id": user_id,
+            # user_id가 None이면 저장하지 않음 (NULL 허용)
             # filter_mode는 NULL 가능, 미지정 시 기본값(ocr)이 적용되도록 서버 쿼리에서 처리
             "filter_mode": filter_mode,
         }
+        
+        # user_id가 있으면 추가 (None이면 제외)
+        if user_id:
+            data["user_id"] = user_id
+        
+        LOGGER.info(f"📝 Supabase 로그 저장: user_id={user_id}, text={text[:30]}..., is_harmful={is_harmful}")
+        
         # execute()는 동기 함수지만, 별도 스레드 풀이나 BackgroundTasks 내부에서 실행 시 안전
-        supabase.table("detection_logs").insert(data).execute()
-        # LOGGER.debug(f"📝 Log saved to Supabase: {text[:10]}...")
+        result = supabase.table("detection_logs").insert(data).execute()
+        LOGGER.debug(f"✅ Log saved to Supabase: {text[:10]}...")
     except Exception as e:
-        LOGGER.error(f"❌ Failed to save log to Supabase: {e}")
+        LOGGER.error(f"❌ Failed to save log to Supabase: {e}", exc_info=True)
 
 
 def get_app_setting(key: str, default: str = None) -> str:

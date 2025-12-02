@@ -434,9 +434,10 @@ app.whenReady().then(async () => {
       // ✅ Header에 user_id 추가 (서버에서 detection_logs에 저장하기 위해)
       const { getDeviceId } = require("./utils/deviceId");
       const deviceId = getDeviceId();
+      console.log("[OCR] 📤 Header에 user-id 추가:", deviceId);
       const headers = {
         ...formData.getHeaders(),
-        "user_id": deviceId,
+        "user-id": deviceId,  // HTTP 표준: 하이픈 사용
       };
 
       const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {

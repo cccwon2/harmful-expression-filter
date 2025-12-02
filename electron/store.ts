@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
+import { v4 as uuidv4 } from 'uuid';
 import type { ROI } from './ipc/roi';
 
 export type OverlayMode = 'setup' | 'detect' | 'alert';
@@ -11,6 +12,7 @@ export interface StoreData {
   volumeLevel?: number; // 1~9 (1 = 10%, 9 = 90%), 기본값: 1 (10%)
   threshold?: number; // 0.0 ~ 1.0, 민감도 설정 (threshold)
   blurIntensity?: number; // 15 | 25 | 40 (px), 블러 강도 설정, 기본값: 40
+  deviceId?: string; // 디바이스 UUID (최초 1회 생성 후 영구 저장)
 }
 
 const getStorePath = () => {
@@ -147,4 +149,27 @@ export function setBlurIntensity(intensity: number): void {
   } else {
     console.warn(`[Store] 유효하지 않은 blur intensity: ${intensity} (15, 25, 40만 허용)`);
   }
+}
+
+/**
+ * 디바이스 UUID 가져오기 또는 생성
+ * 최초 1회만 생성하고 파일에 저장하여 재사용
+ * @returns 디바이스 UUID (항상 동일한 값)
+ */
+export function getOrCreateDeviceId(): string {
+  const data = loadData();
+  
+  // 이미 저장된 UUID가 있으면 반환
+  if (data.deviceId && typeof data.deviceId === 'string' && data.deviceId.length > 0) {
+    console.log('[Store] 기존 디바이스 UUID 로드:', data.deviceId);
+    return data.deviceId;
+  }
+  
+  // 없으면 새로 생성하여 저장
+  const newId = uuidv4();
+  data.deviceId = newId;
+  saveData(data);
+  console.log('[Store] ✅ 새로운 디바이스 UUID 생성 및 저장:', newId);
+  
+  return newId;
 }
