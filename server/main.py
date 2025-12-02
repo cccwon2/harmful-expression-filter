@@ -683,7 +683,7 @@ async def analyze_text(
     # 요청 로그
     text_preview = request.text[:50] + "..." if len(request.text) > 50 else request.text
     threshold_log = f", threshold={threshold}" if threshold is not None else ""
-    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s, user_id Header=%s", len(request.text), text_preview, threshold_log, user_id)
+    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s, UUID(Header)=%s", len(request.text), text_preview, threshold_log, user_id)
     
     is_harmful_ai = False
     ai_confidence = 0.0
@@ -755,13 +755,13 @@ async def analyze_text(
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
     LOGGER.info(f"[Analyze] 🔍 로그 저장 조건 확인: classifier={classifier is not None}, is_harmful_ai={is_harmful_ai}")
     if classifier:
-        # ✅ Header에서 user_id 가져오기 (우선순위: Header > Request Body)
-        final_user_id = user_id or request.user_id
+        # ✅ Header에서 UUID 가져오기 (헤더로 통신)
+        uuid_from_header = user_id
         
         # 디버깅 로그
-        LOGGER.info(f"[Analyze] 🔍 user_id 추출: Header={user_id}, Request Body={request.user_id}, 최종={final_user_id}")
-        if not user_id:
-            LOGGER.warning(f"[Analyze] ⚠️ Header에서 user_id를 받지 못했습니다. Request Body의 user_id 사용: {request.user_id}")
+        LOGGER.info(f"[Analyze] 🔍 UUID 추출: UUID(Header)={uuid_from_header}")
+        if not uuid_from_header:
+            LOGGER.warning(f"[Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. DB에는 NULL로 저장됩니다.")
         
         model_display = getattr(app.state, "model_type_display", "Unknown")
         # 실제 판단 결과를 저장 (is_harmful_ai 값 사용)
@@ -772,8 +772,8 @@ async def analyze_text(
             threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
             model=model_display,
             is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
-            # ✅ 일렉트론에서 전달된 device UUID 또는 User ID (Header 우선)
-            user_id=final_user_id,
+            # ✅ 저장 시에만 UUID를 user_id로 저장
+            user_id=uuid_from_header,
             # ✅ 필터 모드(ocr / voice 등) 저장
             filter_mode=request.filter_mode or "ocr",
         )
@@ -834,7 +834,7 @@ async def ocr_endpoint(file: UploadFile = File(...)):
 async def ocr_and_analyze_endpoint(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    user_id: Optional[str] = Header(default=None, alias="user_id"),  # 🔥 Header에서 user_id 명시적으로 받기
+    request: Request,  # 🔥 Request 객체로 헤더에서 UUID 읽기
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0)")
 ):
     """
@@ -860,8 +860,15 @@ async def ocr_and_analyze_endpoint(
         import time
         from services.paddle_ocr_service import get_ocr_service
         
-        # 디버깅: Header 수신 확인
-        LOGGER.info(f"[OCR+Analyze] 📥 요청 수신: user_id Header={user_id}")
+        # 🔥 헤더에서 UUID 추출 (헤더로 통신)
+        uuid_from_header = request.headers.get("user_id") or request.headers.get("user-id")
+        
+        LOGGER.info(f"[OCR+Analyze] 📥 요청 수신: UUID(Header)={uuid_from_header}")
+        
+        # UUID가 없을 때만 헤더 목록 출력
+        if not uuid_from_header:
+            all_headers = dict(request.headers)
+            LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. 헤더 키: {list(all_headers.keys())}")
         
         start_total = time.time()
         
@@ -918,12 +925,12 @@ async def ocr_and_analyze_endpoint(
             # ✅ Header에서 user_id 가져오기 (이미 함수 인자로 받음)
             
             # 디버깅 로그
-            LOGGER.info(f"[OCR+Analyze] 🔍 user_id 추출: Header={user_id}, is_harmful={is_harmful}")
-            if not user_id:
-                LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 user_id를 받지 못했습니다.")
+            LOGGER.info(f"[OCR+Analyze] 🔍 UUID 추출: UUID={uuid_from_header}, is_harmful={is_harmful}")
+            if not uuid_from_header:
+                LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. DB에는 NULL로 저장됩니다.")
             
             model_display = getattr(app.state, "model_type_display", "Unknown")
-            LOGGER.info(f"[OCR+Analyze] 📝 DB 저장 준비: user_id={user_id}, text={combined_text[:30]}..., is_harmful={is_harmful}")
+            LOGGER.info(f"[OCR+Analyze] 📝 DB 저장 준비: UUID={uuid_from_header} → user_id로 저장, text={combined_text[:30]}..., is_harmful={is_harmful}")
             background_tasks.add_task(
                 save_detection_log,
                 text=combined_text,
@@ -932,7 +939,7 @@ async def ocr_and_analyze_endpoint(
                 model=model_display,
                 is_harmful=True,
                 filter_mode="ocr",
-                user_id=user_id,  # ✅ Header에서 가져온 user_id 저장
+                user_id=uuid_from_header,  # ✅ 저장 시에만 UUID를 user_id로 저장
             )
         
         LOGGER.info(

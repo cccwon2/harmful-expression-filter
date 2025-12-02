@@ -431,13 +431,14 @@ app.whenReady().then(async () => {
         contentType: "image/png",
       });
 
-      // ✅ Header에 user_id 추가 (서버에서 detection_logs에 저장하기 위해)
+      // ✅ UUID를 Header에만 추가 (헤더로 통신)
       const { getDeviceId } = require("./utils/deviceId");
       const deviceId = getDeviceId();
-      console.log("[OCR] 📤 Header에 user_id 추가:", deviceId);
+      console.log("[OCR] 📤 Header에 UUID 추가:", deviceId);
+      
       const headers = {
         ...formData.getHeaders(),
-        "user_id": deviceId,
+        "user_id": deviceId,  // UUID를 헤더로 전달
       };
 
       const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {
