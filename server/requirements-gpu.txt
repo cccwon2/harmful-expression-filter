@@ -1,4 +1,10 @@
-# === FastAPI / 서버 ===
+# === Index URLs (패키지 탐색 경로 우선순위 지정) ===
+# PyTorch (CUDA 12.4~13.0 호환)
+--extra-index-url https://download.pytorch.org/whl/cu124
+# PaddlePaddle (CUDA 13.0)
+--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu130/
+
+# === FastAPI / Server ===
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.10.4
@@ -10,20 +16,29 @@ websockets>=13.0
 # === Env ===
 python-dotenv>=1.0.0
 
-# === Hugging Face / 훈련 스택 ===
+# === PyTorch (명시적 버전 지정 권장) ===
+# Transformers가 자동으로 설치하지만, GPU 버전을 확실히 하기 위해 명시합니다.
+# CUDA 13 드라이버는 하위 호환이 되므로 cu124 또는 cu126 버전을 사용하는 것이 안정적일 수 있습니다.
+torch>=2.4.0
+torchvision>=0.19.0
+torchaudio>=2.4.0
+
+# === Hugging Face / LLM ===
 transformers>=4.38.0
 peft>=0.7.0
 accelerate>=0.28.0
-bitsandbytes>=0.46.1   # CUDA 13 드라이버 호환 릴리스 기준
+bitsandbytes>=0.46.1
 
 # === OCR / PaddleOCR (GPU) ===
-# PaddleOCR은 CUDA 13 환경에서 GPU 가속을 지원합니다
-paddleocr==2.7.0.3
+# 서버 환경에서는 GUI 의존성(libGL 등)을 피하기 위해 headless 버전을 권장합니다.
+opencv-python-headless>=4.8.0
+paddlepaddle-gpu==3.2.2
+paddleocr>=2.7.0.3
 Pillow>=10.0.0
-# paddlepaddle-gpu는 특별한 인덱스로 설치 필요:
-# python -m pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+# shapely는 PaddleOCR의 필수 의존성이지만, 가끔 누락되므로 명시하면 좋습니다.
+shapely
 
-# Database
+# === Database ===
 supabase>=2.0.0
 gotrue>=1.0.0
 
