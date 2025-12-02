@@ -711,7 +711,7 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'separator',
       },
       {
-        label: '--- 관리자 대시보드 ---',
+        label: '--- 사용자 대시보드 ---',
         enabled: false,
       },
       {

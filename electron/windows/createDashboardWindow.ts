@@ -1,5 +1,5 @@
 /**
- * 관리자 대시보드 창 생성
+ * 사용자 대시보드 창 생성
  * Header에 UUID를 user_id로 포함
  */
 import { BrowserWindow, session } from 'electron';
@@ -51,7 +51,7 @@ export function openDashboardWindow(): void {
     height: 800,
     show: false,
     backgroundColor: '#ffffff',
-    title: '관리자 대시보드',
+    title: '사용자 대시보드',
     webPreferences: {
       session: dashboardSession,
       contextIsolation: true,
