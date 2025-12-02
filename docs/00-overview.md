@@ -55,7 +55,9 @@
 42. **[Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)** ✅ 완료
 43. **[Supabase 기반 관리자 DB 및 로깅 시스템 구축](./46-supabase-admin-db.md)** 📝 계획 단계
 44. **[메인 대시보드 구축 및 멀티 윈도우 관리](./47-main-dashboard-multi-window.md)** ✅ 완료
-45. **[애플리케이션 성능 최적화](./48-performance-optimization.md)** 🔄 진행 중
+45. **[애플리케이션 성능 최적화](./48-performance-optimization.md)** ✅ 완료
+46. **[유해 표현 블라인드 처리 및 OCR 연속 감지](./49-harmful-content-blind-ocr-continuous.md)** ✅ 완료
+47. **[테스트 자동화 구현](./50-test-automation.md)** ✅ 완료
 
 ## 작업 의존성 그래프
 
@@ -140,6 +142,23 @@
     ├─ 29-onvoice-com-bridge-integration
     ├─ 39-csharp-volume-control
     └─ 42-electron-app-deployment
+46-supabase-admin-db
+    └─ 20-fastapi-setup
+47-main-dashboard-multi-window
+    ├─ 01-electron-setup
+    ├─ 02-system-tray
+    └─ 03-overlay-window
+48-performance-optimization
+    ├─ 47-main-dashboard-multi-window
+    └─ 34-windows-ocr-optimization
+49-harmful-content-blind-ocr-continuous
+    ├─ 47-main-dashboard-multi-window
+    ├─ 48-performance-optimization
+    └─ 16-server-alert-blind
+50-test-automation
+    ├─ 49-harmful-content-blind-ocr-continuous
+    ├─ 48-performance-optimization
+    └─ 47-main-dashboard-multi-window
 46-supabase-admin-db
     ├─ 20-fastapi-setup
     ├─ 21-text-analysis-api
@@ -280,22 +299,24 @@
   - JSON over stdio 통신 프로토콜 사용
   - 포터블 빌드 검증 문서 추가: `docs/PORTABLE_BUILD_VERIFICATION.md`
 - **Task 46: Supabase 기반 관리자 DB 및 로깅 시스템 구축 계획**
-  - PostgreSQL 기반 로그 저장 시스템 설계
-  - Supabase 연동 가이드 작성
-  - 관리자 API 엔드포인트 설계
-  - 설정 원격 관리 기능 제안
+  - PostgreSQL 로그 저장
+  - 설정 원격 관리
+  - 관리자 API
 - **Task 47: 메인 대시보드 구축 및 멀티 윈도우 관리 완료**
-  - 모드 선택 화면 구현 (OCR/음성 선택)
-  - OCR 모드 선택 시 오버레이 윈도우 동적 생성
-  - 음성 모드 선택 시 AudioManager 스트리밍 시작
-  - OCR 성능 최적화 (캡처 간격 800ms, 썸네일 크기 최적화)
-  - 단일 인스턴스 보장 (중복 실행 방지)
-  - 중복 텍스트 필터링 (OCR 및 서버 분석)
-  - 트레이 메뉴 상태 업데이트 개선
-- **Task 48: 애플리케이션 성능 최적화 진행 중**
-  - 마우스 버벅거림 문제 분석 및 해결 방안 수립
-  - React 렌더링 최적화 계획 (메모이제이션, 배치 처리)
-  - IPC 통신 최적화 계획 (메시지 배치, 직렬화)
-  - 이벤트 핸들러 최적화 (디바운싱, 스로틀링)
-  - 마우스 이벤트에 requestAnimationFrame 적용 완료
-  - Ref 기반 상태 관리로 클로저 문제 해결
+  - 모드 선택 화면 (OCR/음성)
+  - 멀티 윈도우 관리 시스템
+  - 성능 최적화
+- **Task 48: 애플리케이션 성능 최적화 완료**
+  - 마우스 버벅거림 해결 (React 렌더링 최적화)
+  - IPC 통신 최적화 (Deep Compare)
+  - GPU 가속 활성화
+- **Task 49: 유해 표현 블라인드 처리 및 OCR 연속 감지 완료**
+  - 블러 강도 설정 (15, 25, 40px)
+  - 트레이 메뉴 블러 강도 변경 기능
+  - setContentProtection 활성화 (스크린샷 방지)
+  - OCR 연속 감지 (블러 표시 중에도 OCR 작동)
+- **Task 50: 테스트 자동화 구현 완료**
+  - Jest 유닛 테스트 (15개 테스트 케이스)
+  - Playwright E2E 테스트 (10개 테스트 케이스)
+  - 테스트 헬퍼 유틸리티
+  - 빠른 시작 스크립트 (Windows)

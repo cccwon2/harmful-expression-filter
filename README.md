@@ -15,7 +15,7 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~47**까지 진행 중입니다 (Task 43, 44, 46, 47 포함):
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~50**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
@@ -38,7 +38,9 @@
 - **Task 45**: Spawn 방식 Bridge 마이그레이션 (electron-edge-js → child_process.spawn, 프로세스 분리 및 안정성 향상)
 - **Task 46**: Supabase 기반 관리자 DB 및 로깅 시스템 구축 (PostgreSQL 로그 저장, 설정 원격 관리, 관리자 API) 📝 계획 단계
 - **Task 47**: 메인 대시보드 구축 및 멀티 윈도우 관리 (모드 선택 화면, OCR/음성 모드 분리, 성능 최적화)
-- **Task 48**: 애플리케이션 성능 최적화 (마우스 버벅거림 해결, React 렌더링 최적화, IPC 통신 최적화) 🔄 진행 중
+- **Task 48**: 애플리케이션 성능 최적화 (마우스 버벅거림 해결, React 렌더링 최적화, IPC 통신 최적화)
+- **Task 49**: 유해 표현 블라인드 처리 및 OCR 연속 감지 (블러 강도 설정, 트레이 메뉴 통합, setContentProtection)
+- **Task 50**: 테스트 자동화 구현 (Jest 유닛 테스트, Playwright E2E 테스트, 자동화 인프라) ✅ 완료
 
 ### 주요 기술 스택
 
@@ -374,7 +376,22 @@ npm run build           # 전체 빌드 + 패키징
 
 # 프로덕션 실행
 npm start
+
+# 테스트
+npm test                    # 전체 테스트 실행 (유닛 + E2E)
+npm run test:unit           # 유닛 테스트만 실행
+npm run test:unit:watch     # 유닛 테스트 Watch 모드
+npm run test:unit:coverage  # 유닛 테스트 커버리지 포함
+npm run test:e2e            # E2E 테스트 실행
+npm run test:e2e:ui         # E2E 테스트 UI 모드
+npm run test:e2e:debug      # E2E 테스트 디버그 모드
+npm run test:report         # 테스트 리포트 확인
 ```
+
+**테스트 관련**:
+
+- 자세한 테스트 가이드는 [docs/TEST_AUTOMATION_GUIDE.md](./docs/TEST_AUTOMATION_GUIDE.md) 참조
+- 빠른 시작: `scripts\quick-start-test.bat` 실행 (Windows)
 
 **배포 관련**:
 
@@ -446,6 +463,16 @@ harmful-expression-filter/
 │   │   └── bad_words.json   # 유해어 목록
 │   ├── tests/               # 테스트 파일
 │   └── venv312/             # Python 3.12 가상환경
+├── tests/                   # 테스트 자동화 (Task 50)
+│   ├── e2e/                 # E2E 테스트 (Playwright)
+│   │   └── task49-blur.spec.ts
+│   ├── unit/                # 유닛 테스트 (Jest)
+│   │   └── blurIntensity.test.ts
+│   ├── helpers/             # 테스트 헬퍼
+│   │   └── ocr-simulator.ts
+│   └── setup.ts             # Jest 전역 setup
+├── playwright.config.ts     # Playwright 설정
+├── jest.config.js           # Jest 설정
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```
 
@@ -480,7 +507,16 @@ harmful-expression-filter/
 - `docs/43-threshold-configuration.md` – Threshold 설정 및 최적화 문서 (Task 43)
 - `docs/44-vercel-admin-dashboard.md` – Vercel 관리자 대시보드 구축 가이드 (Task 44)
 - `docs/45-spawn-bridge-migration.md` – Spawn 방식 마이그레이션 문서 (Task 45)
+- `docs/48-performance-optimization.md` – 애플리케이션 성능 최적화 문서 (Task 48)
+- `docs/49-harmful-content-blind-ocr-continuous.md` – 유해 표현 블라인드 처리 및 OCR 연속 감지 (Task 49)
+- `docs/50-test-automation.md` – 테스트 자동화 구현 문서 (Task 50)
+- `docs/TEST_AUTOMATION_GUIDE.md` – 테스트 자동화 사용 가이드
 - `docs/PORTABLE_BUILD_VERIFICATION.md` – 포터블 빌드 검증 문서
+- `tests/unit/blurIntensity.test.ts` – 블러 강도 설정 유닛 테스트 (Task 50)
+- `tests/e2e/task49-blur.spec.ts` – 블러 강도 및 OCR 연속 감지 E2E 테스트 (Task 50)
+- `tests/helpers/ocr-simulator.ts` – 테스트 헬퍼 유틸리티 (OCR 시뮬레이터, IPC 모킹)
+- `playwright.config.ts` – Playwright E2E 테스트 설정
+- `jest.config.js` – Jest 유닛 테스트 설정
 
 자세한 내용은 [docs/INTERFACES.md](./docs/INTERFACES.md)와 각 Task 문서를 참조하세요.
 
