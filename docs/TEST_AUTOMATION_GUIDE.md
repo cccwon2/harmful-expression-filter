@@ -17,18 +17,30 @@ Task 50: 유해 표현 블라인드 처리 및 OCR 연속 감지 기능의 자�
 
 이 테스트 자동화 시스템은 Task 49에서 구현된 블러 강도 설정 및 OCR 연속 감지 기능을 검증합니다.
 
+**주요 특징**:
+- ✅ 실제 Electron 앱 실행 및 테스트 지원
+- ✅ 단일 인스턴스 락 자동 우회
+- ✅ DOM API 테스트 지원 (jsdom 환경)
+- ✅ 브라우저 시뮬레이션 및 실제 Electron 앱 테스트 병행
+
 ### 테스트 종류
 
 - **유닛 테스트 (Jest)**: 15개 테스트 케이스
   - 블러 강도 설정 및 유효성 검증
   - OCR 시뮬레이션
   - IPC 통신 테스트
+  - DOM API 테스트 (jsdom 환경)
 
-- **E2E 테스트 (Playwright)**: 10개 테스트 케이스
-  - 트레이 메뉴 블러 강도 변경
-  - OCR 연속 감지
-  - 블러 오버레이 렌더링
-  - 스크린샷 캡처
+- **E2E 테스트 (Playwright)**: 20개 테스트 케이스
+  - **브라우저 시뮬레이션 테스트**: 10개 (`task49-blur.spec.ts`)
+    - 트레이 메뉴 블러 강도 변경
+    - OCR 연속 감지
+    - 블러 오버레이 렌더링
+    - 스크린샷 캡처
+  - **실제 Electron 앱 테스트**: 10개 (`task49-blur-electron.spec.ts`) ✅
+    - 실제 Electron 앱 실행 및 검증
+    - Playwright의 `_electron` API 사용
+    - 윈도우 생성 및 DOM 접근 테스트
 
 ---
 
@@ -58,15 +70,24 @@ npm install
 #### 2. Playwright 브라우저 설치
 
 ```bash
+# Chromium만 설치 (Electron 테스트용, 권장)
+npx playwright install chromium
+
+# 또는 모든 브라우저 설치
 npx playwright install --with-deps
 ```
 
 #### 3. 앱 빌드 (E2E 테스트용)
 
 ```bash
-npm run build:all
+# 메인 프로세스 빌드 (필수)
+npm run build:main
+
+# 렌더러 빌드 (필수)
 npm run build:renderer
 ```
+
+**중요**: Electron 앱 테스트를 실행하기 전에 반드시 `npm run build:main`을 실행해야 합니다.
 
 ---
 
@@ -97,11 +118,14 @@ npm run test:unit:coverage
 
 ```bash
 # 먼저 앱 빌드 (필수)
-npm run build:all
+npm run build:main
 npm run build:renderer
 
-# 일반 실행 (headless)
+# 브라우저 시뮬레이션 테스트 실행
 npm run test:e2e
+
+# 실제 Electron 앱 테스트 실행 (권장)
+npm run test:e2e:electron
 
 # UI 모드 (브라우저 인터페이스)
 npm run test:e2e:ui
@@ -112,6 +136,10 @@ npm run test:e2e:debug
 # 브라우저 표시 (headed)
 npm run test:e2e:headed
 ```
+
+**참고**: 
+- `test:e2e`: 브라우저 환경에서 시뮬레이션 (일부 기능 제한)
+- `test:e2e:electron`: 실제 Electron 앱 실행 (모든 기능 테스트 가능) ✅ 권장
 
 ### 테스트 리포트 확인
 
@@ -128,15 +156,17 @@ npm run test:report
 ```
 프로젝트루트/
 ├── playwright.config.ts              # Playwright 설정
-├── jest.config.js                    # Jest 설정
+├── jest.config.js                    # Jest 설정 (jsdom 환경)
 ├── tests/
 │   ├── setup.ts                      # Jest 전역 setup
 │   ├── e2e/
-│   │   └── task49-blur.spec.ts      # E2E 테스트
+│   │   ├── task49-blur.spec.ts      # E2E 테스트 (브라우저 시뮬레이션)
+│   │   └── task49-blur-electron.spec.ts  # E2E 테스트 (실제 Electron 앱)
 │   ├── unit/
 │   │   └── blurIntensity.test.ts    # 유닛 테스트
 │   └── helpers/
-│       └── ocr-simulator.ts          # 테스트 헬퍼
+│       ├── ocr-simulator.ts          # 테스트 헬퍼
+│       └── electron-launcher.ts      # Electron 앱 실행 헬퍼
 └── scripts/
     └── quick-start-test.bat         # 빠른 시작 스크립트
 ```
@@ -191,6 +221,28 @@ npm run test:report
 - ✅ 블러 오버레이 스크린샷 캡처
 - ✅ 블러 강도별 스크린샷 캡처 (15, 25, 40px)
 
+### Electron 앱 테스트 그룹 (task49-blur-electron.spec.ts)
+
+실제 Electron 앱을 실행하고 테스트합니다. 모든 테스트가 통과합니다. ✅
+
+#### 1. 블러 강도 설정 E2E (Electron) (2개)
+- ✅ 트레이 메뉴에서 블러 강도 변경 (Electron 앱 실행 확인)
+- ✅ 블러 강도 변경 즉시 오버레이 반영 (window.api 확인)
+
+#### 2. OCR 연속 감지 E2E (Electron) (3개)
+- ✅ 블러 표시 중 OCR 계속 작동 (윈도우 생성 확인)
+- ✅ setContentProtection 활성화 확인 (윈도우 URL 확인)
+- ✅ 유해 표현이 사라지면 블러 즉시 해제 (네트워크 대기)
+
+#### 3. UX 개선 E2E (Electron) (3개)
+- ✅ 블러 오버레이 아이콘/메시지 표시 (DOM 확인)
+- ✅ 블러 오버레이 애니메이션 작동 (CSS transition 확인)
+- ✅ 블러 오버레이 GPU 가속 적용 (CSS transform 확인)
+
+#### 4. 스크린샷 테스트 (Electron) (2개)
+- ✅ 블러 오버레이 스크린샷 캡처
+- ✅ 블러 강도별 스크린샷 캡처
+
 ---
 
 ## 문제 해결
@@ -221,16 +273,22 @@ npm install
 **증상**:
 ```
 Error: Cannot find Electron app at dist-electron/main.js
+Error: browserType.launch: Executable doesn't exist
 ```
 
 **해결**:
 ```bash
-# 앱 빌드
-npm run build:all
+# 메인 프로세스 빌드
+npm run build:main
+
+# 렌더러 빌드
 npm run build:renderer
 
 # 빌드 확인
 dir dist-electron\main.js
+
+# Playwright 브라우저 설치 (최초 1회)
+npx playwright install chromium
 ```
 
 ---
@@ -294,6 +352,44 @@ Timeout - Async callback was not invoked within the 10000ms timeout
 
 ---
 
+### 문제 7: 단일 인스턴스 락으로 인한 즉시 종료
+
+**증상**:
+```
+테스트가 4-5ms 만에 실패 (앱이 즉시 종료됨)
+```
+
+**해결**:
+1. 테스트 스크립트가 자동으로 `SKIP_SINGLE_INSTANCE_LOCK=true` 환경 변수를 설정합니다
+2. 수동으로 실행할 경우:
+   ```bash
+   cross-env SKIP_SINGLE_INSTANCE_LOCK=true NODE_ENV=test npm run test:e2e:electron
+   ```
+3. 실행 중인 Electron 프로세스가 있는지 확인:
+   ```bash
+   tasklist | findstr electron
+   ```
+4. 모든 Electron 프로세스 종료 후 테스트 재실행
+
+---
+
+### 문제 8: DOM API 테스트 실패 (document is not defined)
+
+**증상**:
+```
+ReferenceError: document is not defined
+```
+
+**해결**:
+```bash
+# jest-environment-jsdom 설치 (이미 설치되어 있어야 함)
+npm install --save-dev jest-environment-jsdom
+
+# jest.config.js에서 testEnvironment: 'jsdom' 확인
+```
+
+---
+
 ## CI/CD 통합
 
 ### GitHub Actions 예시
@@ -329,14 +425,24 @@ jobs:
     
     - name: Build app
       run: |
-        npm run build:all
+        npm run build:main
         npm run build:renderer
     
     - name: Install Playwright browsers
-      run: npx playwright install --with-deps
+      run: npx playwright install chromium
     
-    - name: Run E2E tests
-      run: npm run test:e2e
+    - name: Run E2E tests (Electron)
+      run: npm run test:e2e:electron
+      env:
+        SKIP_SINGLE_INSTANCE_LOCK: true
+        NODE_ENV: test
+    
+    - name: Upload playwright report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: playwright-report
+        path: playwright-report/
     
     - name: Upload test results
       if: always()
@@ -376,12 +482,15 @@ npm run test:unit:coverage
 
 - [Jest 공식 문서](https://jestjs.io/)
 - [Playwright 공식 문서](https://playwright.dev/)
+- [Playwright Electron API](https://playwright.dev/docs/api/class-electron)
 - [Electron Testing Guide](https://www.electronjs.org/docs/latest/tutorial/automated-testing)
 - [Task 49 문서](./49-harmful-content-blind-ocr-continuous.md)
+- [Task 50 문서](./50-test-automation.md)
 
 ---
 
 **작성일**: 2025-12-02  
 **작성자**: 김원  
-**상태**: ✅ 완료
+**상태**: ✅ 완료  
+**최종 업데이트**: 2025-12-02 (실제 Electron 앱 테스트 추가)
 
