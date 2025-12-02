@@ -834,7 +834,7 @@ async def ocr_endpoint(file: UploadFile = File(...)):
 async def ocr_and_analyze_endpoint(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    request: Request,  # 🔥 Request 객체로 헤더에서 UUID 읽기
+    user_id: Optional[str] = Header(default=None, alias="user_id"),  # 🔥 Header에서 UUID 읽기
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0)")
 ):
     """
@@ -861,14 +861,13 @@ async def ocr_and_analyze_endpoint(
         from services.paddle_ocr_service import get_ocr_service
         
         # 🔥 헤더에서 UUID 추출 (헤더로 통신)
-        uuid_from_header = request.headers.get("user_id") or request.headers.get("user-id")
+        uuid_from_header = user_id
         
         LOGGER.info(f"[OCR+Analyze] 📥 요청 수신: UUID(Header)={uuid_from_header}")
         
-        # UUID가 없을 때만 헤더 목록 출력
+        # UUID가 없을 때만 경고 출력
         if not uuid_from_header:
-            all_headers = dict(request.headers)
-            LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. 헤더 키: {list(all_headers.keys())}")
+            LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. DB에는 NULL로 저장됩니다.")
         
         start_total = time.time()
         
