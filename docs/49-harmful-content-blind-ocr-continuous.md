@@ -2,7 +2,7 @@
 
 ## 상태
 
-🔄 진행 중
+✅ Phase 1, 2 완료 (테스트 필요)
 
 ## 📋 작업 개요
 
@@ -29,10 +29,29 @@
 
 ## 🔍 현재 구현 상태
 
-### 현재 블러 오버레이 구현
+### ✅ Phase 1 완료: 윈도우 캡처 제외 설정
+
+```typescript
+// electron/windows/createOverlayWindow.ts
+// 🔥 [Task 49] Windows에서만 오버레이를 화면 캡처에서 제외
+if (process.platform === 'win32') {
+  try {
+    overlayWindow.setContentProtection(true);
+    console.log('[Overlay] ✅ Content protection enabled (OCR will ignore overlay)');
+  } catch (error) {
+    console.warn('[Overlay] ⚠️ Failed to enable content protection:', error);
+  }
+}
+```
+
+**효과**:
+- OCR 캡처 시 오버레이가 무시되어 원본 화면만 캡처됨
+- 사용자는 블러 처리된 화면을 보지만, OCR은 블러 뒤의 원본 텍스트를 계속 읽을 수 있음
+
+### ✅ Phase 2 완료: 개선된 블러 오버레이 구현
 
 ```118:131:renderer/src/overlay/OverlayApp.tsx
-// [Component] 유해 감지 블러 오버레이
+// [Component] 유해 감지 블러 오버레이 (Task 49: UX 개선)
 const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
   return (
     <div
@@ -43,19 +62,24 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
         width: roi.width,
         height: roi.height,
       }}
-    />
+    >
+      <div style={STYLES.blurIcon}>⚠️</div>
+      <div style={STYLES.blurMessage}>
+        유해 표현이 감지되어 가려졌습니다
+      </div>
+    </div>
   );
 });
 ```
 
-**현재 스타일**:
+**개선된 스타일**:
 - `backdrop-filter: blur(40px)` - 강력한 블러 효과
 - `backgroundColor: rgba(0, 0, 0, 0.8)` - 어두운 배경
 - GPU 가속 활성화 (`transform: translateZ(0)`, `will-change`)
-
-**문제점**:
-- 오버레이 윈도우가 화면 캡처에 포함되어 블러된 화면이 OCR에 전달됨
-- 다음 OCR 캡처 시 블러 뒤의 원본 텍스트를 읽을 수 없음
+- **중앙 정렬**: `display: flex`, `alignItems: center`, `justifyContent: center`
+- **아이콘**: ⚠️ 경고 아이콘 추가
+- **안내 메시지**: "유해 표현이 감지되어 가려졌습니다" 텍스트 추가
+- **텍스트 스타일**: 그림자 효과, 중앙 정렬, 가독성 향상
 
 ---
 
@@ -305,16 +329,16 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 
 ### Phase 1: 윈도우 캡처 제외 설정
 
-- [ ] `createOverlayWindow.ts`에 `setContentProtection(true)` 추가
-- [ ] 플랫폼 체크 (Windows에서만 적용)
-- [ ] OCR 캡처 테스트 (오버레이가 제외되는지 확인)
-- [ ] 문서화 및 주석 추가
+- [x] `createOverlayWindow.ts`에 `setContentProtection(true)` 추가
+- [x] 플랫폼 체크 (Windows에서만 적용)
+- [ ] OCR 캡처 테스트 (오버레이가 제외되는지 확인) - 테스트 필요
+- [x] 문서화 및 주석 추가
 
 ### Phase 2: UX 개선
 
-- [ ] 블러 오버레이에 아이콘 추가
-- [ ] 안내 메시지 추가
-- [ ] 스타일 개선 (중앙 정렬, 텍스트 그림자 등)
+- [x] 블러 오버레이에 아이콘 추가
+- [x] 안내 메시지 추가
+- [x] 스타일 개선 (중앙 정렬, 텍스트 그림자 등)
 - [ ] 애니메이션 효과 추가 (선택사항)
 
 ### Phase 3: 블러 강도 조정 (선택사항)

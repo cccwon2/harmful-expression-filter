@@ -61,6 +61,18 @@ export function createOverlayWindow(): BrowserWindow {
   overlayWindow.setIgnoreMouseEvents(true, { forward: true });
   console.log('[Overlay] Click-through enabled by default');
 
+  // 🔥 [Task 49] Windows에서만 오버레이를 화면 캡처에서 제외
+  // 이렇게 하면 OCR 캡처 시 오버레이가 무시되어 원본 화면만 캡처됨
+  // 사용자는 블러 처리된 화면을 보지만, OCR은 블러 뒤의 원본 텍스트를 계속 읽을 수 있음
+  if (process.platform === 'win32') {
+    try {
+      overlayWindow.setContentProtection(true);
+      console.log('[Overlay] ✅ Content protection enabled (OCR will ignore overlay)');
+    } catch (error) {
+      console.warn('[Overlay] ⚠️ Failed to enable content protection:', error);
+    }
+  }
+
   // 오버레이 창이 로드 완료되면 설정 (main.ts에서 did-finish-load 처리하므로 여기서는 alwaysOnTop만 설정)
   overlayWindow.webContents.once('did-finish-load', () => {
     console.log('[Overlay] Overlay window loaded in createOverlayWindow');

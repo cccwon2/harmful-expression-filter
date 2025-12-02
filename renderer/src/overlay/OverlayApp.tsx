@@ -49,6 +49,24 @@ const STYLES = {
     willChange: "transform, opacity" as const,
     backfaceVisibility: "hidden" as const,
     transform: "translateZ(0)",
+    // 🔥 [Task 49] UX 개선: 중앙 정렬을 위한 flex 설정
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "column",
+  },
+  blurIcon: {
+    fontSize: "32px",
+    marginBottom: "12px",
+    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
+  },
+  blurMessage: {
+    color: "white",
+    fontWeight: "bold",
+    textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+    textAlign: "center" as const,
+    fontSize: "14px",
+    padding: "0 16px",
   },
   monitoringBadge: {
     position: "absolute" as const,
@@ -115,7 +133,7 @@ const SelectionBox = React.memo(({ rect }: { rect: { left: number; top: number; 
   );
 });
 
-// [Component] 유해 감지 블러 오버레이
+// [Component] 유해 감지 블러 오버레이 (Task 49: UX 개선)
 const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
   return (
     <div
@@ -126,7 +144,12 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
         width: roi.width,
         height: roi.height,
       }}
-    />
+    >
+      <div style={STYLES.blurIcon}>⚠️</div>
+      <div style={STYLES.blurMessage}>
+        유해 표현이 감지되어 가려졌습니다
+      </div>
+    </div>
   );
 });
 
