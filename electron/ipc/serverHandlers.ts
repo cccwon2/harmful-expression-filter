@@ -134,10 +134,10 @@ export function registerServerHandlers(): void {
         const finalUserId = userId || deviceId;
         const headers = {
           "Content-Type": "application/json",
-          "user-id": finalUserId,  // HTTP 표준: 하이픈 사용 (전달된 userId 우선, 없으면 deviceId 사용)
+          "user_id": finalUserId,  // 전달된 userId 우선, 없으면 deviceId 사용
         };
         
-        console.log("[IPC] 📤 Header에 user-id 추가:", finalUserId);
+        console.log("[IPC] 📤 Header에 user_id 추가:", finalUserId);
 
         const response = await axios.post<AnalyzeResponse>(
           url,
@@ -274,10 +274,10 @@ export function registerServerHandlers(): void {
         // ✅ Header에 user_id 추가 (서버에서 detection_logs에 저장하기 위해)
         const { getDeviceId } = require("../utils/deviceId");
         const deviceId = getDeviceId();
-        console.log("[IPC] 📤 OCR+Analyze 요청 - Header에 user-id 추가:", deviceId);
+        console.log("[IPC] 📤 OCR+Analyze 요청 - Header에 user_id 추가:", deviceId);
         const headers = {
           ...formData.getHeaders(),
-          "user-id": deviceId,  // HTTP 표준: 하이픈 사용
+          "user_id": deviceId,
         };
 
         const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {

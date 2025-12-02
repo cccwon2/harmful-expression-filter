@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks, File, UploadFile, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks, File, UploadFile, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -677,13 +677,13 @@ async def update_threshold(request: ThresholdUpdateRequest):
 async def analyze_text(
     request: AnalyzeRequest,
     background_tasks: BackgroundTasks,  # [Task 46] BackgroundTasks 주입
-    http_request: Request,  # Header에서 user_id 가져오기 위해
+    user_id: Optional[str] = Header(default=None, alias="user_id"),  # 🔥 Header에서 user_id 명시적으로 받기
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0). If not provided, uses server's default threshold.")
 ):
     # 요청 로그
     text_preview = request.text[:50] + "..." if len(request.text) > 50 else request.text
     threshold_log = f", threshold={threshold}" if threshold is not None else ""
-    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s", len(request.text), text_preview, threshold_log)
+    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s, user_id Header=%s", len(request.text), text_preview, threshold_log, user_id)
     
     is_harmful_ai = False
     ai_confidence = 0.0
@@ -755,34 +755,12 @@ async def analyze_text(
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
     if classifier:
         # ✅ Header에서 user_id 가져오기 (우선순위: Header > Request Body)
-        # FastAPI/Starlette는 헤더를 소문자로 변환하고 하이픈을 언더스코어로 변환할 수 있음
-        # 모든 가능한 변형 확인
-        all_headers_dict = dict(http_request.headers)
-        all_header_keys = list(all_headers_dict.keys())
-        
-        # 여러 변형으로 시도 (HTTP 표준: 하이픈 사용, Starlette는 소문자로 변환할 수 있음)
-        user_id_from_header = None
-        # 우선순위: user-id > user_id > 다른 변형
-        for key_variant in ["user-id", "user_id", "User-Id", "USER_ID", "x-user-id", "x-user_id"]:
-            if key_variant in all_headers_dict:
-                user_id_from_header = all_headers_dict[key_variant]
-                LOGGER.debug(f"[Analyze] ✅ Header에서 user_id 발견: {key_variant} = {user_id_from_header}")
-                break
-        
-        # 대소문자 구분 없이 검색 (추가 시도)
-        if not user_id_from_header:
-            for key in all_header_keys:
-                if "user" in key.lower() and "id" in key.lower():
-                    user_id_from_header = all_headers_dict[key]
-                    LOGGER.debug(f"[Analyze] ✅ Header에서 user_id 발견 (부분 일치): {key} = {user_id_from_header}")
-                    break
-        
-        user_id = user_id_from_header or request.user_id
+        final_user_id = user_id or request.user_id
         
         # 디버깅 로그
-        LOGGER.info(f"[Analyze] 🔍 user_id 추출: Header={user_id_from_header}, Request Body={request.user_id}, 최종={user_id}")
-        if not user_id_from_header:
-            LOGGER.warning(f"[Analyze] ⚠️ Header에서 user_id를 찾을 수 없습니다. 사용 가능한 헤더: {all_header_keys}")
+        LOGGER.info(f"[Analyze] 🔍 user_id 추출: Header={user_id}, Request Body={request.user_id}, 최종={final_user_id}")
+        if not user_id:
+            LOGGER.warning(f"[Analyze] ⚠️ Header에서 user_id를 받지 못했습니다. Request Body의 user_id 사용: {request.user_id}")
         
         model_display = getattr(app.state, "model_type_display", "Unknown")
         # 실제 판단 결과를 저장 (is_harmful_ai 값 사용)
@@ -794,7 +772,7 @@ async def analyze_text(
             model=model_display,
             is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
             # ✅ 일렉트론에서 전달된 device UUID 또는 User ID (Header 우선)
-            user_id=user_id,
+            user_id=final_user_id,
             # ✅ 필터 모드(ocr / voice 등) 저장
             filter_mode=request.filter_mode or "ocr",
         )
@@ -855,7 +833,7 @@ async def ocr_endpoint(file: UploadFile = File(...)):
 async def ocr_and_analyze_endpoint(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    http_request: Request,  # Header에서 user_id 가져오기 위해
+    user_id: Optional[str] = Header(default=None, alias="user_id"),  # 🔥 Header에서 user_id 명시적으로 받기
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0)")
 ):
     """
@@ -880,6 +858,9 @@ async def ocr_and_analyze_endpoint(
     try:
         import time
         from services.paddle_ocr_service import get_ocr_service
+        
+        # 디버깅: Header 수신 확인
+        LOGGER.info(f"[OCR+Analyze] 📥 요청 수신: user_id Header={user_id}")
         
         start_total = time.time()
         
@@ -932,36 +913,15 @@ async def ocr_and_analyze_endpoint(
         
         # 유해 표현 감지 시 DB에 로그 저장
         if is_harmful and classifier:
-            # ✅ Header에서 user_id 가져오기
-            # FastAPI/Starlette는 헤더를 소문자로 변환하고 하이픈을 언더스코어로 변환할 수 있음
-            user_id = None
-            if http_request:
-                all_headers_dict = dict(http_request.headers)
-                all_header_keys = list(all_headers_dict.keys())
-                
-                # 여러 변형으로 시도 (HTTP 표준: 하이픈 사용, Starlette는 소문자로 변환할 수 있음)
-                # 우선순위: user-id > user_id > 다른 변형
-                for key_variant in ["user-id", "user_id", "User-Id", "USER_ID", "x-user-id", "x-user_id"]:
-                    if key_variant in all_headers_dict:
-                        user_id = all_headers_dict[key_variant]
-                        LOGGER.debug(f"[OCR+Analyze] ✅ Header에서 user_id 발견: {key_variant} = {user_id}")
-                        break
-                
-                # 대소문자 구분 없이 검색 (추가 시도)
-                if not user_id:
-                    for key in all_header_keys:
-                        if "user" in key.lower() and "id" in key.lower():
-                            user_id = all_headers_dict[key]
-                            LOGGER.debug(f"[OCR+Analyze] ✅ Header에서 user_id 발견 (부분 일치): {key} = {user_id}")
-                            break
+            # ✅ Header에서 user_id 가져오기 (이미 함수 인자로 받음)
             
             # 디버깅 로그
-            LOGGER.info(f"[OCR+Analyze] 🔍 user_id 추출: Header={user_id}")
-            if not user_id and http_request:
-                all_header_keys = list(dict(http_request.headers).keys())
-                LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 user_id를 찾을 수 없습니다. 사용 가능한 헤더: {all_header_keys}")
+            LOGGER.info(f"[OCR+Analyze] 🔍 user_id 추출: Header={user_id}, is_harmful={is_harmful}")
+            if not user_id:
+                LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 user_id를 받지 못했습니다.")
             
             model_display = getattr(app.state, "model_type_display", "Unknown")
+            LOGGER.info(f"[OCR+Analyze] 📝 DB 저장 준비: user_id={user_id}, text={combined_text[:30]}..., is_harmful={is_harmful}")
             background_tasks.add_task(
                 save_detection_log,
                 text=combined_text,
