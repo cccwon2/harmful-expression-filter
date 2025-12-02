@@ -753,6 +753,7 @@ async def analyze_text(
     # [Task 46] 유해 표현 감지 시 또는 모든 요청에 대해 로그 저장
     # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
+    LOGGER.info(f"[Analyze] 🔍 로그 저장 조건 확인: classifier={classifier is not None}, is_harmful_ai={is_harmful_ai}")
     if classifier:
         # ✅ Header에서 user_id 가져오기 (우선순위: Header > Request Body)
         final_user_id = user_id or request.user_id
@@ -912,6 +913,7 @@ async def ocr_and_analyze_endpoint(
         total_time = time.time() - start_total
         
         # 유해 표현 감지 시 DB에 로그 저장
+        LOGGER.info(f"[OCR+Analyze] 🔍 로그 저장 조건 확인: is_harmful={is_harmful}, classifier={classifier is not None}")
         if is_harmful and classifier:
             # ✅ Header에서 user_id 가져오기 (이미 함수 인자로 받음)
             
