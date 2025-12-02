@@ -129,7 +129,10 @@ type OverlayStatePayload = {
 };
 
 // 🔒 단일 인스턴스만 실행되도록 보장
-const gotTheLock = app.requestSingleInstanceLock();
+// 테스트 환경에서는 단일 인스턴스 락을 우회
+const skipSingleInstanceLock = process.env.SKIP_SINGLE_INSTANCE_LOCK === 'true' || process.env.NODE_ENV === 'test';
+
+const gotTheLock = skipSingleInstanceLock || app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   // 이미 다른 인스턴스가 실행 중이면 종료

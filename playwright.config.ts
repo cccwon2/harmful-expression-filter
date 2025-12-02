@@ -7,7 +7,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   
   reporter: [
-    ['html', { outputFolder: 'test-results/html' }],
+    ['html', { outputFolder: 'playwright-report' }],
     ['json', { outputFile: 'test-results/results.json' }],
     ['list']
   ],
@@ -23,7 +23,7 @@ export default defineConfig({
       name: 'electron',
       use: {
         ...devices['Desktop Chrome'],
-        viewport: null,
+        viewport: { width: 1920, height: 1080 },
       },
     },
   ],
