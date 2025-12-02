@@ -315,11 +315,14 @@ export class GPUAccelerationTester {
     }
 
     const style = window.getComputedStyle(element);
+    // jsdom 환경에서는 getComputedStyle로 일부 속성을 가져올 수 없을 수 있음
+    // 인라인 스타일에서 먼저 확인하고, 없으면 computed style 사용
+    const backfaceVisibility = element.style.backfaceVisibility || style.backfaceVisibility || 'visible';
     
     return {
-      willChange: style.willChange,
-      transform: style.transform,
-      backfaceVisibility: style.backfaceVisibility,
+      willChange: style.willChange || element.style.willChange || 'auto',
+      transform: style.transform || element.style.transform || 'none',
+      backfaceVisibility,
       hasAcceleration: this.hasGPUAcceleration(element),
     };
   }
