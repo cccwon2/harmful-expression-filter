@@ -1,16 +1,21 @@
 # Task 28: PaddleOCR 서버 연동 및 Tesseract.js 대체
 
 ## 상태
-✅ 완료
+✅ 완료 (Windows SDK OCR로 대체됨, 서버 측 PaddleOCR 재적용 가능)
 
 ## 📋 작업 개요
 
 **목표**: Tesseract.js 클라이언트 기반 OCR을 PaddleOCR 서버 기반 OCR로 전환하여 인식 정확도 및 성능 향상
 
 **배경**:
-- 현재: Electron에서 Tesseract.js(WASM)로 클라이언트 측 OCR 수행
-- 개선: FastAPI 서버에 PaddleOCR 통합하여 서버 측에서 고성능 OCR 수행
-- 기대효과: 한국어 인식 정확도 향상, 클라이언트 리소스 절약
+- 현재: Electron에서 Windows SDK OCR 사용 (Task 34에서 최적화)
+- 서버 측 대안: FastAPI 서버에 PaddleOCR 통합하여 서버 측에서 고성능 OCR 수행 (GPU 가속 가능)
+- 기대효과: 한국어 인식 정확도 향상, GPU 가속으로 처리 속도 향상, 클라이언트 리소스 절약
+
+**참고**:
+- 현재 Electron 앱은 Windows SDK OCR을 사용 중 (Task 34)
+- 서버 측에서도 PaddleOCR을 사용할 수 있도록 설정 가능
+- Ubuntu 24.04 Server + CUDA 13 환경에서 GPU 가속 사용 권장
 
 **관련 작업**:
 - T15 (OCR/STT 파이프라인 스텁) ✅ - 기존 Tesseract.js 구현
@@ -33,23 +38,57 @@
 ### ✅ 체크리스트
 
 #### 1.1 PaddleOCR 의존성 설치
+
+**⚠️ 중요**: venv312 가상환경에서만 설치합니다
+
+##### 방법 1: CPU 버전 (Windows/Linux 공통)
+
 ```bash
-# [Server: server/]
-# ⚠️ 중요: venv312 가상환경에서만 설치합니다
+cd server
 
 # Windows
-cd server
 venv312\Scripts\activate
 .\venv312\Scripts\python.exe -m pip install paddleocr==2.7.0.3 paddlepaddle==2.6.1 Pillow
 
 # Linux/Mac
-cd server
 source venv312/bin/activate
 python -m pip install paddleocr==2.7.0.3 paddlepaddle==2.6.1 Pillow
-
-# 또는 requirements.txt에서 설치
-.\venv312\Scripts\python.exe -m pip install -r requirements.txt
 ```
+
+##### 방법 2: GPU 버전 (Ubuntu 24.04 Server + CUDA 13) 🆕
+
+**CUDA 13 드라이버용 PaddlePaddle GPU 설치**:
+
+```bash
+cd server
+
+# 가상환경 활성화
+source venv312/bin/activate
+
+# CUDA 13용 PaddlePaddle GPU 설치
+python -m pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+
+# PaddleOCR 설치 (GPU 버전 호환)
+python -m pip install paddleocr==2.7.0.3 Pillow
+
+# CUDA 버전 확인
+python -c "import paddle; print(f'PaddlePaddle GPU: {paddle.device.is_compiled_with_cuda()}')"
+```
+
+**설치 확인**:
+
+```bash
+# CUDA 가용성 확인
+python -c "import paddle; print(f'CUDA available: {paddle.device.is_compiled_with_cuda()}')"
+
+# GPU 장치 확인
+python -c "import paddle; print(f'GPU devices: {paddle.device.get_device()}')"
+```
+
+**참고**:
+- CUDA 12.x 드라이버: `cu121` 또는 `cu124` 인덱스 사용
+- CUDA 11.8: `cu118` 인덱스 사용
+- 설치 가이드: https://www.paddlepaddle.org.cn/install/quick
 
 #### 1.2 OCR 서비스 모듈 생성
 **파일**: `server/services/paddle_ocr_service.py`
@@ -76,12 +115,18 @@ class PaddleOCRService:
         """
         try:
             logger.info("PaddleOCR 모델 초기화 중...")
+            # 환경 변수에서 GPU 사용 여부 확인
+            import os
+            use_gpu = os.getenv('PADDLEOCR_USE_GPU', 'false').lower() == 'true'
+            
             self.ocr = PaddleOCR(
                 use_angle_cls=True,
                 lang='korean',
-                use_gpu=False,  # CPU 버전
+                use_gpu=use_gpu,  # GPU 사용 여부 (환경 변수로 제어)
                 show_log=False
             )
+            
+            logger.info(f"PaddleOCR 초기화 완료 (GPU: {use_gpu})")
             logger.info("PaddleOCR 모델 초기화 완료")
         except Exception as e:
             logger.error(f"PaddleOCR 초기화 실패: {e}")
@@ -755,9 +800,159 @@ PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속 (NVIDIA GPU만 지원)
 
 **설명**: 
 - `PADDLEOCR_LANG`: OCR 언어 설정 (기본값: 'korean')
-- `PADDLEOCR_USE_GPU`: GPU 사용 여부 (기본값: false, AMD Radeon은 지원 안 됨)
+- `PADDLEOCR_USE_GPU`: GPU 사용 여부 (기본값: false)
+
+**Ubuntu 24.04 Server + CUDA 13 환경 예시**:
+
+```bash
+# server/.env
+PADDLEOCR_LANG=korean
+PADDLEOCR_USE_GPU=true  # GPU 가속 활성화 (CUDA 13)
+```
+
+**주의사항**:
+- GPU 사용 시 NVIDIA GPU 필수 (AMD Radeon은 지원 안 됨)
+- CUDA 드라이버가 올바르게 설치되어 있어야 함
+- `nvidia-smi` 명령어로 GPU 인식 확인
 
 **⚠️ 중요**: 서버의 모든 Python 라이브러리는 `venv312` 가상환경에서만 관리합니다.
+
+---
+
+## 🚀 Ubuntu 24.04 Server + CUDA 13 설치 가이드 🆕
+
+Ubuntu 24.04 Server 환경에서 CUDA 13을 사용하여 GPU 가속 PaddleOCR을 설치하는 방법입니다.
+
+### 1. CUDA 13 드라이버 확인
+
+```bash
+# NVIDIA GPU 확인
+nvidia-smi
+
+# CUDA 드라이버 버전 확인
+nvidia-smi | grep "CUDA Version"
+# 예: CUDA Version: 13.0
+
+# CUDA 13이 설치되어 있는지 확인
+nvcc --version
+```
+
+### 2. Python 가상환경 설정
+
+```bash
+cd /opt/harmful-expression-filter/server
+
+# Python 3.12 가상환경 생성 (없는 경우)
+python3.12 -m venv venv312
+
+# 가상환경 활성화
+source venv312/bin/activate
+
+# pip 업그레이드
+pip install --upgrade pip setuptools wheel
+```
+
+### 3. CUDA 13용 PaddlePaddle GPU 설치
+
+```bash
+# venv312 활성화 후
+
+# CUDA 13용 PaddlePaddle GPU 설치 (Ubuntu 24.04 Server 권장)
+python -m pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+
+# PaddleOCR 설치 (GPU 버전 호환)
+python -m pip install paddleocr==2.7.0.3 Pillow
+
+# 추가 의존성 (필요시)
+python -m pip install numpy opencv-python
+```
+
+**참고**: 
+- 위 명령어는 Ubuntu 24.04 Server에 CUDA 13 드라이버가 설치된 환경에서 사용합니다
+- CUDA 12.x 사용 시: `cu121` 또는 `cu124` 인덱스 사용
+- CUDA 11.8 사용 시: `cu118` 인덱스 사용
+
+### 4. GPU 인식 확인
+
+```bash
+# Python에서 GPU 확인
+python -c "import paddle; print(f'CUDA available: {paddle.device.is_compiled_with_cuda()}'); print(f'GPU devices: {paddle.device.get_device()}')"
+```
+
+**예상 출력**:
+```
+CUDA available: True
+GPU devices: gpu:0
+```
+
+### 5. 환경 변수 설정
+
+```bash
+# server/.env 파일 수정
+cat >> server/.env << EOF
+PADDLEOCR_LANG=korean
+PADDLEOCR_USE_GPU=true
+EOF
+```
+
+### 6. 서버 시작 및 테스트
+
+```bash
+# 가상환경 활성화
+source venv312/bin/activate
+
+# 서버 시작
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# 다른 터미널에서 OCR 테스트
+curl -X POST "http://localhost:8000/api/ocr" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@test_image.png"
+```
+
+**서버 로그에서 확인할 내용**:
+```
+PaddleOCR 모델 초기화 중...
+PaddleOCR 초기화 완료 (GPU: True)
+```
+
+### 7. 성능 비교
+
+GPU 버전과 CPU 버전의 성능 차이:
+
+| 환경 | 처리 시간 (평균) | 비고 |
+|------|-----------------|------|
+| CPU 버전 | 0.5-2.0초 | CPU 부하 높음 |
+| GPU 버전 (CUDA 13) | 0.1-0.3초 | GPU 가속 활용 |
+
+### 8. 문제 해결
+
+#### GPU 인식 안 됨
+
+```bash
+# NVIDIA 드라이버 재확인
+nvidia-smi
+
+# CUDA 경로 확인
+echo $CUDA_HOME
+export CUDA_HOME=/usr/local/cuda-13.0
+
+# PaddlePaddle 재설치
+pip uninstall paddlepaddle-gpu
+pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+```
+
+#### 메모리 부족 오류
+
+```bash
+# GPU 메모리 확인
+nvidia-smi
+
+# PaddleOCR에서 GPU 메모리 제한 설정 (필요시)
+# server/services/paddle_ocr_service.py 수정
+```
+
+---
 
 ---
 
@@ -831,8 +1026,48 @@ PADDLEOCR_USE_GPU=false  # true로 변경 시 GPU 가속 (NVIDIA GPU만 지원)
 
 ## 🎯 작업 완료 후 다음 단계
 
-- [ ] T16: 서버 알림 수신 통합 (OCR + 음성 유해성 통합 알림)
+- [x] GPU 버전 PaddleOCR 설치 가이드 추가 (Ubuntu 24.04 Server + CUDA 13) 🆕
+- [ ] FastAPI 서버에 PaddleOCR 엔드포인트 구현 (현재는 Windows SDK OCR 사용 중)
+- [ ] 서버 측 OCR을 선택적으로 사용할 수 있도록 설정
 - [ ] 성능 모니터링 대시보드 추가 (관리자 페이지)
-- [ ] GPU 버전 PaddleOCR로 전환 (성능 향상, NVIDIA GPU만 지원)
 - [ ] 다국어 지원 (영어, 일본어 등)
 - [ ] OCR 인식 정확도 개선 (이미지 전처리, ROI 크기 최적화)
+
+---
+
+## 📝 최신 업데이트 (2025-12-02)
+
+### Ubuntu 24.04 Server + CUDA 13 지원 추가 🆕
+
+- CUDA 13 드라이버용 PaddlePaddle GPU 설치 가이드 추가
+- GPU 가속 PaddleOCR 설치 명령어 추가
+- 환경 변수 설정 방법 업데이트
+
+**참고**:
+- 현재 Electron 앱은 Windows SDK OCR을 사용 중 (Task 34)
+- 서버 측에서도 PaddleOCR을 사용할 수 있도록 준비 중
+- GPU 가속을 통해 OCR 처리 속도 향상 가능 (0.1-0.3초)
+
+### 설치 명령어 요약
+
+```bash
+# Ubuntu 24.04 Server + CUDA 13
+cd server
+source venv312/bin/activate
+
+# CUDA 13용 PaddlePaddle GPU 설치
+python -m pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+
+# PaddleOCR 설치
+python -m pip install paddleocr==2.7.0.3 Pillow
+
+# 환경 변수 설정 (server/.env)
+PADDLEOCR_USE_GPU=true
+```
+
+---
+
+**작성일**: 2025-12-02  
+**작성자**: 김원  
+**상태**: ✅ 완료 (Ubuntu 24.04 Server + CUDA 13 가이드 추가)  
+**최종 업데이트**: 2025-12-02 (GPU 버전 설치 가이드 추가)

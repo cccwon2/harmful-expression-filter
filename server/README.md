@@ -102,6 +102,20 @@ MODEL_PATH=models/your-custom-model
 - C# COM Bridge (`dotnet/OnVoiceComBridge/Startup.cs`)를 통해 Windows.Media.Ocr API 사용
 - 서버의 `/api/ocr` 엔드포인트는 현재 사용되지 않음 (하위 호환성을 위해 유지)
 
+**서버 측 PaddleOCR 사용 (선택사항)**:
+
+서버 측에서도 PaddleOCR을 사용할 수 있습니다 (Ubuntu 24.04 Server + CUDA 13 권장):
+
+```bash
+# CUDA 13용 PaddlePaddle GPU 설치
+python -m pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+
+# PaddleOCR 설치
+python -m pip install paddleocr==2.7.0.3 Pillow
+```
+
+자세한 내용은 [docs/28-paddle-ocr-integration.md](../docs/28-paddle-ocr-integration.md) 참조
+
 ## API 문서
 
 서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다:

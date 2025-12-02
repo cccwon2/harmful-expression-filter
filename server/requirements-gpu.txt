@@ -16,6 +16,13 @@ peft>=0.7.0
 accelerate>=0.28.0
 bitsandbytes>=0.46.1   # CUDA 13 드라이버 호환 릴리스 기준
 
+# === OCR / PaddleOCR (GPU) ===
+# PaddleOCR은 CUDA 13 환경에서 GPU 가속을 지원합니다
+paddleocr==2.7.0.3
+Pillow>=10.0.0
+# paddlepaddle-gpu는 특별한 인덱스로 설치 필요:
+# python -m pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+
 # Database
 supabase>=2.0.0
 gotrue>=1.0.0
