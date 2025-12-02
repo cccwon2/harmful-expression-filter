@@ -84,8 +84,7 @@
 │   └── helpers/
 │       └── ocr-simulator.ts          # 테스트 헬퍼
 └── scripts/
-    ├── quick-start-test.bat         # Windows 빠른 시작
-    └── quick-start-test.sh          # Linux/Mac 빠른 시작
+    └── quick-start-test.bat         # 빠른 시작 스크립트
 ```
 
 ---
@@ -233,8 +232,7 @@ Running 10 tests using 1 worker
 **목표**: 한 번의 실행으로 테스트 환경 구축
 
 **작업 내용**:
-1. `scripts/quick-start-test.bat` 생성 (Windows)
-2. `scripts/quick-start-test.sh` 생성 (Linux/Mac)
+1. `scripts/quick-start-test.bat` 생성
 
 **스크립트 기능**:
 - 필요한 패키지 자동 설치
@@ -246,12 +244,7 @@ Running 10 tests using 1 worker
 
 **검증 방법**:
 ```bash
-# Windows
-quick-start-test.bat
-
-# Linux/Mac
-chmod +x scripts/quick-start-test.sh
-./scripts/quick-start-test.sh
+scripts\quick-start-test.bat
 ```
 
 ---
@@ -554,9 +547,7 @@ npm run test:report
 - [ ] 모든 테스트 통과 (10/10)
 
 ### Phase 5: 빠른 시작 스크립트
-- [ ] `scripts/quick-start-test.bat` 파일 생성 (Windows)
-- [ ] `scripts/quick-start-test.sh` 파일 생성 (Linux/Mac)
-- [ ] 스크립트 실행 권한 부여
+- [ ] `scripts/quick-start-test.bat` 파일 생성
 - [ ] 스크립트 정상 실행 확인
 
 ### Phase 6: 문서
@@ -674,8 +665,7 @@ npx playwright install
 ### 3. Windows 환경
 
 - E2E 테스트의 `setContentProtection` 관련 테스트는 Windows에서만 동작
-- macOS/Linux에서는 해당 테스트가 스킵될 수 있음
-- 빠른 시작 스크립트는 OS별로 다른 파일 사용 필요
+- Windows 10 이상이 필요합니다
 
 ### 4. 테스트 실패 시 디버깅
 
@@ -836,7 +826,6 @@ jobs:
 
 3. **추가 E2E 시나리오**
    - 대시보드 블러 강도 슬라이더 (Task 49 향후 구현)
-   - macOS/Linux 환경 테스트
 
 4. **CI/CD 통합**
    - GitHub Actions 설정

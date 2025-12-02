@@ -43,17 +43,8 @@ Task 50: 유해 표현 블라인드 처리 및 OCR 연속 감지 기능의 자�
 
 ### 빠른 설치 (권장)
 
-#### Windows
-
 ```bash
 scripts\quick-start-test.bat
-```
-
-#### Linux/Mac
-
-```bash
-chmod +x scripts/quick-start-test.sh
-./scripts/quick-start-test.sh
 ```
 
 ### 수동 설치
@@ -147,8 +138,7 @@ npm run test:report
 │   └── helpers/
 │       └── ocr-simulator.ts          # 테스트 헬퍼
 └── scripts/
-    ├── quick-start-test.bat         # Windows 빠른 시작
-    └── quick-start-test.sh          # Linux/Mac 빠른 시작
+    └── quick-start-test.bat         # 빠른 시작 스크립트
 ```
 
 ### 유닛 테스트 그룹
@@ -219,7 +209,8 @@ npm ERR! ERESOLVE unable to resolve dependency tree
 npm cache clean --force
 
 # node_modules 삭제 후 재설치
-rm -rf node_modules package-lock.json  # Windows: rmdir /s /q node_modules
+rmdir /s /q node_modules
+del package-lock.json
 npm install
 ```
 
@@ -239,7 +230,7 @@ npm run build:all
 npm run build:renderer
 
 # 빌드 확인
-ls dist-electron/main.js  # Windows: dir dist-electron\main.js
+dir dist-electron\main.js
 ```
 
 ---
@@ -273,9 +264,6 @@ Error: Browser download failed
 ```bash
 # 브라우저만 재설치
 npx playwright install chromium
-
-# 또는 시스템 의존성 설치 (Linux)
-npx playwright install-deps
 ```
 
 ---
@@ -363,31 +351,6 @@ jobs:
       with:
         name: coverage
         path: coverage/
-```
-
-### GitLab CI 예시
-
-`.gitlab-ci.yml`:
-
-```yaml
-test:
-  stage: test
-  image: node:18
-  before_script:
-    - npm ci
-    - npx playwright install --with-deps
-  script:
-    - npm run test:unit:coverage
-    - npm run build:all
-    - npm run build:renderer
-    - npm run test:e2e
-  artifacts:
-    when: always
-    paths:
-      - test-results/
-      - coverage/
-    reports:
-      junit: test-results/results.xml
 ```
 
 ---
