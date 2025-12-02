@@ -125,6 +125,7 @@ type OverlayStatePayload = {
   mode: OverlayMode;
   roi?: ROI;
   harmful?: boolean;
+  blurIntensity?: number; // 🔥 [Task 49] 블러 강도 설정 (15 | 25 | 40)
 };
 
 // 🔒 단일 인스턴스만 실행되도록 보장
@@ -339,10 +340,15 @@ app.whenReady().then(async () => {
       return;
     }
     try {
+      // 🔥 [Task 49] 블러 강도 설정 가져오기
+      const { getBlurIntensity } = require("./store");
+      const blurIntensity = getBlurIntensity();
+
       // 안전하게 직렬화 가능한 형태로 변환
       const safeState: OverlayStatePayload = {
         mode: state.mode,
         harmful: state.harmful === true,
+        blurIntensity, // 🔥 [Task 49] 블러 강도 포함
         ...(state.roi && {
           roi: {
             x: Number(state.roi.x) || 0,

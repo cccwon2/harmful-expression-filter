@@ -10,6 +10,7 @@ export interface StoreData {
   mode: OverlayMode;
   volumeLevel?: number; // 1~9 (1 = 10%, 9 = 90%), 기본값: 1 (10%)
   threshold?: number; // 0.0 ~ 1.0, 민감도 설정 (threshold)
+  blurIntensity?: number; // 15 | 25 | 40 (px), 블러 강도 설정, 기본값: 40
 }
 
 const getStorePath = () => {
@@ -21,6 +22,7 @@ const defaultData: StoreData = {
   roi: null,
   mode: 'setup',
   volumeLevel: 1, // 기본값: 1 (10%)
+  blurIntensity: 40, // 기본값: 40px (강한 블러)
 };
 
 function loadData(): StoreData {
@@ -115,4 +117,34 @@ export function setThreshold(threshold: number): void {
   data.threshold = Math.round(Math.max(0.0, Math.min(1.0, threshold)) * 10) / 10;
   saveData(data);
   console.log(`[Store] Threshold 설정: ${data.threshold}`);
+}
+
+/**
+ * 블러 강도 가져오기
+ * @returns 블러 강도 (15 | 25 | 40), 설정되지 않았으면 기본값 40
+ */
+export function getBlurIntensity(): number {
+  const data = loadData();
+  const intensity = data.blurIntensity ?? defaultData.blurIntensity ?? 40;
+  // 유효한 값만 허용 (15, 25, 40)
+  if ([15, 25, 40].includes(intensity)) {
+    return intensity;
+  }
+  return 40; // 기본값
+}
+
+/**
+ * 블러 강도 설정
+ * @param intensity 블러 강도 (15 | 25 | 40)
+ */
+export function setBlurIntensity(intensity: number): void {
+  const data = loadData();
+  // 유효한 값만 허용 (15, 25, 40)
+  if ([15, 25, 40].includes(intensity)) {
+    data.blurIntensity = intensity;
+    saveData(data);
+    console.log(`[Store] Blur intensity 설정: ${data.blurIntensity}px`);
+  } else {
+    console.warn(`[Store] 유효하지 않은 blur intensity: ${intensity} (15, 25, 40만 허용)`);
+  }
 }

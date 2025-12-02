@@ -43,7 +43,8 @@ const STYLES = {
     // 4. 그림자
     boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
     zIndex: 1003,
-    transition: "all 0.3s ease",
+    // 🔥 [Task 49] 애니메이션 효과: 부드러운 페이드인 및 스케일 효과
+    transition: "opacity 0.3s ease, transform 0.3s ease",
     pointerEvents: "none" as const,
     // 🔥 [최적화] GPU 가속 (backdrop-filter는 이미 GPU 가속 활용)
     willChange: "transform, opacity" as const,
@@ -133,8 +134,22 @@ const SelectionBox = React.memo(({ rect }: { rect: { left: number; top: number; 
   );
 });
 
-// [Component] 유해 감지 블러 오버레이 (Task 49: UX 개선)
-const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
+// [Component] 유해 감지 블러 오버레이 (Task 49: UX 개선 + 애니메이션 + 동적 블러 강도)
+const BlurOverlay = React.memo(({ roi, blurIntensity = 40 }: { roi: ROI; blurIntensity?: number }) => {
+  const [isVisible, setIsVisible] = React.useState(false);
+
+  // 🔥 [Task 49] 애니메이션: 마운트 시 부드러운 페이드인 효과
+  React.useEffect(() => {
+    // 다음 프레임에서 opacity를 1로 변경하여 페이드인 효과
+    const timer = requestAnimationFrame(() => {
+      setIsVisible(true);
+    });
+    return () => cancelAnimationFrame(timer);
+  }, []);
+
+  // 🔥 [Task 49] 동적 블러 강도 적용
+  const blurValue = `${blurIntensity}px`;
+
   return (
     <div
       style={{
@@ -143,6 +158,13 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
         top: roi.y,
         width: roi.width,
         height: roi.height,
+        // 🔥 [Task 49] 동적 블러 강도 적용
+        backdropFilter: `blur(${blurValue})`,
+        WebkitBackdropFilter: `blur(${blurValue})`,
+        // 🔥 [Task 49] 애니메이션: 초기 opacity 0에서 1로 페이드인
+        opacity: isVisible ? 1 : 0,
+        // 🔥 [Task 49] 애니메이션: 약간의 스케일 효과
+        transform: isVisible ? "translateZ(0) scale(1)" : "translateZ(0) scale(0.95)",
       }}
     >
       <div style={STYLES.blurIcon}>⚠️</div>
@@ -196,6 +218,8 @@ export const OverlayApp: React.FC = () => {
   const [roi, setRoi] = useState<ROI | undefined>(undefined);
   const [harmful, setHarmful] = useState<boolean>(false);
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
+  // 🔥 [Task 49] 블러 강도 설정 (기본값: 40px)
+  const [blurIntensity, setBlurIntensity] = useState<number>(40);
 
   // ROI 선택 상태
   const [selectionState, setSelectionState] = useState<SelectionState | null>(null);
@@ -333,6 +357,10 @@ export const OverlayApp: React.FC = () => {
       (onStatePush) =>
         onStatePush((state) => {
           if (state.roi) setRoi(state.roi);
+          // 🔥 [Task 49] 블러 강도 설정 업데이트
+          if (state.blurIntensity !== undefined) {
+            setBlurIntensity(state.blurIntensity);
+          }
         }),
       "onStatePush"
     );
@@ -584,7 +612,7 @@ export const OverlayApp: React.FC = () => {
       {isMonitoring && roi && mode !== "alert" && <MonitoringOverlay roi={roi} />}
 
       {/* 4. 블러 오버레이 */}
-      {mode === "alert" && roi && <BlurOverlay roi={roi} />}
+      {mode === "alert" && roi && <BlurOverlay roi={roi} blurIntensity={blurIntensity} />}
 
       {/* 5. Setup 안내 */}
       {mode === "setup" && !selectionState && !isSelectionComplete && <InstructionMessage />}

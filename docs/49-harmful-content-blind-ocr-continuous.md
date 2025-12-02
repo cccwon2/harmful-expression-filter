@@ -2,7 +2,7 @@
 
 ## 상태
 
-✅ Phase 1, 2 완료 (테스트 필요)
+✅ Phase 1, 2, 3 완료 (테스트 필요)
 
 ## 📋 작업 개요
 
@@ -24,6 +24,25 @@
 1. **UX 개선**: 단순 어둡게 처리(Dimming)보다 세련된 블러 처리 방식 적용
 2. **기술적 해결**: 오버레이 블러가 OCR 캡처에 영향을 주지 않도록 설정
 3. **연속 감지**: 유해 표현이 사라지면 즉시 블러 해제하여 반응성 유지
+
+---
+
+## ✅ 완료된 작업 요약
+
+### Phase 1: 윈도우 캡처 제외 설정 ✅
+- `setContentProtection(true)` 적용 완료
+- Windows에서만 동작하도록 플랫폼 체크
+- OCR 캡처 시 오버레이가 제외되어 원본 화면만 캡처됨
+
+### Phase 2: UX 개선 ✅
+- 블러 오버레이에 아이콘 및 안내 메시지 추가
+- 애니메이션 효과 추가 (페이드인 + 스케일)
+- 스타일 개선 (중앙 정렬, 텍스트 그림자)
+
+### Phase 3: 블러 강도 조정 ✅
+- 설정 스키마에 `blurIntensity` 추가
+- IPC로 설정 전달 및 동적 적용
+- 사용자 설정에 따라 15px, 25px, 40px 중 선택 가능
 
 ---
 
@@ -73,13 +92,15 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 ```
 
 **개선된 스타일**:
-- `backdrop-filter: blur(40px)` - 강력한 블러 효과
+- `backdrop-filter: blur(40px)` - 강력한 블러 효과 (동적 조정 가능)
 - `backgroundColor: rgba(0, 0, 0, 0.8)` - 어두운 배경
 - GPU 가속 활성화 (`transform: translateZ(0)`, `will-change`)
 - **중앙 정렬**: `display: flex`, `alignItems: center`, `justifyContent: center`
 - **아이콘**: ⚠️ 경고 아이콘 추가
 - **안내 메시지**: "유해 표현이 감지되어 가려졌습니다" 텍스트 추가
 - **텍스트 스타일**: 그림자 효과, 중앙 정렬, 가독성 향상
+- **애니메이션**: 페이드인 및 스케일 효과 (0.3s ease)
+- **동적 블러 강도**: 사용자 설정에 따라 15px, 25px, 40px 중 선택 가능
 
 ---
 
@@ -303,9 +324,15 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 });
 ```
 
-**예상 효과**:
+**구현 완료**:
+- ✅ 아이콘 및 안내 메시지 추가 완료
+- ✅ 애니메이션 효과 추가 완료 (페이드인 + 스케일)
+- ✅ 동적 블러 강도 적용 완료
+
+**효과**:
 - 사용자가 왜 화면이 가려졌는지 명확히 알 수 있음
-- 더 세련된 UX 제공
+- 부드러운 애니메이션으로 더 세련된 UX 제공
+- 사용자 설정에 따라 블러 강도 조정 가능 (15px, 25px, 40px)
 
 ---
 
@@ -318,10 +345,18 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 - UI: 대시보드 설정 화면
 - 적용: `renderer/src/overlay/OverlayApp.tsx`
 
+**구현 완료**:
+- ✅ 설정 스키마에 `blurIntensity` 추가 (`electron/store.ts`)
+- ✅ `getBlurIntensity()`, `setBlurIntensity()` 함수 구현
+- ✅ IPC로 설정 전달 (`OVERLAY_STATE_PUSH`에 포함)
+- ✅ 동적 스타일 적용 (렌더러에서 `blurIntensity` 상태로 관리)
+- ⏳ 대시보드에 블러 강도 슬라이더 추가 (향후 구현)
+
 **방법**:
-- 설정 값: `blurIntensity: 15 | 25 | 40` (px)
-- IPC로 설정 전달
-- 동적 스타일 적용
+- 설정 값: `blurIntensity: 15 | 25 | 40` (px), 기본값: 40
+- `pushOverlayState`에서 자동으로 `blurIntensity` 포함하여 전송
+- 렌더러에서 `onStatePush`로 받아서 상태 업데이트
+- `BlurOverlay` 컴포넌트에서 동적으로 `backdrop-filter: blur(${blurIntensity}px)` 적용
 
 ---
 
@@ -339,14 +374,18 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
 - [x] 블러 오버레이에 아이콘 추가
 - [x] 안내 메시지 추가
 - [x] 스타일 개선 (중앙 정렬, 텍스트 그림자 등)
-- [ ] 애니메이션 효과 추가 (선택사항)
+- [x] 애니메이션 효과 추가
+  - 페이드인 효과 (opacity 0 → 1)
+  - 스케일 효과 (scale 0.95 → 1)
+  - `requestAnimationFrame`을 사용한 부드러운 전환
 
-### Phase 3: 블러 강도 조정 (선택사항)
+### Phase 3: 블러 강도 조정
 
-- [ ] 설정 스키마에 `blurIntensity` 추가
-- [ ] 대시보드에 블러 강도 슬라이더 추가
-- [ ] IPC로 설정 전달
-- [ ] 동적 스타일 적용
+- [x] 설정 스키마에 `blurIntensity` 추가 (`electron/store.ts`)
+- [x] `getBlurIntensity()`, `setBlurIntensity()` 함수 구현
+- [x] IPC로 설정 전달 (`OVERLAY_STATE_PUSH`에 포함)
+- [x] 동적 스타일 적용 (렌더러에서 `blurIntensity` 상태로 관리)
+- [ ] 대시보드에 블러 강도 슬라이더 추가 (향후 구현)
 
 ---
 
@@ -378,58 +417,33 @@ export function createOverlayWindow(): BrowserWindow {
 }
 ```
 
-### 2. 개선된 블러 오버레이 컴포넌트
+### 2. 개선된 블러 오버레이 컴포넌트 (✅ 구현 완료)
 
-```tsx
-// renderer/src/overlay/OverlayApp.tsx
+```137:155:renderer/src/overlay/OverlayApp.tsx
+// [Component] 유해 감지 블러 오버레이 (Task 49: UX 개선 + 애니메이션 + 동적 블러 강도)
+const BlurOverlay = React.memo(({ roi, blurIntensity = 40 }: { roi: ROI; blurIntensity?: number }) => {
+  const [isVisible, setIsVisible] = React.useState(false);
 
-const STYLES = {
-  // ... 기존 스타일
-  blurOverlay: {
-    position: "absolute" as const,
-    backdropFilter: "blur(40px)",
-    WebkitBackdropFilter: "blur(40px)",
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    border: "2px solid rgba(255, 0, 0, 0.5)",
-    boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
-    zIndex: 1003,
-    transition: "all 0.3s ease",
-    pointerEvents: "none" as const,
-    // 🔥 [최적화] GPU 가속
-    willChange: "transform, opacity" as const,
-    backfaceVisibility: "hidden" as const,
-    transform: "translateZ(0)",
-    // 🔥 [UX 개선] 중앙 정렬을 위한 flex 설정
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "column",
-  },
-  blurIcon: {
-    fontSize: "32px",
-    marginBottom: "12px",
-    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
-  },
-  blurMessage: {
-    color: "white",
-    fontWeight: "bold",
-    textShadow: "0 2px 4px rgba(0,0,0,0.5)",
-    textAlign: "center" as const,
-    fontSize: "14px",
-    padding: "0 16px",
-  },
-};
+  // 🔥 [Task 49] 애니메이션: 마운트 시 부드러운 페이드인 효과
+  React.useEffect(() => {
+    const timer = requestAnimationFrame(() => {
+      setIsVisible(true);
+    });
+    return () => cancelAnimationFrame(timer);
+  }, []);
 
-// [Component] 유해 감지 블러 오버레이 (개선 버전)
-const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
+  // 🔥 [Task 49] 동적 블러 강도 적용
+  const blurValue = `${blurIntensity}px`;
+
   return (
     <div
       style={{
         ...STYLES.blurOverlay,
-        left: roi.x,
-        top: roi.y,
-        width: roi.width,
-        height: roi.height,
+        backdropFilter: `blur(${blurValue})`,
+        WebkitBackdropFilter: `blur(${blurValue})`,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateZ(0) scale(1)" : "translateZ(0) scale(0.95)",
+        // ... 기타 스타일
       }}
     >
       <div style={STYLES.blurIcon}>⚠️</div>
@@ -439,6 +453,52 @@ const BlurOverlay = React.memo(({ roi }: { roi: ROI }) => {
     </div>
   );
 });
+```
+
+### 3. 블러 강도 설정 저장 및 전달 (✅ 구현 완료)
+
+```typescript
+// electron/store.ts
+export interface StoreData {
+  // ... 기존 필드
+  blurIntensity?: number; // 15 | 25 | 40 (px), 기본값: 40
+}
+
+export function getBlurIntensity(): number {
+  const data = loadData();
+  const intensity = data.blurIntensity ?? 40;
+  // 유효한 값만 허용 (15, 25, 40)
+  if ([15, 25, 40].includes(intensity)) {
+    return intensity;
+  }
+  return 40; // 기본값
+}
+
+export function setBlurIntensity(intensity: number): void {
+  const data = loadData();
+  if ([15, 25, 40].includes(intensity)) {
+    data.blurIntensity = intensity;
+    saveData(data);
+  }
+}
+```
+
+```typescript
+// electron/main.ts
+const pushOverlayState = (state: OverlayStatePayload) => {
+  // 🔥 [Task 49] 블러 강도 설정 가져오기
+  const { getBlurIntensity } = require("./store");
+  const blurIntensity = getBlurIntensity();
+
+  const safeState: OverlayStatePayload = {
+    mode: state.mode,
+    harmful: state.harmful === true,
+    blurIntensity, // 🔥 [Task 49] 블러 강도 포함
+    // ... 기타 필드
+  };
+  
+  currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, safeState);
+};
 ```
 
 ---
