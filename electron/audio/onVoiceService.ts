@@ -414,10 +414,33 @@ export class OnVoiceService {
     }
   }
 
+  // 🔥 [최적화] IPC 브로드캐스트 스로틀링
+  private lastBroadcastTime = 0;
+  private readonly BROADCAST_INTERVAL_MS = 100; // 100ms (초당 10회) 제한
+  private broadcastPending = false;
+
   /**
    * 상태 브로드캐스트
    */
   private broadcastStatus(): void {
+    const now = Date.now();
+    
+    // 🔥 [최적화] 스로틀링: 마지막 브로드캐스트로부터 충분한 시간이 지나지 않았으면 스킵
+    if (now - this.lastBroadcastTime < this.BROADCAST_INTERVAL_MS) {
+      // 다음 프레임에서 업데이트하도록 스케줄링 (마지막 상태 보장)
+      if (!this.broadcastPending) {
+        this.broadcastPending = true;
+        setTimeout(() => {
+          this.broadcastPending = false;
+          this.broadcastStatus(); // 재시도
+        }, this.BROADCAST_INTERVAL_MS - (now - this.lastBroadcastTime));
+      }
+      return;
+    }
+    
+    this.lastBroadcastTime = now;
+    this.broadcastPending = false;
+    
     const status = {
       isMonitoring: this.isMonitoring,
       targetPid: this.targetPid,

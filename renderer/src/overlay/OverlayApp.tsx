@@ -15,6 +15,10 @@ const STYLES = {
     height: "100vh",
     backgroundColor: "transparent",
     outline: "none",
+    // 🔥 [최적화] GPU 가속 힌트 및 렌더링 최적화
+    willChange: "transform" as const, // 브라우저에게 변경 예상 속성 알림
+    backfaceVisibility: "hidden" as const, // 뒷면 렌더링 방지 (GPU 가속 트리거)
+    transform: "translateZ(0)", // 하드웨어 가속 강제 활성화
   },
   selectionBox: {
     position: "absolute" as const,
@@ -22,6 +26,10 @@ const STYLES = {
     backgroundColor: "rgba(0, 255, 0, 0.1)",
     zIndex: 1000,
     pointerEvents: "none" as const, // 드래그 중 간섭 방지
+    // 🔥 [최적화] 선택 박스는 위치와 크기가 자주 변함
+    willChange: "left, top, width, height" as const,
+    backfaceVisibility: "hidden" as const,
+    transform: "translateZ(0)", // GPU 가속 활성화
   },
   blurOverlay: {
     position: "absolute" as const,
@@ -37,12 +45,20 @@ const STYLES = {
     zIndex: 1003,
     transition: "all 0.3s ease",
     pointerEvents: "none" as const,
+    // 🔥 [최적화] GPU 가속 (backdrop-filter는 이미 GPU 가속 활용)
+    willChange: "transform, opacity" as const,
+    backfaceVisibility: "hidden" as const,
+    transform: "translateZ(0)",
   },
   monitoringBadge: {
     position: "absolute" as const,
     border: "3px solid #ff0000",
     pointerEvents: "none" as const,
     zIndex: 1002,
+    // 🔥 [최적화] GPU 가속
+    willChange: "transform" as const,
+    backfaceVisibility: "hidden" as const,
+    transform: "translateZ(0)",
   },
   toast: {
     position: "fixed" as const,

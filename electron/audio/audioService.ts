@@ -20,6 +20,11 @@ export class AudioService {
   private volumeController: AppVolumeController;
   private targetAppName: string | null = "chrome"; // 모니터링할 앱 이름 (기본값: chrome, null이면 모든 앱)
   private windows: Set<BrowserWindow> = new Set(); // 여러 윈도우 지원
+  
+  // 🔥 [최적화] IPC 브로드캐스트 스로틀링
+  private lastBroadcastTime = 0;
+  private readonly BROADCAST_INTERVAL_MS = 100; // 100ms (초당 10회) 제한
+  private broadcastPending = false;
 
   constructor(initialWindow: BrowserWindow | null) {
     // AudioProcessor는 startMonitoring에서 실제 디바이스 샘플 레이트로 초기화됨
@@ -216,6 +221,24 @@ export class AudioService {
   }
 
   private broadcastStatus(): void {
+    const now = Date.now();
+    
+    // 🔥 [최적화] 스로틀링: 마지막 브로드캐스트로부터 충분한 시간이 지나지 않았으면 스킵
+    if (now - this.lastBroadcastTime < this.BROADCAST_INTERVAL_MS) {
+      // 다음 프레임에서 업데이트하도록 스케줄링 (마지막 상태 보장)
+      if (!this.broadcastPending) {
+        this.broadcastPending = true;
+        setTimeout(() => {
+          this.broadcastPending = false;
+          this.broadcastStatus(); // 재시도
+        }, this.BROADCAST_INTERVAL_MS - (now - this.lastBroadcastTime));
+      }
+      return;
+    }
+    
+    this.lastBroadcastTime = now;
+    this.broadcastPending = false;
+    
     const status = this.getStatus();
 
     // 등록된 모든 윈도우에 상태 전송
