@@ -1,11 +1,11 @@
 import { app, Menu, Tray, BrowserWindow, nativeImage, ipcMain } from 'electron';
 import type { NativeImage } from 'electron';
 import * as path from 'path';
-import { getEditModeState, setEditModeState } from './state/editMode';
+import { getEditModeState, setEditModeState, getOverlayWindow } from './state/editMode';
 import { IPC_CHANNELS, DASHBOARD_CHANNELS } from './ipc/channels';
 import AudioManager from './main/AudioManager';
 import { getOnVoiceService } from './audio/onVoiceService';
-import { getVolumeLevel, setVolumeLevel, getThreshold, setThreshold } from './store';
+import { getVolumeLevel, setVolumeLevel, getThreshold, setThreshold, getBlurIntensity, setBlurIntensity } from './store';
 
 let tray: Tray | null = null;
 let trayUpdateCallback: (() => void) | null = null;
@@ -165,6 +165,9 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
     // 현재 Threshold 값 가져오기 (로컬 스토어에서)
     const currentThreshold = getCurrentThresholdSync();
 
+    // 🔥 [Task 49] 현재 블러 강도 가져오기
+    const currentBlurIntensity = getBlurIntensity();
+
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '영역 지정 (Select Region)',
@@ -197,37 +200,6 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
               overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
                 mode: 'setup',
                 ...(storedROI ? { roi: storedROI } : {}),
-              });
-            }
-          }
-          
-          updateContextMenu();
-        },
-      },
-      {
-        label: '영역 재지정 (Re-setup)',
-        type: 'normal',
-        click: async () => {
-          console.log('[Tray] Reset to setup mode - OCR 모드로 전환');
-          
-          try {
-            // dashboardHandlers의 switchToOcrMode 함수를 직접 호출
-            const { switchToOcrMode } = await import('./ipc/dashboardHandlers');
-            await switchToOcrMode();
-            console.log('[Tray] ✅ OCR 모드 전환 완료 (재지정)');
-          } catch (error: any) {
-            console.error('[Tray] OCR 모드 전환 실패:', error);
-            // 폴백: 기존 resetToSetupMode 로직
-            if (handlers?.resetToSetupMode) {
-              handlers.resetToSetupMode();
-            } else {
-              overlayWindow.show();
-              overlayWindow.setSkipTaskbar(false);
-              overlayWindow.setIgnoreMouseEvents(false);
-              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
-              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
-                mode: 'setup',
-                harmful: false,
               });
             }
           }
@@ -561,6 +533,49 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
         type: 'separator',
       },
       {
+        label: '--- 블러 강도 설정 (Blur Intensity) ---',
+        enabled: false,
+      },
+      {
+        label: `현재 블러 강도: ${currentBlurIntensity}px`,
+        enabled: false,
+      },
+      {
+        label: '블러 강도 설정',
+        submenu: [
+          {
+            label: '15px (약함)',
+            type: 'radio',
+            checked: currentBlurIntensity === 15,
+            click: () => {
+              setTrayBlurIntensity(15);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '25px (보통)',
+            type: 'radio',
+            checked: currentBlurIntensity === 25,
+            click: () => {
+              setTrayBlurIntensity(25);
+              updateContextMenu();
+            },
+          },
+          {
+            label: '40px (강함)',
+            type: 'radio',
+            checked: currentBlurIntensity === 40,
+            click: () => {
+              setTrayBlurIntensity(40);
+              updateContextMenu();
+            },
+          },
+        ],
+      },
+      {
+        type: 'separator',
+      },
+      {
         label: '--- 민감도 설정 (Sensitivity) ---',
         enabled: false,
       },
@@ -842,6 +857,43 @@ async function setTrayVolumeLevel(level: number): Promise<void> {
     }
   } catch (err) {
     console.error('[Tray] Failed to set volume level:', err);
+  }
+}
+
+/**
+ * 트레이 메뉴에서 블러 강도 설정 (Task 49)
+ */
+function setTrayBlurIntensity(intensity: number): void {
+  try {
+    // 설정 저장
+    setBlurIntensity(intensity);
+    console.log(`[Tray] Blur intensity set to: ${intensity}px`);
+
+    // 🔥 [Task 49] 오버레이 윈도우에 새로운 블러 강도 전달
+    // 현재 상태를 가져와서 blurIntensity만 업데이트하여 전송
+    const currentOverlayWindow = getOverlayWindow();
+    if (currentOverlayWindow && !currentOverlayWindow.isDestroyed()) {
+      const { getROI, getMode } = require('./store');
+      const currentROI = getROI();
+      const currentMode = getMode();
+      
+      try {
+        // 현재 상태를 가져와서 blurIntensity 포함하여 전송
+        // main.ts의 pushOverlayState와 동일한 형식으로 전송
+        const statePayload = {
+          mode: currentMode,
+          blurIntensity: intensity, // 🔥 [Task 49] 새로운 블러 강도
+          ...(currentROI ? { roi: currentROI } : {}),
+        };
+        
+        currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
+        console.log(`[Tray] ✅ 블러 강도 설정 전달: ${intensity}px`);
+      } catch (err: any) {
+        console.warn('[Tray] 블러 강도 설정 전달 실패:', err?.message || err);
+      }
+    }
+  } catch (err) {
+    console.error('[Tray] Failed to set blur intensity:', err);
   }
 }
 
