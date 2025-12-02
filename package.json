@@ -25,7 +25,16 @@
     "prebuild": "taskkill /F /IM OnVoiceComBridge.exe 2>nul & taskkill /F /IM dllhost.exe 2>nul & taskkill /F /IM electron.exe 2>nul || exit 0",
     "build": "npm run prebuild && npm run build:all && npm run build:renderer && npm run build:electron",
     "build:win": "npm run build",
-    "postinstall": ""
+    "postinstall": "",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "jest",
+    "test:unit:watch": "jest --watch",
+    "test:unit:coverage": "jest --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:report": "playwright show-report"
   },
   "keywords": [
     "electron",
@@ -47,6 +56,8 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
+    "@playwright/test": "^1.40.0",
+    "@types/jest": "^29.5.8",
     "@types/node": "^22.0.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
@@ -57,7 +68,9 @@
     "cross-env": "^10.1.0",
     "electron": "^28.3.3",
     "electron-builder": "^26.0.12",
+    "jest": "^29.7.0",
     "rimraf": "^5.0.5",
+    "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
