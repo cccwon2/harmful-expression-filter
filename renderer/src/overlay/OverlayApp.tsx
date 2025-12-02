@@ -56,11 +56,6 @@ const STYLES = {
     justifyContent: "center",
     flexDirection: "column",
   },
-  blurIcon: {
-    fontSize: "32px",
-    marginBottom: "12px",
-    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
-  },
   blurMessage: {
     color: "white",
     fontWeight: "bold",
@@ -167,7 +162,6 @@ const BlurOverlay = React.memo(({ roi, blurIntensity = 40 }: { roi: ROI; blurInt
         transform: isVisible ? "translateZ(0) scale(1)" : "translateZ(0) scale(0.95)",
       }}
     >
-      <div style={STYLES.blurIcon}>⚠️</div>
       <div style={STYLES.blurMessage}>
         유해 표현이 감지되어 가려졌습니다
       </div>
