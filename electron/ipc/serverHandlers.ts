@@ -128,13 +128,13 @@ export function registerServerHandlers(): void {
           ? `${serverUrl}/analyze?threshold=${threshold}`
           : `${serverUrl}/analyze`;
         
-        // ✅ Header에 UUID 추가 (헤더로 통신)
+        // ✅ Header에 UUID 추가 (헤더 키: UUID)
         const { getDeviceId } = require("../utils/deviceId");
         const deviceId = getDeviceId();
         const finalUserId = userId || deviceId;
         const headers = {
           "Content-Type": "application/json",
-          "user_id": finalUserId,  // UUID를 헤더로 전달
+          "UUID": finalUserId,  // 헤더 키를 UUID로 전달
         };
         
         console.log("[IPC] 📤 Header에 UUID 추가:", finalUserId);
@@ -271,14 +271,14 @@ export function registerServerHandlers(): void {
           contentType: "image/png",
         });
 
-        // ✅ UUID를 Header에만 추가 (헤더로 통신)
+        // ✅ UUID를 Header에만 추가 (헤더 키: UUID)
         const { getDeviceId } = require("../utils/deviceId");
         const deviceId = getDeviceId();
         console.log("[IPC] 📤 OCR+Analyze 요청 - Header에 UUID 추가:", deviceId);
         
         const headers = {
           ...formData.getHeaders(),
-          "user_id": deviceId,  // UUID를 헤더로 전달
+          "UUID": deviceId,  // 헤더 키를 UUID로 전달
         };
 
         const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {

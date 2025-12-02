@@ -677,13 +677,13 @@ async def update_threshold(request: ThresholdUpdateRequest):
 async def analyze_text(
     request: AnalyzeRequest,
     background_tasks: BackgroundTasks,  # [Task 46] BackgroundTasks 주입
-    user_id: Optional[str] = Header(default=None, alias="user_id"),  # 🔥 Header에서 user_id 명시적으로 받기
+    uuid: Optional[str] = Header(default=None, alias="UUID"),  # 🔥 Header에서 UUID 읽기 (헤더 키: UUID)
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0). If not provided, uses server's default threshold.")
 ):
     # 요청 로그
     text_preview = request.text[:50] + "..." if len(request.text) > 50 else request.text
     threshold_log = f", threshold={threshold}" if threshold is not None else ""
-    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s, UUID(Header)=%s", len(request.text), text_preview, threshold_log, user_id)
+    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s, UUID(Header)=%s", len(request.text), text_preview, threshold_log, uuid)
     
     is_harmful_ai = False
     ai_confidence = 0.0
@@ -755,8 +755,8 @@ async def analyze_text(
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
     LOGGER.info(f"[Analyze] 🔍 로그 저장 조건 확인: classifier={classifier is not None}, is_harmful_ai={is_harmful_ai}")
     if classifier:
-        # ✅ Header에서 UUID 가져오기 (헤더로 통신)
-        uuid_from_header = user_id
+        # ✅ Header에서 UUID 가져오기 (헤더 키: UUID)
+        uuid_from_header = uuid
         
         # 디버깅 로그
         LOGGER.info(f"[Analyze] 🔍 UUID 추출: UUID(Header)={uuid_from_header}")
@@ -834,7 +834,7 @@ async def ocr_endpoint(file: UploadFile = File(...)):
 async def ocr_and_analyze_endpoint(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    user_id: Optional[str] = Header(default=None, alias="user_id"),  # 🔥 Header에서 UUID 읽기
+    uuid: Optional[str] = Header(default=None, alias="UUID"),  # 🔥 Header에서 UUID 읽기 (헤더 키: UUID)
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0)")
 ):
     """
@@ -860,8 +860,8 @@ async def ocr_and_analyze_endpoint(
         import time
         from services.paddle_ocr_service import get_ocr_service
         
-        # 🔥 헤더에서 UUID 추출 (헤더로 통신)
-        uuid_from_header = user_id
+        # 🔥 헤더에서 UUID 추출 (헤더 키: UUID)
+        uuid_from_header = uuid
         
         LOGGER.info(f"[OCR+Analyze] 📥 요청 수신: UUID(Header)={uuid_from_header}")
         
