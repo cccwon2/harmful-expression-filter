@@ -9,10 +9,13 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
+from PIL import Image
+import io
 
 # ✅ websockets: legacy asyncio API 사용
 from websockets.legacy.client import connect as ws_connect
@@ -485,6 +488,14 @@ async def lifespan(app: FastAPI):
         app.state.threshold = target_threshold  # Threshold 값을 app.state에 저장
         LOGGER.info(f"[Init] ✅ {app.state.model_type_display} 모델 로드 완료!")
 
+        # PaddleOCR 서비스 프리로드 (첫 요청 지연 방지)
+        try:
+            from services.paddle_ocr_service import get_ocr_service
+            ocr_service = get_ocr_service()
+            LOGGER.info("[Init] ✅ PaddleOCR 서비스 준비 완료")
+        except Exception as ocr_error:
+            LOGGER.warning(f"[Init] ⚠️ OCR 서비스 초기화 실패: {ocr_error} (OCR 기능은 사용할 수 없습니다)")
+
     except Exception as e:
         LOGGER.error("[Init] ❌ AI 모델 로드 실패: %s", e, exc_info=True)
         classifier = None
@@ -758,6 +769,170 @@ async def analyze_text(
         )
     
     return response
+
+
+# ============== OCR 엔드포인트 ==============
+
+@app.post("/api/ocr")
+async def ocr_endpoint(file: UploadFile = File(...)):
+    """
+    이미지 OCR 엔드포인트
+    
+    Request:
+        - file: 이미지 파일 (multipart/form-data)
+        
+    Response:
+        {
+            "texts": ["추출된", "텍스트", "리스트"],
+            "processing_time": 0.123,
+            "text_count": 3
+        }
+    """
+    try:
+        from services.paddle_ocr_service import get_ocr_service
+        
+        # 파일 유효성 검사
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+        
+        # 이미지 로드
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        # OCR 실행
+        ocr_service = get_ocr_service()
+        texts, processing_time = ocr_service.extract_text(image)
+        
+        LOGGER.info(f"[OCR] OCR 완료: {len(texts)}개 텍스트, {processing_time:.3f}초")
+        
+        # 결과 반환
+        return JSONResponse(content={
+            "texts": texts,
+            "processing_time": round(processing_time, 3),
+            "text_count": len(texts)
+        })
+        
+    except ImportError:
+        LOGGER.error("[OCR] PaddleOCR 서비스가 사용할 수 없습니다. 의존성 설치를 확인하세요.")
+        raise HTTPException(status_code=503, detail="OCR 서비스가 사용할 수 없습니다. 서버 설정을 확인하세요.")
+    except Exception as e:
+        LOGGER.error(f"[OCR] OCR API 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ocr-and-analyze")
+async def ocr_and_analyze_endpoint(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0)")
+):
+    """
+    이미지 OCR + 유해성 분석 통합 엔드포인트
+    
+    Request:
+        - file: 이미지 파일
+        
+    Response:
+        {
+            "texts": ["추출된", "텍스트"],
+            "is_harmful": true,
+            "harmful_words": [],
+            "confidence": 0.85,
+            "processing_time": {
+                "ocr": 0.123,
+                "analysis": 0.045,
+                "total": 0.168
+            }
+        }
+    """
+    try:
+        import time
+        from services.paddle_ocr_service import get_ocr_service
+        
+        start_total = time.time()
+        
+        # 이미지 로드
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+        
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        # OCR 실행
+        ocr_service = get_ocr_service()
+        texts, ocr_time = ocr_service.extract_text(image)
+        
+        # 텍스트 결합 및 유해성 분석
+        combined_text = " ".join(texts)
+        is_harmful = False
+        ai_confidence = 0.0
+        used_threshold = threshold
+        start_analysis = time.time()
+        
+        if combined_text.strip() and classifier and inference_executor:
+            try:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    inference_executor,
+                    classifier.predict,
+                    combined_text
+                )
+                
+                ai_confidence = result.confidence
+                
+                # Threshold 적용
+                if threshold is not None:
+                    if threshold < 0.0 or threshold > 1.0:
+                        threshold = None
+                
+                if threshold is not None:
+                    is_harmful = ai_confidence >= threshold
+                    used_threshold = threshold
+                else:
+                    is_harmful = result.is_harmful
+                    used_threshold = classifier.threshold if classifier else None
+                    
+            except Exception as e:
+                LOGGER.error(f"[OCR+Analyze] 분석 중 오류: {e}", exc_info=True)
+        
+        analysis_time = time.time() - start_analysis
+        total_time = time.time() - start_total
+        
+        # 유해 표현 감지 시 DB에 로그 저장
+        if is_harmful and classifier:
+            model_display = getattr(app.state, "model_type_display", "Unknown")
+            background_tasks.add_task(
+                save_detection_log,
+                text=combined_text,
+                confidence=ai_confidence,
+                threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
+                model=model_display,
+                is_harmful=True,
+                filter_mode="ocr",
+            )
+        
+        LOGGER.info(
+            f"[OCR+Analyze] 완료: {len(texts)}개 텍스트, 유해={is_harmful}, 신뢰도={ai_confidence:.3f}, 총 시간={total_time:.3f}초"
+        )
+        
+        return JSONResponse(content={
+            "texts": texts,
+            "is_harmful": is_harmful,
+            "harmful_words": [],  # AI 모델은 키워드 리스트를 반환하지 않음
+            "confidence": ai_confidence,
+            "processing_time": {
+                "ocr": round(ocr_time, 3),
+                "analysis": round(analysis_time, 3),
+                "total": round(total_time, 3)
+            }
+        })
+        
+    except ImportError:
+        LOGGER.error("[OCR+Analyze] PaddleOCR 서비스가 사용할 수 없습니다.")
+        raise HTTPException(status_code=503, detail="OCR 서비스가 사용할 수 없습니다.")
+    except Exception as e:
+        LOGGER.error(f"[OCR+Analyze] OCR+분석 API 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

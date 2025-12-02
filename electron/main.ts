@@ -402,7 +402,7 @@ app.whenReady().then(async () => {
   };
 
   /**
-   * Windows OCR을 사용하여 이미지에서 텍스트 추출 및 유해성 분석
+   * 서버 PaddleOCR을 사용하여 이미지에서 텍스트 추출 및 유해성 분석
    */
   const sendImageToServer = async (
     imageBuffer: Buffer
@@ -417,59 +417,55 @@ app.whenReady().then(async () => {
     error?: string;
   }> => {
     try {
-      // 🔥 동적 import 제거하고 상단 정적 import 사용
-      const roi = currentROI;
+      const axios = (await import("axios")).default;
+      const FormData = require("form-data");
+      const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:8000";
 
       const requestStartTime = Date.now();
 
-      // Windows OCR + 분석 수행 (ROI 정보 포함)
-      const result = roi
-        ? await onVoiceBridge.performOCRAndAnalyze(imageBuffer, {
-            x: roi.x,
-            y: roi.y,
-            width: roi.width,
-            height: roi.height,
-          })
-        : await onVoiceBridge.performOCR(imageBuffer);
+      console.log("[OCR] 서버 OCR + 분석 요청:", imageBuffer.length, "bytes");
+
+      const formData = new FormData();
+      formData.append("file", imageBuffer, {
+        filename: "screenshot.png",
+        contentType: "image/png",
+      });
+
+      const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {
+        headers: formData.getHeaders(),
+        timeout: 30000, // OCR + 분석은 시간이 걸릴 수 있으므로 30초로 설정
+      });
 
       const requestTime = Date.now() - requestStartTime;
 
-      if (!result.ok) {
-        console.error(`[OCR] Windows OCR 실패 (${requestTime}ms): ${result.error}`);
+      if (response.data) {
+        return {
+          success: true,
+          data: {
+            texts: response.data.texts || [],
+            is_harmful: response.data.is_harmful || false,
+            harmful_words: response.data.harmful_words || [],
+            processing_time: response.data.processing_time || {
+              ocr: 0,
+              analysis: 0,
+              total: requestTime / 1000,
+            },
+          },
+        };
+      } else {
         return {
           success: false,
-          error: result.error || "OCR 처리 실패",
+          error: "서버 응답 형식이 올바르지 않습니다",
         };
       }
-
-      // 결과를 서버 응답 형식으로 변환
-      const rawText = result.text || "";
-      const texts = rawText ? rawText.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
-
-      // OCR 결과 로그는 유해 표현 감지 시에만 출력 (중복 텍스트는 제외)
-      // 로그는 captureAndProcessROI에서 유해 표현 감지 시에만 출력
-
-      return {
-        success: true,
-        data: {
-          texts: texts,
-          is_harmful: result.isHarmful || false,
-          harmful_words: result.matchedKeywords || [],
-          processing_time: {
-            ocr: 0,
-            analysis: 0,
-            total: requestTime / 1000,
-          },
-        },
-      };
     } catch (error: any) {
       const errorMessage = error?.message ?? "Unknown error";
-      console.error("[OCR] Windows OCR 요청 실패:", errorMessage);
-      // 타임아웃 에러일 경우 명확히 표시
-      if (errorMessage === "BRIDGE_TIMEOUT") {
-        console.error("[OCR] ⚠️ C# Bridge 응답 시간 초과. 루프는 계속됩니다.");
-      } else {
-        console.error(`[OCR] 전체 에러 객체:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      console.error("[OCR] 서버 OCR 요청 실패:", errorMessage);
+      
+      if (error?.response) {
+        console.error("[OCR] 서버 응답:", error.response.status, error.response.data);
+      } else if (error?.code === "ECONNREFUSED") {
+        console.error("[OCR] ⚠️ 서버 연결 거부 - 서버가 실행 중인지 확인하세요");
       }
 
       return {
