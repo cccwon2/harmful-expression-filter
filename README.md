@@ -40,7 +40,7 @@
 - **Task 47**: 메인 대시보드 구축 및 멀티 윈도우 관리 (모드 선택 화면, OCR/음성 모드 분리, 성능 최적화)
 - **Task 48**: 애플리케이션 성능 최적화 (마우스 버벅거림 해결, React 렌더링 최적화, IPC 통신 최적화)
 - **Task 49**: 유해 표현 블라인드 처리 및 OCR 연속 감지 (블러 강도 설정, 트레이 메뉴 통합, setContentProtection)
-- **Task 50**: 테스트 자동화 구현 (Jest 유닛 테스트, Playwright E2E 테스트, 자동화 인프라) ✅ 완료
+- **Task 50**: 테스트 자동화 구현 (Jest 유닛 테스트 32개, Playwright E2E 테스트, 성능 테스트 포함) ✅ 완료
 
 ### 주요 기술 스택
 
@@ -390,6 +390,15 @@ npm run test:report         # 테스트 리포트 확인
 
 **테스트 관련**:
 
+- **유닛 테스트**: 32개 테스트 케이스 (Task 49: 15개, Task 48 성능 최적화: 17개)
+  - 블러 강도 설정 및 유효성 검증
+  - OCR 시뮬레이션
+  - React 렌더링 최적화
+  - IPC 통신 최적화
+  - OCR 처리 최적화 (적응형 인터벌)
+  - 메모리 최적화
+  - GPU 가속 렌더링
+- **E2E 테스트**: 20개 테스트 케이스 (브라우저 시뮬레이션 10개, Electron 앱 10개)
 - 자세한 테스트 가이드는 [docs/TEST_AUTOMATION_GUIDE.md](./docs/TEST_AUTOMATION_GUIDE.md) 참조
 - 빠른 시작: `scripts\quick-start-test.bat` 실행 (Windows)
 
@@ -465,11 +474,15 @@ harmful-expression-filter/
 │   └── venv312/             # Python 3.12 가상환경
 ├── tests/                   # 테스트 자동화 (Task 50)
 │   ├── e2e/                 # E2E 테스트 (Playwright)
-│   │   └── task49-blur.spec.ts
+│   │   ├── task49-blur.spec.ts
+│   │   └── task49-blur-electron.spec.ts
 │   ├── unit/                # 유닛 테스트 (Jest)
-│   │   └── blurIntensity.test.ts
+│   │   ├── blurIntensity.test.ts    # Task 49 (15개 테스트)
+│   │   └── performance.test.ts      # Task 48 (17개 성능 테스트) 🆕
 │   ├── helpers/             # 테스트 헬퍼
-│   │   └── ocr-simulator.ts
+│   │   ├── ocr-simulator.ts
+│   │   ├── performance-helpers.ts   # 성능 테스트 헬퍼 🆕
+│   │   └── electron-launcher.ts
 │   └── setup.ts             # Jest 전역 setup
 ├── playwright.config.ts     # Playwright 설정
 ├── jest.config.js           # Jest 설정
@@ -512,9 +525,12 @@ harmful-expression-filter/
 - `docs/50-test-automation.md` – 테스트 자동화 구현 문서 (Task 50)
 - `docs/TEST_AUTOMATION_GUIDE.md` – 테스트 자동화 사용 가이드
 - `docs/PORTABLE_BUILD_VERIFICATION.md` – 포터블 빌드 검증 문서
-- `tests/unit/blurIntensity.test.ts` – 블러 강도 설정 유닛 테스트 (Task 50)
-- `tests/e2e/task49-blur.spec.ts` – 블러 강도 및 OCR 연속 감지 E2E 테스트 (Task 50)
+- `tests/unit/blurIntensity.test.ts` – 블러 강도 설정 유닛 테스트 (Task 49, 15개)
+- `tests/unit/performance.test.ts` – 성능 최적화 유닛 테스트 (Task 48, 17개) 🆕
+- `tests/e2e/task49-blur.spec.ts` – 블러 강도 및 OCR 연속 감지 E2E 테스트 (브라우저 시뮬레이션, 10개)
+- `tests/e2e/task49-blur-electron.spec.ts` – 실제 Electron 앱 E2E 테스트 (10개)
 - `tests/helpers/ocr-simulator.ts` – 테스트 헬퍼 유틸리티 (OCR 시뮬레이터, IPC 모킹)
+- `tests/helpers/performance-helpers.ts` – 성능 테스트 헬퍼 (IPC, React, OCR, GPU, 메모리) 🆕
 - `playwright.config.ts` – Playwright E2E 테스트 설정
 - `jest.config.js` – Jest 유닛 테스트 설정
 
