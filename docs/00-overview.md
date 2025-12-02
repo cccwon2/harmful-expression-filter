@@ -38,10 +38,10 @@
 25. **[음성 Electron 연동](./25-audio-electron-integration.md)** ✅ 완료
 26. **[앱별 볼륨 조절 마이그레이션](./26-app-volume-migration.md)** ✅ 완료
 27. **[Deepgram STT 통합](./27-deepgram-stt-integration.md)** ✅ 완료 (Task 35로 실시간 스트리밍 방식으로 업데이트됨)
-28. **[PaddleOCR 서버 연동 및 Tesseract.js 대체](./28-paddle-ocr-integration.md)** ✅ 완료 (현재는 Windows SDK OCR로 대체됨)
+28. **[PaddleOCR 서버 연동 및 Tesseract.js 대체](./28-paddle-ocr-integration.md)** ✅ 완료 (서버 측 PaddleOCR 사용)
 29. **[OnVoice COM Bridge 통합](./29-onvoice-com-bridge-integration.md)** ✅ 완료
 30. **[AudioManager 트레이 통합](./33-audiomanager-tray-integration.md)** ✅ 완료
-31. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ✅ 완료
+31. **[Windows OCR 성능 최적화](./34-windows-ocr-optimization.md)** ⚠️ 레거시 (현재는 서버 측 PaddleOCR 사용)
 32. **[Deepgram 실시간 스트리밍 방식](./35-deepgram-realtime-streaming.md)** ✅ 완료
 33. **[로컬 Whisper 폴백 시스템](./36-local-whisper-fallback.md)** ✅ 완료
 34. **[Ubuntu 서버 FastAPI 배포](./37-ubuntu-fastapi-deployment.md)** ✅ 문서화 완료
@@ -203,10 +203,10 @@
 | 음성 Electron 연동                     | ✅ 완료        | 100%   | High     |
 | 앱별 볼륨 조절 마이그레이션            | ✅ 완료        | 100%   | High     |
 | Deepgram STT 통합                      | ✅ 완료        | 100%   | High     |
-| PaddleOCR 서버 연동                    | ✅ 완료        | 100%   | High     | (현재는 Windows SDK OCR로 대체됨) |
+| PaddleOCR 서버 연동                    | ✅ 완료        | 100%   | High     | (서버 측 PaddleOCR 사용) |
 | OnVoice COM Bridge 통합                | ✅ 완료        | 100%   | High     |
 | AudioManager 트레이 통합               | ✅ 완료        | 100%   | High     |
-| Windows OCR 성능 최적화                | ✅ 완료        | 100%   | High     |
+| Windows OCR 성능 최적화                | ⚠️ 레거시       | 100%   | High     | (현재는 서버 측 PaddleOCR 사용) |
 | Deepgram 실시간 스트리밍               | ✅ 완료        | 100%   | High     |
 | 로컬 Whisper 폴백 시스템               | ✅ 완료        | 100%   | High     |
 | Ubuntu 서버 FastAPI 배포               | ✅ 문서화 완료 | 100%   | Medium   |
@@ -224,14 +224,29 @@
 | 유해 표현 블라인드 처리 및 OCR 연속 감지 | ✅ 완료        | 100%   | High     |
 | 테스트 자동화 구현                      | ✅ 완료        | 100%   | High     |
 
-## 최근 변경 사항 (2025-11-26)
+## 최근 변경 사항
+
+### 2025-01-XX: 서버 측 PaddleOCR 전환 완료
+
+- **서버 측 PaddleOCR 적용**: Windows SDK OCR에서 서버 측 PaddleOCR로 전환
+  - FastAPI 서버의 `/api/ocr` 및 `/api/ocr-and-analyze` 엔드포인트 사용
+  - Electron에서 화면 캡처 후 서버로 이미지 전송하여 OCR 처리
+  - CPU 버전 및 GPU 버전 지원 (환경 변수로 제어)
+  - 블라인드 최적화(`setContentProtection`)와 완벽 호환 (Task 49)
+- **OCR 아키텍처 개선**: 클라이언트 기반 → 서버 기반 (PaddleOCR)
+  - 더 높은 인식 정확도 (한국어 특화)
+  - GPU 가속 지원 (Ubuntu 24.04 Server + CUDA 13)
+  - 서버 리소스 활용으로 클라이언트 부하 감소
+
+### 2025-11-26: Windows SDK OCR 적용 (레거시)
 
 - **Windows SDK OCR 적용**: PaddleOCR 제거, Windows.Media.Ocr API 사용
   - Electron에서 C# COM Bridge를 통해 직접 처리
   - 서버 불필요, 네이티브 성능 활용
+  - ⚠️ 현재는 서버 측 PaddleOCR로 전환되어 사용하지 않음
 - **venv312 환경 사용**: Python 3.12 가상환경(venv312)으로 변경
-- **OCR 아키텍처 개선**: 서버 기반 → 클라이언트 기반 (Windows SDK)
-- **Task 34: Windows OCR 성능 최적화 완료**
+- **OCR 아키텍처 개선**: 서버 기반 → 클라이언트 기반 (Windows SDK) (레거시)
+- **Task 34: Windows OCR 성능 최적화 완료** (레거시)
   - 처리 시간: 2-3초 → 14-17ms (약 120-200배 개선)
   - 서버 분석 제거, Node.js 로컬 분석으로 전환
   - OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거

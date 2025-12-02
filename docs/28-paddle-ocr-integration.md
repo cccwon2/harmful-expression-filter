@@ -1,21 +1,23 @@
 # Task 28: PaddleOCR 서버 연동 및 Tesseract.js 대체
 
 ## 상태
-✅ 완료 (Windows SDK OCR로 대체됨, 서버 측 PaddleOCR 재적용 가능)
+✅ 완료 (서버 측 PaddleOCR 사용 중)
 
 ## 📋 작업 개요
 
 **목표**: Tesseract.js 클라이언트 기반 OCR을 PaddleOCR 서버 기반 OCR로 전환하여 인식 정확도 및 성능 향상
 
 **배경**:
-- 현재: Electron에서 Windows SDK OCR 사용 (Task 34에서 최적화)
-- 서버 측 대안: FastAPI 서버에 PaddleOCR 통합하여 서버 측에서 고성능 OCR 수행 (GPU 가속 가능)
-- 기대효과: 한국어 인식 정확도 향상, GPU 가속으로 처리 속도 향상, 클라이언트 리소스 절약
+- **현재**: Electron에서 화면 캡처 후 FastAPI 서버로 이미지 전송, 서버 측 PaddleOCR로 처리
+- **이전**: Windows SDK OCR 사용 (Task 34) - 현재는 사용하지 않음
+- **기대효과**: 한국어 인식 정확도 향상, GPU 가속으로 처리 속도 향상, 클라이언트 리소스 절약
 
 **참고**:
-- 현재 Electron 앱은 Windows SDK OCR을 사용 중 (Task 34)
-- 서버 측에서도 PaddleOCR을 사용할 수 있도록 설정 가능
+- Electron 앱은 `desktopCapturer.getSources()`로 화면 캡처 후 서버로 전송
+- FastAPI 서버의 `/api/ocr` 및 `/api/ocr-and-analyze` 엔드포인트 사용
+- CPU 버전 및 GPU 버전 지원 (환경 변수 `PADDLEOCR_USE_GPU`로 제어)
 - Ubuntu 24.04 Server + CUDA 13 환경에서 GPU 가속 사용 권장
+- 블라인드 최적화(`setContentProtection`)와 완벽 호환 (Task 49)
 
 **관련 작업**:
 - T15 (OCR/STT 파이프라인 스텁) ✅ - 기존 Tesseract.js 구현

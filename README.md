@@ -20,11 +20,11 @@
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
 - **Task 24~27**: 음성 STT API, Electron 오디오 연동, Deepgram STT 통합
-- **Task 28**: PaddleOCR 서버 연동 및 Tesseract.js 대체 (현재는 Windows SDK OCR로 대체됨)
+- **Task 28**: PaddleOCR 서버 연동 및 Tesseract.js 대체 ✅ 완료 (서버 측 PaddleOCR 사용)
 - **Task 29**: OnVoice COM Bridge 통합 (프로세스별 오디오 캡처)
 - **Task 30~32**: electron-edge-js 마이그레이션 (⚠️ Deprecated - Task 45로 대체됨)
 - **Task 33**: AudioManager 트레이 통합 (보안 강화, 시스템 트레이 직접 제어)
-- **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
+- **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선) ⚠️ 레거시 (현재는 서버 측 PaddleOCR 사용)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
 - **Task 36**: 로컬 Whisper 폴백 시스템 (⚠️ 제거됨 - 서버 STT만 사용, 자동 재연결)
 - **Task 37**: Ubuntu 서버 FastAPI 배포 가이드 (systemd, Nginx, SSL, 프로덕션 환경 구성)
@@ -44,9 +44,12 @@
 
 ### 주요 기술 스택
 
-- **OCR**: Windows SDK OCR (Windows.Media.Ocr) - C# COM Bridge를 통해 사용
-  - **성능**: 14-17ms 처리 시간 (서버 분석 제거, 로컬 분석으로 전환)
-  - **최적화**: OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
+- **OCR**: 서버 측 PaddleOCR (FastAPI 서버에서 처리) ✅
+  - **CPU 버전**: 기본 설치 (`paddleocr==2.7.0.3`, `paddlepaddle==2.6.2`)
+  - **GPU 버전**: Ubuntu 24.04 Server + CUDA 13 환경에서 GPU 가속 지원
+  - **처리 흐름**: Electron → 화면 캡처 → 서버 전송 → PaddleOCR 처리 → 결과 반환
+  - **블라인드 최적화**: `setContentProtection(true)`로 오버레이 제외, 연속 감지 지원 (Task 49)
+  - **레거시**: Windows SDK OCR (Task 34) - 현재는 사용하지 않음
 - **STT**: Deepgram (WebSocket 기반 실시간 음성 인식) - 서버 STT만 사용
   - **정상 모드**: Deepgram 실시간 스트리밍 (~0.5초 레이턴시)
     - 중간 결과(Interim Results) 지원, 문장 완성 전에도 감지 가능
@@ -114,6 +117,12 @@ USE_QUANTIZATION=false
 # CLASSIFIER_THRESHOLD=0.5  # 0.0 ~ 1.0 (기본값: KoElectra=0.5, Kanana=0.22)
 # 환경 변수를 설정하지 않으면 모델별 기본값이 사용됩니다.
 # 자세한 내용은 docs/43-threshold-configuration.md 참조
+
+# ==========================================
+# PaddleOCR 설정 (선택사항)
+# ==========================================
+# PADDLEOCR_USE_GPU=false  # GPU 사용 여부 (기본값: false, CPU 사용)
+# PADDLEOCR_LANG=korean     # OCR 언어 설정 (기본값: korean)
 ```
 
 **참고**:
@@ -135,6 +144,11 @@ USE_QUANTIZATION=false
   - 설정하지 않으면 모델별 기본값 사용 (KoElectra: 0.5, Kanana: 0.22)
   - Electron 트레이 메뉴에서도 동적으로 조정 가능
   - 자세한 내용은 [docs/43-threshold-configuration.md](./docs/43-threshold-configuration.md) 참조
+- **PaddleOCR 설정** (선택사항):
+  - `PADDLEOCR_USE_GPU`: GPU 사용 여부 (기본값: `false`, CPU 사용)
+  - `PADDLEOCR_LANG`: OCR 언어 설정 (기본값: `korean`)
+  - GPU 사용 시 Ubuntu 24.04 Server + CUDA 13 환경 권장
+  - 자세한 내용은 [docs/28-paddle-ocr-integration.md](./docs/28-paddle-ocr-integration.md) 참조
 
 ## 🚀 빠른 시작
 
@@ -436,7 +450,7 @@ harmful-expression-filter/
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 │   ├── main/                # 메인 프로세스 핵심 모듈
 │   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)
-│   │   └── onVoiceBridge.ts # OnVoice Bridge 모듈 (Windows SDK OCR 포함)
+│   │   └── onVoiceBridge.ts # OnVoice Bridge 모듈 (레거시: Windows SDK OCR 포함, 현재는 사용하지 않음)
 │   ├── audio/               # 오디오 관련 서비스
 │   │   ├── onVoiceService.ts        # OnVoice 서비스 (IPC용)
 │   │   └── onVoiceBridgeAdapter.ts  # OnVoice 브리지 어댑터
@@ -444,7 +458,7 @@ harmful-expression-filter/
 │       └── onVoiceHandlers.ts       # OnVoice IPC 핸들러
 ├── dotnet/                  # C# COM Bridge
 │   └── OnVoiceComBridge/    # .NET 6 프로젝트
-│       └── Startup.cs       # Windows SDK OCR + OnVoice COM 래퍼
+│       └── Startup.cs       # OnVoice COM 래퍼 (레거시: Windows SDK OCR 포함, 현재는 사용하지 않음)
 ├── native/                  # C++ COM DLL (빌드 산출물)
 │   ├── .gitkeep            # 폴더 구조 유지
 │   └── OnVoiceAudioBridge.dll  # 빌드된 C++ COM DLL (배포용)
@@ -504,10 +518,10 @@ harmful-expression-filter/
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
 - `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
 - `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
-- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (spawn 방식, Windows SDK OCR 포함, Task 45)
+- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (spawn 방식, 레거시: Windows SDK OCR 포함, 현재는 사용하지 않음, Task 45)
 - `electron/main/registerComDll.ts` – COM DLL 자동 등록 유틸리티 (포터블 방식 지원)
 - `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합, 폴백 로직 포함)
-- `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
+- `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (레거시: Windows SDK OCR 포함, 현재는 OnVoice COM 래퍼만 사용)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
 - `electron/audio/volumeController.ts` – 볼륨 레벨(1~9) 및 타깃 앱 관리 (AppVolumeController 파사드)
 - `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어 (C# Bridge 기반, PID 지원)
