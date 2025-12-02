@@ -117,7 +117,7 @@ export const ModeSelection: React.FC = () => {
           zIndex: 1,
         }}
       >
-        {/* OCR 모드 선택 */}
+        {/* 채팅 모드 선택 */}
         <button
           onClick={() => handleModeSelect('ocr')}
           onMouseEnter={() => setHoveredMode('ocr')}
@@ -167,7 +167,7 @@ export const ModeSelection: React.FC = () => {
                 letterSpacing: '-0.01em',
               }}
             >
-              OCR
+              채팅
             </h2>
             <p
               style={{

@@ -431,8 +431,16 @@ app.whenReady().then(async () => {
         contentType: "image/png",
       });
 
+      // ✅ Header에 user_id 추가 (서버에서 detection_logs에 저장하기 위해)
+      const { getDeviceId } = require("./utils/deviceId");
+      const deviceId = getDeviceId();
+      const headers = {
+        ...formData.getHeaders(),
+        "user_id": deviceId,
+      };
+
       const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {
-        headers: formData.getHeaders(),
+        headers,
         timeout: 30000, // OCR + 분석은 시간이 걸릴 수 있으므로 30초로 설정
       });
 

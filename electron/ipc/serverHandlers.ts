@@ -128,17 +128,25 @@ export function registerServerHandlers(): void {
           ? `${serverUrl}/analyze?threshold=${threshold}`
           : `${serverUrl}/analyze`;
         
+        // ✅ Header에 user_id 추가 (서버에서 detection_logs에 저장하기 위해)
+        const { getDeviceId } = require("../utils/deviceId");
+        const deviceId = getDeviceId();
+        const headers = {
+          "Content-Type": "application/json",
+          "user_id": userId || deviceId,  // 전달된 userId 우선, 없으면 deviceId 사용
+        };
+
         const response = await axios.post<AnalyzeResponse>(
           url,
           {
             text,
-            user_id: userId,
+            user_id: userId || deviceId,  // Request Body에도 포함 (하위 호환성)
             // ✅ 필터 모드(ocr / voice 등)를 함께 전달
             filter_mode: filterMode,
           },
           {
             timeout: REQUEST_TIMEOUT,
-            headers: { "Content-Type": "application/json" },
+            headers,
           }
         );
 
@@ -260,8 +268,16 @@ export function registerServerHandlers(): void {
           contentType: "image/png",
         });
 
+        // ✅ Header에 user_id 추가 (서버에서 detection_logs에 저장하기 위해)
+        const { getDeviceId } = require("../utils/deviceId");
+        const deviceId = getDeviceId();
+        const headers = {
+          ...formData.getHeaders(),
+          "user_id": deviceId,
+        };
+
         const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {
-          headers: formData.getHeaders(),
+          headers,
           timeout: REQUEST_TIMEOUT * 3, // OCR + 분석은 더 오래 걸릴 수 있으므로 타임아웃 연장
         });
 

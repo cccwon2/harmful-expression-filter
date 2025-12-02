@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks, File, UploadFile, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks, File, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -677,6 +677,7 @@ async def update_threshold(request: ThresholdUpdateRequest):
 async def analyze_text(
     request: AnalyzeRequest,
     background_tasks: BackgroundTasks,  # [Task 46] BackgroundTasks 주입
+    http_request: Request,  # Header에서 user_id 가져오기 위해
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0). If not provided, uses server's default threshold.")
 ):
     # 요청 로그
@@ -753,6 +754,10 @@ async def analyze_text(
     # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
     if classifier:
+        # ✅ Header에서 user_id 가져오기 (우선순위: Header > Request Body)
+        user_id_from_header = http_request.headers.get("user_id")
+        user_id = user_id_from_header or request.user_id
+        
         model_display = getattr(app.state, "model_type_display", "Unknown")
         # 실제 판단 결과를 저장 (is_harmful_ai 값 사용)
         background_tasks.add_task(
@@ -762,8 +767,8 @@ async def analyze_text(
             threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
             model=model_display,
             is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
-            # ✅ 일렉트론에서 전달된 device UUID 또는 User ID
-            user_id=request.user_id,
+            # ✅ 일렉트론에서 전달된 device UUID 또는 User ID (Header 우선)
+            user_id=user_id,
             # ✅ 필터 모드(ocr / voice 등) 저장
             filter_mode=request.filter_mode or "ocr",
         )
@@ -824,6 +829,7 @@ async def ocr_endpoint(file: UploadFile = File(...)):
 async def ocr_and_analyze_endpoint(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
+    http_request: Request,  # Header에서 user_id 가져오기 위해
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0)")
 ):
     """
@@ -900,6 +906,9 @@ async def ocr_and_analyze_endpoint(
         
         # 유해 표현 감지 시 DB에 로그 저장
         if is_harmful and classifier:
+            # ✅ Header에서 user_id 가져오기
+            user_id = http_request.headers.get("user_id") if http_request else None
+            
             model_display = getattr(app.state, "model_type_display", "Unknown")
             background_tasks.add_task(
                 save_detection_log,
@@ -909,6 +918,7 @@ async def ocr_and_analyze_endpoint(
                 model=model_display,
                 is_harmful=True,
                 filter_mode="ocr",
+                user_id=user_id,  # ✅ Header에서 가져온 user_id 저장
             )
         
         LOGGER.info(
