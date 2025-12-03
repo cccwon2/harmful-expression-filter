@@ -362,6 +362,10 @@ class DeepgramWebSocketManager:
     async def _save_detection_log_async(self, text: str, confidence: float, threshold: float, model: str, is_harmful: bool, user_id: Optional[str] = None, filter_mode: str = "voice"):
         """비동기로 DB에 감지 로그 저장"""
         try:
+            # user_id가 None인 경우 경고 로그
+            if not user_id:
+                LOGGER.warning(f"[Deepgram] ⚠️ user_id가 None입니다. DB에 NULL로 저장됩니다. filter_mode={filter_mode}, text={text[:30]}...")
+            
             # 별도 스레드에서 동기 함수 실행
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
@@ -375,7 +379,10 @@ class DeepgramWebSocketManager:
                 user_id,
                 filter_mode
             )
-            LOGGER.info(f"[Deepgram] ✅ DB 저장 완료: filter_mode={filter_mode}, user_id={user_id}, text={text[:30]}...")
+            if user_id:
+                LOGGER.info(f"[Deepgram] ✅ DB 저장 완료: filter_mode={filter_mode}, user_id={user_id}, text={text[:30]}...")
+            else:
+                LOGGER.warning(f"[Deepgram] ⚠️ DB 저장 완료 (user_id=NULL): filter_mode={filter_mode}, text={text[:30]}...")
         except Exception as e:
             LOGGER.error(f"[Deepgram] ❌ DB 저장 실패: {e}", exc_info=True)
 
@@ -582,17 +589,49 @@ async def audio_stream(websocket: WebSocket):
     # ✅ WebSocket 헤더에서 UUID 읽기 (여러 변형 지원)
     user_id = None
     headers = websocket.headers
-    if "uuid" in headers:
-        user_id = headers["uuid"]
-    elif "user-id" in headers:
-        user_id = headers["user-id"]
-    elif "user_id" in headers:
-        user_id = headers["user_id"]
+    
+    # 디버깅: 모든 헤더 출력 (대소문자 변환 확인)
+    LOGGER.info(f"[WS] 📋 WebSocket 헤더 확인: {dict(headers)}")
+    LOGGER.info(f"[WS] 📋 헤더 키 목록: {list(headers.keys())}")
+    
+    # Starlette/FastAPI는 헤더 이름을 소문자로 변환하므로, 소문자로 확인
+    # 클라이언트에서 "UUID"로 보내면 서버에서는 "uuid"로 읽어야 함
+    header_keys_lower = [k.lower() for k in headers.keys()]
+    LOGGER.info(f"[WS] 📋 소문자 변환된 헤더 키: {header_keys_lower}")
+    
+    # 여러 변형으로 시도 (소문자 기준)
+    if "uuid" in header_keys_lower:
+        # 원본 키 찾기
+        for key in headers.keys():
+            if key.lower() == "uuid":
+                user_id = headers[key]
+                LOGGER.info(f"[WS] ✅ UUID 발견 (헤더 키: {key}): {user_id}")
+                break
+    elif "user-id" in header_keys_lower:
+        for key in headers.keys():
+            if key.lower() == "user-id":
+                user_id = headers[key]
+                LOGGER.info(f"[WS] ✅ UUID 발견 (헤더 키: {key}): {user_id}")
+                break
+    elif "user_id" in header_keys_lower:
+        for key in headers.keys():
+            if key.lower() == "user_id":
+                user_id = headers[key]
+                LOGGER.info(f"[WS] ✅ UUID 발견 (헤더 키: {key}): {user_id}")
+                break
+    
+    # get() 메서드로도 시도
+    if not user_id:
+        user_id = headers.get("uuid") or headers.get("UUID") or headers.get("user-id") or headers.get("user_id")
+        if user_id:
+            LOGGER.info(f"[WS] ✅ UUID 발견 (get() 메서드): {user_id}")
     
     if user_id:
-        LOGGER.info(f"[WS] WebSocket 연결: user_id={user_id}")
+        LOGGER.info(f"[WS] ✅ WebSocket 연결: user_id={user_id}")
     else:
         LOGGER.warning("[WS] ⚠️ WebSocket 헤더에서 UUID를 찾을 수 없습니다. DB에는 NULL로 저장됩니다.")
+        LOGGER.warning(f"[WS] 📋 사용 가능한 헤더 키: {list(headers.keys())}")
+        LOGGER.warning(f"[WS] 📋 헤더 전체 내용: {dict(headers)}")
     
     # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
     # ✅ filter_mode는 voice로 고정 (WebSocket은 음성 전용)

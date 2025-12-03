@@ -406,7 +406,8 @@ export class OnVoiceService {
    */
   private async analyzeText(text: string): Promise<void> {
     try {
-      const result = await sendTextForAnalysis(text);
+      // ✅ voice 모드로 명시적으로 전달
+      const result = await sendTextForAnalysis(text, false, "voice");
 
       if ("error" in result) {
         console.error("[OnVoiceService] 분석 오류:", result.message);

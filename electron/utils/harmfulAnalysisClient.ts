@@ -60,6 +60,14 @@ export async function sendTextForAnalysis(
       };
     }
 
+    // ✅ UUID 헤더 추가
+    const { getDeviceId } = require("../utils/deviceId");
+    const deviceId = getDeviceId();
+    const headers = {
+      'Content-Type': 'application/json',
+      'UUID': deviceId,  // 헤더 키를 UUID로 전달
+    };
+    
     const response = await axios.post<{
       has_violation: boolean;
       confidence: number;
@@ -71,7 +79,7 @@ export async function sendTextForAnalysis(
       { text: text.trim(), use_ai: useAI, filter_mode: filterMode },
       {
         timeout: REQUEST_TIMEOUT,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
       }
     );
 
