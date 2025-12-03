@@ -1,5 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, Request
-from fastapi import Request as FastAPIRequest
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from db.supabase_client import supabase, get_app_setting
 import logging
@@ -43,7 +42,6 @@ async def sync_settings(payload: SettingUpdate):
 
 @router.get("/logs")
 async def get_detection_logs(
-    request: FastAPIRequest,
     limit: int = Query(20, ge=1, le=100, description="가져올 로그 개수 (1-100)"),
     offset: int = Query(0, ge=0, description="시작 위치 (페이징용)"),
     only_harmful: bool = Query(False, description="유해한 것만 조회")
@@ -58,21 +56,7 @@ async def get_detection_logs(
     **주의**: 현재는 인증이 없어서 누구나 로그를 볼 수 있습니다.
     Task 47(로그인) 완료 후 관리자만 접근 가능하도록 보안 강화 예정입니다.
     """
-    # ✅ 요청 정보 로깅 (디버깅용)
-    LOGGER.info(f"[Admin/Logs] 📥 요청 수신: limit={limit}, offset={offset}, only_harmful={only_harmful}")
-    LOGGER.info(f"[Admin/Logs] 📋 요청 URL: {request.url}")
-    LOGGER.info(f"[Admin/Logs] 📋 Origin: {request.headers.get('origin', 'N/A')}")
-    LOGGER.info(f"[Admin/Logs] 📋 Referer: {request.headers.get('referer', 'N/A')}")
-    LOGGER.info(f"[Admin/Logs] 📋 User-Agent: {request.headers.get('user-agent', 'N/A')}")
-    # UUID 헤더 확인 (대시보드에서 전달하는 경우)
-    uuid_header = request.headers.get('uuid') or request.headers.get('UUID') or request.headers.get('user-id')
-    if uuid_header:
-        LOGGER.info(f"[Admin/Logs] 📋 UUID 헤더 발견: {uuid_header}")
-    else:
-        LOGGER.info(f"[Admin/Logs] 📋 UUID 헤더 없음 (대시보드에서 전달하지 않음)")
-    
     if not supabase:
-        LOGGER.error("[Admin/Logs] ❌ Supabase 연결 실패")
         raise HTTPException(status_code=503, detail="Database connection failed")
     
     try:
@@ -85,11 +69,9 @@ async def get_detection_logs(
         
         # 3. 정렬 및 페이징: 최신순 정렬, 개수 제한
         # range(start, end)를 사용하여 페이징 처리
-        LOGGER.info(f"[Admin/Logs] 🔍 DB 쿼리 실행 중...")
         response = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         
         log_count = len(response.data) if response.data else 0
-        LOGGER.info(f"[Admin/Logs] ✅ 로그 조회 성공: {log_count}개 로그 반환")
         
         return {
             "count": log_count,

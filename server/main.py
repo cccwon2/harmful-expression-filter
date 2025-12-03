@@ -633,7 +633,7 @@ async def audio_stream(websocket: WebSocket):
         LOGGER.warning("[WS] ⚠️ WebSocket 헤더에서 UUID를 찾을 수 없습니다. DB에는 NULL로 저장됩니다.")
         LOGGER.warning(f"[WS] 📋 사용 가능한 헤더 키: {list(headers.keys())}")
         LOGGER.warning(f"[WS] 📋 헤더 전체 내용: {dict(headers)}")
-    
+
     # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
     # ✅ filter_mode는 voice로 고정 (WebSocket은 음성 전용)
     dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, classifier, user_id=user_id, filter_mode="voice")
