@@ -329,7 +329,8 @@ class DeepgramWebSocketManager:
             
             # ✅ 모든 분석 결과를 DB에 저장 (최종 결과만 저장)
             # 일관성을 위해 /analyze 엔드포인트와 동일하게 모든 요청 저장
-            if is_final and self.classifier:
+            # ⚠️ 빈 텍스트는 DB에 저장하지 않음
+            if is_final and self.classifier and transcript and transcript.strip():
                 global app
                 model_display = getattr(app.state, "model_type_display", "Unknown")
                 threshold_used = self.classifier.threshold if self.classifier else 0.0
@@ -346,6 +347,8 @@ class DeepgramWebSocketManager:
                     user_id=self.user_id,
                     filter_mode=self.filter_mode
                 ))
+            elif is_final and transcript and not transcript.strip():
+                LOGGER.info(f"[Deepgram] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다. filter_mode={self.filter_mode}")
         except Exception as e:
             LOGGER.error("[AI] 분류 에러: %s", e, exc_info=True)
             self._send_no_ai_complete(transcript, stt_confidence)
@@ -363,6 +366,11 @@ class DeepgramWebSocketManager:
     async def _save_detection_log_async(self, text: str, confidence: float, threshold: float, model: str, is_harmful: bool, user_id: Optional[str] = None, filter_mode: str = "voice"):
         """비동기로 DB에 감지 로그 저장"""
         try:
+            # ⚠️ 빈 텍스트는 DB에 저장하지 않음
+            if not text or not text.strip():
+                LOGGER.info(f"[Deepgram] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다. filter_mode={filter_mode}")
+                return
+            
             # user_id가 None인 경우 경고 로그
             if not user_id:
                 LOGGER.warning(f"[Deepgram] ⚠️ user_id가 None입니다. DB에 NULL로 저장됩니다. filter_mode={filter_mode}, text={text[:30]}...")
@@ -850,8 +858,9 @@ async def analyze_text(
     # [Task 46] 유해 표현 감지 시 또는 모든 요청에 대해 로그 저장
     # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
+    # ⚠️ 빈 텍스트는 DB에 저장하지 않음
     LOGGER.info(f"[Analyze] 🔍 로그 저장 조건 확인: classifier={classifier is not None}, is_harmful_ai={is_harmful_ai}")
-    if classifier:
+    if classifier and request.text and request.text.strip():
         # ✅ Header에서 UUID 가져오기 (헤더 키: UUID)
         uuid_from_header = uuid
         
@@ -874,6 +883,8 @@ async def analyze_text(
             # ✅ 필터 모드(ocr / voice 등) 저장
             filter_mode=request.filter_mode or "ocr",
         )
+    elif not request.text or not request.text.strip():
+        LOGGER.info(f"[Analyze] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다.")
     
     return response
 
@@ -1017,8 +1028,9 @@ async def ocr_and_analyze_endpoint(
         
         # ✅ 모든 분석 결과를 DB에 저장
         # 일관성을 위해 /analyze 엔드포인트와 동일하게 모든 요청 저장
+        # ⚠️ 빈 텍스트는 DB에 저장하지 않음
         LOGGER.info(f"[OCR+Analyze] 🔍 로그 저장 조건 확인: is_harmful={is_harmful}, classifier={classifier is not None}")
-        if classifier:
+        if classifier and combined_text and combined_text.strip():
             # ✅ Header에서 user_id 가져오기 (이미 함수 인자로 받음)
             
             # 디버깅 로그
@@ -1038,6 +1050,8 @@ async def ocr_and_analyze_endpoint(
                 filter_mode="ocr",
                 user_id=uuid_from_header,  # ✅ 저장 시에만 UUID를 user_id로 저장
             )
+        elif not combined_text or not combined_text.strip():
+            LOGGER.info(f"[OCR+Analyze] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다.")
         
         LOGGER.info(
             f"[OCR+Analyze] 완료: {len(texts)}개 텍스트, 유해={is_harmful}, 신뢰도={ai_confidence:.3f}, 총 시간={total_time:.3f}초"
