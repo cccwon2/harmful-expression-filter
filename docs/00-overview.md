@@ -207,13 +207,14 @@
 | Threshold 설정 및 최적화               | ✅ 완료        | 100%   | Medium   |
 | Vercel 관리자 대시보드                 | 📝 계획 단계   | 0%     | Low      |
 | Spawn 방식 Bridge 마이그레이션         | ✅ 완료        | 100%   | High     |
-| Supabase 기반 관리자 DB 및 로깅 시스템 | 📝 계획 단계   | 0%     | Medium   |
+| Supabase 기반 관리자 DB 및 로깅 시스템 | ✅ 완료        | 90%    | Medium   | (빈 텍스트 필터링, filter_mode/user_id 저장 개선 완료)
 | 메인 대시보드 구축 및 멀티 윈도우 관리 | ✅ 완료        | 100%   | High     |
 | 애플리케이션 성능 최적화                | ✅ 완료        | 100%   | High     |
 | 유해 표현 블라인드 처리 및 OCR 연속 감지 | ✅ 완료        | 100%   | High     |
 | 테스트 자동화 구현                      | ✅ 완료        | 100%   | High     |
 | PaddleOCR 전환, 대시보드 통합 및 UUID 식별 | ✅ 완료        | 100%   | High     |
 | 트레이 정리                            | ✅ 완료        | 100%   | Low      |
+| 빈 텍스트 필터링 및 데이터 품질 개선    | ✅ 완료        | 100%   | High     |
 
 ## 최근 변경 사항
 
@@ -224,13 +225,22 @@
   - Windows SDK OCR 의존성 완전 제거
 - **사용자 대시보드 통합**: 트레이 메뉴에 사용자 대시보드 바로가기 추가
   - Electron BrowserWindow를 통한 대시보드 창 관리
-  - HTTP Header에 UUID 자동 포함
+  - HTTP Header에 UUID 자동 포함 (`webRequest.onBeforeSendHeaders` 사용)
   - 별도 세션 파티션으로 대시보드 세션 분리
 - **UUID 기반 사용자 식별 시스템 구축**: 
   - UUID 영구 저장 로직 개선 (`store.ts` 저장소 시스템 활용)
   - 앱 재시작 후에도 동일한 UUID 유지
   - 모든 서버 요청에 `user-id` Header 자동 추가
   - `detection_logs` 테이블에 `user_id` 정확히 저장
+- **빈 텍스트 필터링**: voice 모드 및 OCR 모드에서 빈 텍스트(`text_content = ''`) DB 저장 방지
+  - `_check_harmful_async` 메서드에서 빈 텍스트 필터링
+  - `/analyze` 및 `/api/ocr-and-analyze` 엔드포인트에서 빈 텍스트 필터링
+  - `_save_detection_log_async` 메서드에서 이중 체크
+- **filter_mode 및 user_id 저장 개선**:
+  - voice 모드에서 `filter_mode="voice"` 정확히 저장
+  - OCR 모드에서 `filter_mode="ocr"` 정확히 저장
+  - WebSocket 헤더에서 UUID 읽기 로직 개선 (여러 변형 지원)
+  - 모든 분석 결과 저장 (유해/정상 구분 없이)
 - **디버깅 기능 강화**: Header 전송/수신 및 DB 저장 과정 로깅 추가
 
 ### 2025-01-XX: 서버 측 PaddleOCR 전환 완료

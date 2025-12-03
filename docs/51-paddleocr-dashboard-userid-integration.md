@@ -454,6 +454,42 @@ async def save_detection_log(
 
 **해결**: 모든 Windows SDK OCR 호출을 서버 측 PaddleOCR로 변경
 
+### 문제 4: 빈 텍스트가 DB에 저장됨
+
+**증상**: voice 모드에서 빈 텍스트(`text_content = ''`)가 DB에 저장됨
+
+**원인**: STT 결과가 빈 문자열이거나 공백만 있는 경우에도 DB 저장 로직이 실행됨
+
+**해결**: 
+1. `_check_harmful_async` 메서드에서 `transcript.strip()` 체크 추가
+2. `/analyze` 엔드포인트에서 `request.text.strip()` 체크 추가
+3. `/api/ocr-and-analyze` 엔드포인트에서 `combined_text.strip()` 체크 추가
+4. `_save_detection_log_async` 메서드에서 이중 체크로 안전성 보장
+5. 빈 텍스트는 로그만 남기고 DB 저장을 건너뜀
+
+### 문제 5: filter_mode가 잘못 저장됨
+
+**증상**: voice 모드인데도 `filter_mode`가 `'ocr'`로 저장됨
+
+**원인**: `DeepgramWebSocketManager`에서 `filter_mode`를 명시적으로 설정하지 않음
+
+**해결**: 
+1. `DeepgramWebSocketManager` 초기화 시 `filter_mode="voice"` 명시
+2. `/api/ocr-and-analyze` 엔드포인트에서 `filter_mode="ocr"` 명시
+3. `/analyze` 엔드포인트에서 `request.filter_mode` 또는 기본값 `"ocr"` 사용
+
+### 문제 6: user_id가 null로 저장됨 (voice 모드)
+
+**증상**: voice 모드에서 `user_id`가 `null`로 저장됨
+
+**원인**: WebSocket 헤더에서 UUID를 읽지 못함
+
+**해결**:
+1. WebSocket 연결 시 헤더에 `uuid`, `user-id`, `user_id` 등 여러 변형으로 전송
+2. 서버에서 여러 Header 이름 변형 지원 (대소문자 무시)
+3. `DeepgramWebSocketManager`에 `user_id` 파라미터 전달
+4. 디버깅 로그 추가하여 Header 전송/수신 확인
+
 ---
 
 ## 📊 디버깅 및 모니터링
@@ -509,6 +545,14 @@ async def save_detection_log(
 - [x] `detection_logs` 테이블에 `user_id` 저장
 - [x] 디버깅 로그 추가
 
+### Phase 4: 데이터 품질 개선 ✅
+- [x] 빈 텍스트 필터링 (voice 모드)
+- [x] 빈 텍스트 필터링 (OCR 모드)
+- [x] 빈 텍스트 필터링 (`/analyze` 엔드포인트)
+- [x] `filter_mode` 정확한 저장 (voice/ocr 구분)
+- [x] WebSocket 헤더에서 UUID 읽기 개선
+- [x] 모든 분석 결과 저장 (유해/정상 구분 없이)
+
 ---
 
 ## 🎯 다음 단계
@@ -551,7 +595,8 @@ async def save_detection_log(
 - `electron/ipc/serverHandlers.ts` - Header에 user-id 추가
 - `electron/main.ts` - Header에 user-id 추가
 - `electron/tray.ts` - 대시보드 메뉴 항목 추가
-- `server/main.py` - Header에서 user_id 읽기
+- `electron/windows/createDashboardWindow.ts` - UUID 헤더 전달 로직 개선
+- `server/main.py` - Header에서 user_id 읽기, 빈 텍스트 필터링, filter_mode 저장 개선
 - `server/db/supabase_client.py` - user_id 저장 로직 개선
 
 ### 새로 생성된 파일
@@ -568,7 +613,8 @@ async def save_detection_log(
 2. ✅ **사용자 대시보드 통합**: 트레이 메뉴에서 쉽게 접근 가능
 3. ✅ **UUID 기반 사용자 식별**: 앱 재시작 후에도 동일한 UUID 유지
 4. ✅ **정확한 사용자 로그**: `detection_logs` 테이블에 `user_id` 정확히 저장
-5. ✅ **디버깅 기능 강화**: 상세한 로그로 문제 추적 용이
+5. ✅ **데이터 품질 개선**: 빈 텍스트 필터링, `filter_mode` 정확한 저장
+6. ✅ **디버깅 기능 강화**: 상세한 로그로 문제 추적 용이
 
 ---
 
