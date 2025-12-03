@@ -237,7 +237,15 @@ export class OnVoiceService {
    */
   private async connectServer(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.options.serverWebSocketUrl);
+      // ✅ UUID 헤더 추가
+      const { getDeviceId } = require("../utils/deviceId");
+      const deviceId = getDeviceId();
+      const headers = {
+        "UUID": deviceId,  // 헤더 키를 UUID로 전달
+      };
+      console.log(`[OnVoiceService] 📤 WebSocket 헤더에 UUID 추가: ${deviceId}`);
+      
+      const ws = new WebSocket(this.options.serverWebSocketUrl, { headers });
 
       ws.on("open", () => {
         console.log("[OnVoiceService] 서버 WebSocket 연결 성공");

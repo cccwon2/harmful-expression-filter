@@ -151,6 +151,14 @@ class AudioManager {
 
       console.log(`[AudioManager] WebSocket 연결 시도: ${this.wsUrl}`);
       
+      // ✅ UUID 헤더 추가
+      const { getDeviceId } = require("../utils/deviceId");
+      const deviceId = getDeviceId();
+      const headers = {
+        "UUID": deviceId,  // 헤더 키를 UUID로 전달
+      };
+      console.log(`[AudioManager] 📤 WebSocket 헤더에 UUID 추가: ${deviceId}`);
+      
       let timeoutCleared = false;
       let resolvedOrRejected = false;
       
@@ -176,7 +184,7 @@ class AudioManager {
         reject(new Error("WebSocket connection timeout"));
       }, 10000);
 
-      this.ws = new WebSocket(this.wsUrl);
+      this.ws = new WebSocket(this.wsUrl, { headers });
 
       this.ws.on("open", () => {
         if (resolvedOrRejected) return;

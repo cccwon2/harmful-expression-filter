@@ -36,7 +36,15 @@ export class AudioStreamClient extends EventEmitter {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.ws = new WebSocket(this.serverUrl);
+        // ✅ UUID 헤더 추가
+        const { getDeviceId } = require("../utils/deviceId");
+        const deviceId = getDeviceId();
+        const headers = {
+          "UUID": deviceId,  // 헤더 키를 UUID로 전달
+        };
+        console.log(`[AudioStreamClient] 📤 WebSocket 헤더에 UUID 추가: ${deviceId}`);
+        
+        this.ws = new WebSocket(this.serverUrl, { headers });
         
         this.ws.on('open', () => {
           console.log('✅ WebSocket connected to server');

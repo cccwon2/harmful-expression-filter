@@ -61,11 +61,13 @@ class DeepgramWebSocketManager:
     FastAPI WebSocket(Electron)과 Deepgram STT WebSocket(v1 / nova-2, ko)을 중계하는 클래스
     Task 35: 실시간 스트리밍 및 중간 결과 처리 지원
     """
-    def __init__(self, websocket: WebSocket, api_key: str, classifier_instance: Optional[HarmfulTextClassifier]):
+    def __init__(self, websocket: WebSocket, api_key: str, classifier_instance: Optional[HarmfulTextClassifier], user_id: Optional[str] = None, filter_mode: str = "voice"):
         self.websocket = websocket
         self.api_key = api_key
         # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
         self.classifier = classifier_instance
+        self.user_id = user_id  # ✅ WebSocket 연결 시 user_id 저장
+        self.filter_mode = filter_mode  # ✅ 필터 모드 저장 (기본값: voice)
         self.dg_ws = None
         self.receive_task: Optional[asyncio.Task] = None
         self.result_queue: asyncio.Queue = asyncio.Queue()
@@ -324,6 +326,25 @@ class DeepgramWebSocketManager:
                 "ai_checked": True,
             }
             self.result_queue.put_nowait(ai_response)
+            
+            # ✅ 유해 표현 감지 시 DB에 저장 (최종 결과만 저장)
+            if is_final and is_harmful_ai and self.classifier:
+                global app
+                model_display = getattr(app.state, "model_type_display", "Unknown")
+                threshold_used = self.classifier.threshold if self.classifier else 0.0
+                
+                # BackgroundTasks를 사용하여 비동기로 저장
+                # WebSocket에서는 BackgroundTasks를 직접 사용할 수 없으므로, 
+                # 별도 태스크로 실행
+                asyncio.create_task(self._save_detection_log_async(
+                    text=transcript,
+                    confidence=ai_confidence,
+                    threshold=threshold_used,
+                    model=model_display,
+                    is_harmful=True,
+                    user_id=self.user_id,
+                    filter_mode=self.filter_mode
+                ))
         except Exception as e:
             LOGGER.error("[AI] 분류 에러: %s", e, exc_info=True)
             self._send_no_ai_complete(transcript, stt_confidence)
@@ -337,6 +358,26 @@ class DeepgramWebSocketManager:
         if not getattr(self.classifier, "use_lora", True):
             return "Kanana-Base"
         return "Kanana-LoRA"
+    
+    async def _save_detection_log_async(self, text: str, confidence: float, threshold: float, model: str, is_harmful: bool, user_id: Optional[str] = None, filter_mode: str = "voice"):
+        """비동기로 DB에 감지 로그 저장"""
+        try:
+            # 별도 스레드에서 동기 함수 실행
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,  # 기본 스레드 풀 사용
+                save_detection_log,
+                text,
+                confidence,
+                threshold,
+                model,
+                is_harmful,
+                user_id,
+                filter_mode
+            )
+            LOGGER.info(f"[Deepgram] ✅ DB 저장 완료: filter_mode={filter_mode}, user_id={user_id}, text={text[:30]}...")
+        except Exception as e:
+            LOGGER.error(f"[Deepgram] ❌ DB 저장 실패: {e}", exc_info=True)
 
     async def _send_results_to_client(self):
         while self.is_running:
@@ -538,8 +579,24 @@ async def audio_stream(websocket: WebSocket):
         await websocket.close(code=1008, reason="API Key missing")
         return
 
+    # ✅ WebSocket 헤더에서 UUID 읽기 (여러 변형 지원)
+    user_id = None
+    headers = websocket.headers
+    if "uuid" in headers:
+        user_id = headers["uuid"]
+    elif "user-id" in headers:
+        user_id = headers["user-id"]
+    elif "user_id" in headers:
+        user_id = headers["user_id"]
+    
+    if user_id:
+        LOGGER.info(f"[WS] WebSocket 연결: user_id={user_id}")
+    else:
+        LOGGER.warning("[WS] ⚠️ WebSocket 헤더에서 UUID를 찾을 수 없습니다. DB에는 NULL로 저장됩니다.")
+    
     # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
-    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, classifier)
+    # ✅ filter_mode는 voice로 고정 (WebSocket은 음성 전용)
+    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, classifier, user_id=user_id, filter_mode="voice")
     success = await dg_manager.start()
 
     if not success:
