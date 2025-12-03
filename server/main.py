@@ -1015,9 +1015,10 @@ async def ocr_and_analyze_endpoint(
         analysis_time = time.time() - start_analysis
         total_time = time.time() - start_total
         
-        # 유해 표현 감지 시 DB에 로그 저장
+        # ✅ 모든 분석 결과를 DB에 저장
+        # 일관성을 위해 /analyze 엔드포인트와 동일하게 모든 요청 저장
         LOGGER.info(f"[OCR+Analyze] 🔍 로그 저장 조건 확인: is_harmful={is_harmful}, classifier={classifier is not None}")
-        if is_harmful and classifier:
+        if classifier:
             # ✅ Header에서 user_id 가져오기 (이미 함수 인자로 받음)
             
             # 디버깅 로그
@@ -1033,7 +1034,7 @@ async def ocr_and_analyze_endpoint(
                 confidence=ai_confidence,
                 threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
                 model=model_display,
-                is_harmful=True,
+                is_harmful=is_harmful,  # ✅ 실제 판단 결과 저장 (True/False 모두)
                 filter_mode="ocr",
                 user_id=uuid_from_header,  # ✅ 저장 시에만 UUID를 user_id로 저장
             )
