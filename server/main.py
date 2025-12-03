@@ -327,8 +327,9 @@ class DeepgramWebSocketManager:
             }
             self.result_queue.put_nowait(ai_response)
             
-            # ✅ 유해 표현 감지 시 DB에 저장 (최종 결과만 저장)
-            if is_final and is_harmful_ai and self.classifier:
+            # ✅ 모든 분석 결과를 DB에 저장 (최종 결과만 저장)
+            # 일관성을 위해 /analyze 엔드포인트와 동일하게 모든 요청 저장
+            if is_final and self.classifier:
                 global app
                 model_display = getattr(app.state, "model_type_display", "Unknown")
                 threshold_used = self.classifier.threshold if self.classifier else 0.0
@@ -341,7 +342,7 @@ class DeepgramWebSocketManager:
                     confidence=ai_confidence,
                     threshold=threshold_used,
                     model=model_display,
-                    is_harmful=True,
+                    is_harmful=is_harmful_ai,  # ✅ 실제 판단 결과 저장 (True/False 모두)
                     user_id=self.user_id,
                     filter_mode=self.filter_mode
                 ))
