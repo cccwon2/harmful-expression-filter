@@ -116,7 +116,7 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
     }
     tray = null;
   }
-  
+
   // 트레이 아이콘 생성 (초기에는 모니터링 중지 상태)
   const icon = createTrayIcon(false);
 
@@ -132,607 +132,455 @@ export function createTray(overlayWindow: BrowserWindow, handlers: TrayHandlers)
       console.warn('[Tray] updateContextMenu: Tray 인스턴스가 null입니다');
       return;
     }
-    
+
     try {
       const isOverlayVisible = overlayWindow.isVisible();
-    const isEditMode = getEditModeState();
+      const isEditMode = getEditModeState();
 
-    // AudioManager 상태 가져오기
-    const audioManager = AudioManager.getInstance();
-    const audioStatus = audioManager.getStatus();
-    const isStreaming = audioStatus.isStreaming || false;
-    const currentTarget = audioStatus.target || null;
+      // AudioManager 상태 가져오기
+      const audioManager = AudioManager.getInstance();
+      const audioStatus = audioManager.getStatus();
+      const isStreaming = audioStatus.isStreaming || false;
+      const currentTarget = audioStatus.target || null;
 
-    // 트레이 아이콘 업데이트 (스트리밍 상태에 따라 색상 변경)
-    try {
-      const newIcon = createTrayIcon(isStreaming);
-      trayInstance.setImage(newIcon);
+      // 트레이 아이콘 업데이트 (스트리밍 상태에 따라 색상 변경)
+      try {
+        const newIcon = createTrayIcon(isStreaming);
+        trayInstance.setImage(newIcon);
 
-      // 트레이 툴팁 업데이트
-      const tooltip = isStreaming
-        ? `Harmful Expression Filter - 스트리밍 중 (${currentTarget || 'Unknown'})`
-        : 'Harmful Expression Filter - 대기 중';
-      trayInstance.setToolTip(tooltip);
-    } catch (err: any) {
-      // Tray가 destroy된 경우 조용히 반환
-      if (err?.message?.includes('destroy') || err?.message?.includes('Tray')) {
-        console.warn('[Tray] updateContextMenu: Tray가 destroy되어 업데이트 불가:', err?.message);
-        return;
+        // 트레이 툴팁 업데이트
+        const tooltip = isStreaming
+          ? `Harmful Expression Filter - 스트리밍 중 (${currentTarget || 'Unknown'})`
+          : 'Harmful Expression Filter - 대기 중';
+        trayInstance.setToolTip(tooltip);
+      } catch (err: any) {
+        // Tray가 destroy된 경우 조용히 반환
+        if (err?.message?.includes('destroy') || err?.message?.includes('Tray')) {
+          console.warn('[Tray] updateContextMenu: Tray가 destroy되어 업데이트 불가:', err?.message);
+          return;
+        }
+        throw err; // 다른 오류는 다시 throw
       }
-      throw err; // 다른 오류는 다시 throw
-    }
 
-    // 현재 Threshold 값 가져오기 (로컬 스토어에서)
-    const currentThreshold = getCurrentThresholdSync();
+      // 현재 Threshold 값 가져오기 (로컬 스토어에서)
+      const currentThreshold = getCurrentThresholdSync();
 
-    // 🔥 [Task 49] 현재 블러 강도 가져오기
-    const currentBlurIntensity = getBlurIntensity();
+      // 🔥 [Task 49] 현재 블러 강도 가져오기
+      const currentBlurIntensity = getBlurIntensity();
 
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: '영역 지정 (Select Region)',
-        type: 'normal',
-        click: async () => {
-          console.log('[Tray] Select Region requested - OCR 모드로 전환');
-          
-          try {
-            // dashboardHandlers의 switchToOcrMode 함수를 직접 호출
-            const { switchToOcrMode } = await import('./ipc/dashboardHandlers');
-            await switchToOcrMode();
-            console.log('[Tray] ✅ OCR 모드 전환 완료');
-          } catch (error: any) {
-            console.error('[Tray] OCR 모드 전환 실패:', error);
-            console.error('[Tray] 에러 상세:', error.message, error.stack);
-            // 폴백: 기존 setup 모드 진입 로직
-            console.log('[Tray] 폴백: Setup 모드로 진입');
-            if (!overlayWindow.isVisible()) {
-              overlayWindow.show();
-              overlayWindow.setSkipTaskbar(false);
-            }
-            if (handlers?.enterSetupMode) {
-              handlers.enterSetupMode();
-            } else {
-              overlayWindow.setIgnoreMouseEvents(false);
-              overlayWindow.focus();
-              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
-              const { getROI } = require('./store');
-              const storedROI = getROI();
-              overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
-                mode: 'setup',
-                ...(storedROI ? { roi: storedROI } : {}),
-              });
-            }
-          }
-          
-          updateContextMenu();
-        },
-      },
-      {
-        label: isOverlayVisible ? 'Hide Overlay' : 'Show Overlay',
-        type: 'normal',
-        click: () => {
-          if (overlayWindow.isVisible()) {
-            overlayWindow.hide();
-            // 숨길 때 작업표시줄에서도 제거
-            overlayWindow.setSkipTaskbar(true);
-            // 오버레이 숨길 때 Edit Mode도 비활성화
-            setEditModeState(false);
-          } else {
-            overlayWindow.show();
-            overlayWindow.setSkipTaskbar(false); // 표시할 때만 작업표시줄에 표시
-            // 오버레이 표시할 때 자동으로 Edit Mode 활성화
-            setEditModeState(true);
-            // 마우스 이벤트 활성화 확인 (setEditModeState에서 이미 처리되지만 명시적으로 확인)
-            overlayWindow.setIgnoreMouseEvents(false);
-            console.log('[Tray] Overlay shown, Edit Mode enabled, mouse events enabled');
-            // 키보드 포커스를 명시적으로 설정
-            overlayWindow.focus();
-            // Windows에서 포커스를 보장하기 위해 약간의 지연 후 다시 포커스
-            setTimeout(() => {
-              if (overlayWindow && overlayWindow.isVisible()) {
-                overlayWindow.focus();
-                // 마우스 이벤트가 제대로 활성화되었는지 확인
-                overlayWindow.setIgnoreMouseEvents(false);
-                console.log('[Tray] Overlay focus and mouse events re-enabled after timeout');
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: '영역 지정 (Select Region)',
+          type: 'normal',
+          click: async () => {
+            console.log('[Tray] Select Region requested - OCR 모드로 전환');
+
+            try {
+              // dashboardHandlers의 switchToOcrMode 함수를 직접 호출
+              const { switchToOcrMode } = await import('./ipc/dashboardHandlers');
+              await switchToOcrMode();
+              console.log('[Tray] ✅ OCR 모드 전환 완료');
+            } catch (error: any) {
+              console.error('[Tray] OCR 모드 전환 실패:', error);
+              console.error('[Tray] 에러 상세:', error.message, error.stack);
+              // 폴백: 기존 setup 모드 진입 로직
+              console.log('[Tray] 폴백: Setup 모드로 진입');
+              if (!overlayWindow.isVisible()) {
+                overlayWindow.show();
+                overlayWindow.setSkipTaskbar(false);
               }
-            }, 100);
-          }
-          updateContextMenu();
-        },
-      },
-      {
-        label: isEditMode ? 'Exit Edit Mode' : 'Edit Mode',
-        type: 'normal',
-        click: () => {
-          // Edit Mode 토글
-          if (isEditMode) {
-            // Edit Mode 종료 시 오버레이도 숨김 (다른 창을 방해하지 않도록)
-            setEditModeState(false);
-            overlayWindow.hide();
-            overlayWindow.setSkipTaskbar(true);
-          } else {
-            // Edit Mode 활성화 시 오버레이 표시
-            overlayWindow.show();
-            overlayWindow.setSkipTaskbar(false);
-            setEditModeState(true);
-            overlayWindow.setIgnoreMouseEvents(false);
-            overlayWindow.focus();
-          }
-          updateContextMenu();
-        },
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: 'Toggle DevTools',
-        type: 'normal',
-        click: () => {
-          if (overlayWindow.isVisible()) {
-            if (overlayWindow.webContents.isDevToolsOpened()) {
-              overlayWindow.webContents.closeDevTools();
-              // 개발자 도구가 닫히면 Edit Mode 상태에 따라 마우스 이벤트 설정
-              setTimeout(() => {
-                const { getEditModeState } = require('./state/editMode');
-                const isEditMode = getEditModeState();
-                if (isEditMode) {
-                  overlayWindow.setIgnoreMouseEvents(false);
-                  console.log('[Tray] Mouse events re-enabled after DevTools closed (Edit Mode active)');
-                }
-              }, 100);
-            } else {
-              // detach 모드로 열어서 완전히 독립된 창으로 표시 (이동 가능)
-              overlayWindow.webContents.openDevTools({ mode: 'detach' });
-              console.log('[Tray] DevTools opened in detach mode - window should be movable');
-
-              // 개발자 도구가 열릴 때 오버레이 창의 키보드 포커스 해제
-              // 개발자 도구가 키보드 입력을 받을 수 있도록
-              overlayWindow.blur();
-
-              // 개발자 도구가 열릴 때 renderer에 테스트 로그 출력 요청 (콘솔 확인용)
-              setTimeout(() => {
-                if (overlayWindow && overlayWindow.webContents.isDevToolsOpened()) {
-                  overlayWindow.webContents.executeJavaScript(`
-                    (function() {
-                      console.log('%c[DevTools] DevTools opened successfully!', 'color: green; font-weight: bold; font-size: 16px;');
-                      console.log('[DevTools] Console logging is working properly');
-                      console.log('[DevTools] Overlay state available at window.__overlayState');
-                      console.log('[DevTools] You can now type commands in the console');
-                      if (window.__overlayState) {
-                        console.log('[DevTools] Current overlay state:', window.__overlayState);
-                      }
-                      console.log('[DevTools] Test: 1 + 1 =', 1 + 1);
-                    })();
-                  `).catch((err) => {
-                    console.error('[Tray] Error executing JavaScript in DevTools:', err);
-                  });
-                }
-              }, 500);
-
-              // 개발자 도구가 열려 있을 때도 Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
-              // (ROI 선택을 시작할 수 있도록)
-              const { getEditModeState } = require('./state/editMode');
-              const isEditMode = getEditModeState();
-              if (isEditMode) {
-                // Edit Mode가 활성화되어 있으면 마우스 이벤트 유지
-                // 개발자 도구 창은 detach 모드로 열려 있어서 독립적으로 이동 가능
-                overlayWindow.setIgnoreMouseEvents(false);
-                console.log('[Tray] Mouse events kept enabled while DevTools is open (Edit Mode active)');
+              if (handlers?.enterSetupMode) {
+                handlers.enterSetupMode();
               } else {
-                // Edit Mode가 비활성화되어 있으면 클릭-스루 활성화
-                overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-                console.log('[Tray] Click-through enabled while DevTools is open (Edit Mode inactive)');
+                overlayWindow.setIgnoreMouseEvents(false);
+                overlayWindow.focus();
+                overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_SET_MODE, 'setup');
+                const { getROI } = require('./store');
+                const storedROI = getROI();
+                overlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, {
+                  mode: 'setup',
+                  ...(storedROI ? { roi: storedROI } : {}),
+                });
               }
-              // 개발자 도구 창이 닫히면 다시 마우스 이벤트 활성화
-              overlayWindow.webContents.once('devtools-closed', () => {
-                if (overlayWindow && overlayWindow.isVisible()) {
-                  const { getEditModeState } = require('./state/editMode');
-                  const isEditMode = getEditModeState();
-                  if (isEditMode) {
-                    overlayWindow.setIgnoreMouseEvents(false);
-                    console.log('[Tray] Mouse events re-enabled after DevTools closed (Edit Mode active)');
-                  }
-                }
-              });
             }
-          }
+
+            updateContextMenu();
+          },
         },
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: '--- 오디오 캡처 (Audio Capture) ---',
-        enabled: false,
-      },
-      {
-        label: isStreaming ? `🟢 스트리밍 중 (${currentTarget || 'Unknown'})` : '⚪ 스트리밍 중지',
-        enabled: false,
-      },
-      {
-        label: 'Capture Chrome',
-        type: 'normal',
-        click: async () => {
-          const audioManager = AudioManager.getInstance();
-          try {
-            if (isStreaming) {
+
+        {
+          label: '--- 오디오 캡처 (Audio Capture) ---',
+          enabled: false,
+        },
+        {
+          label: isStreaming ? `🟢 스트리밍 중 (${currentTarget || 'Unknown'})` : '⚪ 스트리밍 중지',
+          enabled: false,
+        },
+        {
+          label: 'Capture Chrome',
+          type: 'normal',
+          click: async () => {
+            const audioManager = AudioManager.getInstance();
+            try {
+              if (isStreaming) {
+                await audioManager.stopStream();
+                await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
+              }
+              await audioManager.startStream('chrome');
+              console.log('[Tray] Chrome 캡처 시작');
+              setTimeout(() => {
+                updateContextMenu();
+              }, 100);
+            } catch (err) {
+              console.error('[Tray] Chrome 캡처 실패:', err);
+            }
+          },
+        },
+        {
+          label: 'Capture Edge',
+          type: 'normal',
+          click: async () => {
+            const audioManager = AudioManager.getInstance();
+            try {
+              if (isStreaming) {
+                await audioManager.stopStream();
+                await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
+              }
+              await audioManager.startStream('edge');
+              console.log('[Tray] Edge 캡처 시작');
+              setTimeout(() => {
+                updateContextMenu();
+              }, 100);
+            } catch (err) {
+              console.error('[Tray] Edge 캡처 실패:', err);
+            }
+          },
+        },
+        {
+          label: 'Capture Discord',
+          type: 'normal',
+          click: async () => {
+            const audioManager = AudioManager.getInstance();
+            try {
+              if (isStreaming) {
+                await audioManager.stopStream();
+                await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
+              }
+              await audioManager.startStream('discord');
+              console.log('[Tray] Discord 캡처 시작');
+              setTimeout(() => {
+                updateContextMenu();
+              }, 100);
+            } catch (err) {
+              console.error('[Tray] Discord 캡처 실패:', err);
+            }
+          },
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: 'Stop Capture',
+          type: 'normal',
+          enabled: isStreaming,
+          click: async () => {
+            const audioManager = AudioManager.getInstance();
+            try {
               await audioManager.stopStream();
-              await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
+              console.log('[Tray] 캡처 중지');
+              setTimeout(() => {
+                updateContextMenu();
+              }, 100);
+            } catch (err) {
+              console.error('[Tray] 캡처 중지 실패:', err);
             }
-            await audioManager.startStream('chrome');
-            console.log('[Tray] Chrome 캡처 시작');
-            setTimeout(() => {
-              updateContextMenu();
-            }, 100);
-          } catch (err) {
-            console.error('[Tray] Chrome 캡처 실패:', err);
-          }
+          },
         },
-      },
-      {
-        label: 'Capture Edge',
-        type: 'normal',
-        click: async () => {
-          const audioManager = AudioManager.getInstance();
-          try {
-            if (isStreaming) {
-              await audioManager.stopStream();
-              await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
-            }
-            await audioManager.startStream('edge');
-            console.log('[Tray] Edge 캡처 시작');
-            setTimeout(() => {
-              updateContextMenu();
-            }, 100);
-          } catch (err) {
-            console.error('[Tray] Edge 캡처 실패:', err);
-          }
+        {
+          type: 'separator',
         },
-      },
-      {
-        label: 'Capture Discord',
-        type: 'normal',
-        click: async () => {
-          const audioManager = AudioManager.getInstance();
-          try {
-            if (isStreaming) {
-              await audioManager.stopStream();
-              await new Promise(resolve => setTimeout(resolve, 500)); // 잠시 대기
-            }
-            await audioManager.startStream('discord');
-            console.log('[Tray] Discord 캡처 시작');
-            setTimeout(() => {
-              updateContextMenu();
-            }, 100);
-          } catch (err) {
-            console.error('[Tray] Discord 캡처 실패:', err);
-          }
+        {
+          type: 'separator',
         },
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: 'Stop Capture',
-        type: 'normal',
-        enabled: isStreaming,
-        click: async () => {
-          const audioManager = AudioManager.getInstance();
-          try {
-            await audioManager.stopStream();
-            console.log('[Tray] 캡처 중지');
-            setTimeout(() => {
-              updateContextMenu();
-            }, 100);
-          } catch (err) {
-            console.error('[Tray] 캡처 중지 실패:', err);
-          }
+        {
+          label: '--- 볼륨 설정 (Volume) ---',
+          enabled: false,
         },
-      },
-      {
-        type: 'separator',
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: '--- 볼륨 설정 (Volume) ---',
-        enabled: false,
-      },
-      {
-        label: `현재 볼륨: ${getVolumeLevel()} (${getVolumeLevel() * 10}%)`,
-        enabled: false,
-      },
-      {
-        label: '볼륨 조절',
-        submenu: [
-          {
-            label: '1 (10%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 1,
-            click: async () => {
-              await setTrayVolumeLevel(1);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '2 (20%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 2,
-            click: async () => {
-              await setTrayVolumeLevel(2);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '3 (30%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 3,
-            click: async () => {
-              await setTrayVolumeLevel(3);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '4 (40%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 4,
-            click: async () => {
-              await setTrayVolumeLevel(4);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '5 (50%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 5,
-            click: async () => {
-              await setTrayVolumeLevel(5);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '6 (60%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 6,
-            click: async () => {
-              await setTrayVolumeLevel(6);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '7 (70%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 7,
-            click: async () => {
-              await setTrayVolumeLevel(7);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '8 (80%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 8,
-            click: async () => {
-              await setTrayVolumeLevel(8);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '9 (90%)',
-            type: 'radio',
-            checked: getVolumeLevel() === 9,
-            click: async () => {
-              await setTrayVolumeLevel(9);
-              updateContextMenu();
-            },
-          },
-        ],
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: '--- 블러 강도 설정 (Blur Intensity) ---',
-        enabled: false,
-      },
-      {
-        label: `현재 블러 강도: ${currentBlurIntensity}px`,
-        enabled: false,
-      },
-      {
-        label: '블러 강도 설정',
-        submenu: [
-          {
-            label: '15px (약함)',
-            type: 'radio',
-            checked: currentBlurIntensity === 15,
-            click: () => {
-              setTrayBlurIntensity(15);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '25px (보통)',
-            type: 'radio',
-            checked: currentBlurIntensity === 25,
-            click: () => {
-              setTrayBlurIntensity(25);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '40px (강함)',
-            type: 'radio',
-            checked: currentBlurIntensity === 40,
-            click: () => {
-              setTrayBlurIntensity(40);
-              updateContextMenu();
-            },
-          },
-        ],
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: '--- 민감도 설정 (Sensitivity) ---',
-        enabled: false,
-      },
-      {
-        label: `현재 민감도: ${getCurrentThresholdSync().toFixed(1)}`,
-        enabled: false,
-      },
-      {
-        label: '◀ 민감도 낮추기 (-0.1)',
-        enabled: getCurrentThresholdSync() > 0.0,
-        click: async () => {
-          const current = getCurrentThresholdSync();
-          const newThreshold = Math.max(0.0, current - 0.1);
-          await setTrayThreshold(newThreshold);
-          updateContextMenu();
+        {
+          label: `현재 볼륨: ${getVolumeLevel()} (${getVolumeLevel() * 10}%)`,
+          enabled: false,
         },
-      },
-      {
-        label: '▶ 민감도 높이기 (+0.1)',
-        enabled: getCurrentThresholdSync() < 1.0,
-        click: async () => {
-          const current = getCurrentThresholdSync();
-          const newThreshold = Math.min(1.0, current + 0.1);
-          await setTrayThreshold(newThreshold);
-          updateContextMenu();
+        {
+          label: '볼륨 조절',
+          submenu: [
+            {
+              label: '1 (10%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 1,
+              click: async () => {
+                await setTrayVolumeLevel(1);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '2 (20%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 2,
+              click: async () => {
+                await setTrayVolumeLevel(2);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '3 (30%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 3,
+              click: async () => {
+                await setTrayVolumeLevel(3);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '4 (40%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 4,
+              click: async () => {
+                await setTrayVolumeLevel(4);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '5 (50%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 5,
+              click: async () => {
+                await setTrayVolumeLevel(5);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '6 (60%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 6,
+              click: async () => {
+                await setTrayVolumeLevel(6);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '7 (70%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 7,
+              click: async () => {
+                await setTrayVolumeLevel(7);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '8 (80%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 8,
+              click: async () => {
+                await setTrayVolumeLevel(8);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '9 (90%)',
+              type: 'radio',
+              checked: getVolumeLevel() === 9,
+              click: async () => {
+                await setTrayVolumeLevel(9);
+                updateContextMenu();
+              },
+            },
+          ],
         },
-      },
-      {
-        label: '민감도 설정',
-        submenu: [
-          {
-            label: '0.0 (가장 낮음)',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.0) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.0);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.1',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.1) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.1);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.2',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.2) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.2);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.3',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.3) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.3);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.4',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.4) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.4);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.5',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.5) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.5);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.6',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.6) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.6);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.7',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.7) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.7);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.8',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.8) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.8);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '0.9',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 0.9) < 0.01,
-            click: async () => {
-              await setTrayThreshold(0.9);
-              updateContextMenu();
-            },
-          },
-          {
-            label: '1.0 (가장 높음)',
-            type: 'radio',
-            checked: Math.abs(getCurrentThresholdSync() - 1.0) < 0.01,
-            click: async () => {
-              await setTrayThreshold(1.0);
-              updateContextMenu();
-            },
-          },
-        ],
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: '--- 사용자 대시보드 ---',
-        enabled: false,
-      },
-      {
-        label: '대시보드 열기',
-        type: 'normal',
-        click: () => {
-          const { openDashboardWindow } = require('./windows/createDashboardWindow');
-          openDashboardWindow();
+        {
+          type: 'separator',
         },
-      },
-      {
-        type: 'separator',
-      },
-      {
-        label: 'Quit',
-        type: 'normal',
-        click: () => {
-          app.quit();
+        {
+          label: '--- 블러 강도 설정 (Blur Intensity) ---',
+          enabled: false,
         },
-      },
-    ]);
+        {
+          label: `현재 블러 강도: ${currentBlurIntensity}px`,
+          enabled: false,
+        },
+        {
+          label: '블러 강도 설정',
+          submenu: [
+            {
+              label: '15px (약함)',
+              type: 'radio',
+              checked: currentBlurIntensity === 15,
+              click: () => {
+                setTrayBlurIntensity(15);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '25px (보통)',
+              type: 'radio',
+              checked: currentBlurIntensity === 25,
+              click: () => {
+                setTrayBlurIntensity(25);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '40px (강함)',
+              type: 'radio',
+              checked: currentBlurIntensity === 40,
+              click: () => {
+                setTrayBlurIntensity(40);
+                updateContextMenu();
+              },
+            },
+          ],
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: '--- 민감도 설정 (Sensitivity) ---',
+          enabled: false,
+        },
+        {
+          label: `현재 민감도: ${getCurrentThresholdSync().toFixed(1)}`,
+          enabled: false,
+        },
+
+        {
+          label: '민감도 설정',
+          submenu: [
+            {
+              label: '0.0 (가장 낮음)',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.0) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.0);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.1',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.1) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.1);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.2',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.2) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.2);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.3',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.3) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.3);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.4',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.4) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.4);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.5',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.5) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.5);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.6',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.6) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.6);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.7',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.7) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.7);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.8',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.8) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.8);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '0.9',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 0.9) < 0.01,
+              click: async () => {
+                await setTrayThreshold(0.9);
+                updateContextMenu();
+              },
+            },
+            {
+              label: '1.0 (가장 높음)',
+              type: 'radio',
+              checked: Math.abs(getCurrentThresholdSync() - 1.0) < 0.01,
+              click: async () => {
+                await setTrayThreshold(1.0);
+                updateContextMenu();
+              },
+            },
+          ],
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: '--- 사용자 대시보드 ---',
+          enabled: false,
+        },
+        {
+          label: '대시보드 열기',
+          type: 'normal',
+          click: () => {
+            const { openDashboardWindow } = require('./windows/createDashboardWindow');
+            openDashboardWindow();
+          },
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: 'Quit',
+          type: 'normal',
+          click: () => {
+            app.quit();
+          },
+        },
+      ]);
 
       try {
         trayInstance.setContextMenu(contextMenu);
@@ -891,7 +739,7 @@ function setTrayBlurIntensity(intensity: number): void {
       const { getROI, getMode } = require('./store');
       const currentROI = getROI();
       const currentMode = getMode();
-      
+
       try {
         // 현재 상태를 가져와서 blurIntensity 포함하여 전송
         // main.ts의 pushOverlayState와 동일한 형식으로 전송
@@ -900,7 +748,7 @@ function setTrayBlurIntensity(intensity: number): void {
           blurIntensity: intensity, // 🔥 [Task 49] 새로운 블러 강도
           ...(currentROI ? { roi: currentROI } : {}),
         };
-        
+
         currentOverlayWindow.webContents.send(IPC_CHANNELS.OVERLAY_STATE_PUSH, statePayload);
         console.log(`[Tray] ✅ 블러 강도 설정 전달: ${intensity}px`);
       } catch (err: any) {

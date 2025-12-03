@@ -52,18 +52,6 @@
 39. **[Electron 앱 배포](./42-electron-app-deployment.md)** ✅ 완료
 40. **[Threshold(임계값) 설정 및 최적화](./43-threshold-configuration.md)** ✅ 완료
 41. **[Vercel 관리자 대시보드 구축 가이드](./44-vercel-admin-dashboard.md)** 📝 계획 단계
-42. **[Spawn 방식 Bridge 마이그레이션](./45-spawn-bridge-migration.md)** ✅ 완료
-43. **[Supabase 기반 관리자 DB 및 로깅 시스템 구축](./46-supabase-admin-db.md)** 📝 계획 단계
-44. **[메인 대시보드 구축 및 멀티 윈도우 관리](./47-main-dashboard-multi-window.md)** ✅ 완료
-45. **[애플리케이션 성능 최적화](./48-performance-optimization.md)** ✅ 완료
-46. **[유해 표현 블라인드 처리 및 OCR 연속 감지](./49-harmful-content-blind-ocr-continuous.md)** ✅ 완료
-47. **[테스트 자동화 구현](./50-test-automation.md)** ✅ 완료 (성능 테스트 포함)
-48. **[PaddleOCR 전환, 대시보드 통합 및 UUID 식별](./51-paddleocr-dashboard-userid-integration.md)** ✅ 완료
-
-## 작업 의존성 그래프
-
-```
-01-electron-setup
     ├─ 02-system-tray
     ├─ 03-overlay-window
     │   ├─ 04-roi-selection
@@ -225,6 +213,7 @@
 | 유해 표현 블라인드 처리 및 OCR 연속 감지 | ✅ 완료        | 100%   | High     |
 | 테스트 자동화 구현                      | ✅ 완료        | 100%   | High     |
 | PaddleOCR 전환, 대시보드 통합 및 UUID 식별 | ✅ 완료        | 100%   | High     |
+| 트레이 정리                            | ✅ 완료        | 100%   | Low      |
 
 ## 최근 변경 사항
 
