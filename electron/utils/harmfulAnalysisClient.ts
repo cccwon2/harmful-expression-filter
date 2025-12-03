@@ -40,11 +40,13 @@ export interface AnalysisError {
  * 
  * @param text 분석할 텍스트
  * @param useAI AI 모델 사용 여부 (기본값: false, 키워드 기반만 사용)
+ * @param filterMode 필터 모드 ('ocr' | 'voice', 기본값: 'voice')
  * @returns 분석 결과 또는 에러
  */
 export async function sendTextForAnalysis(
   text: string,
-  useAI: boolean = false
+  useAI: boolean = false,
+  filterMode: "ocr" | "voice" = "voice"
 ): Promise<AnalysisResult | AnalysisError> {
   try {
     // 빈 텍스트 처리
@@ -66,7 +68,7 @@ export async function sendTextForAnalysis(
       processing_time: number;
     }>(
       `${SERVER_URL}/analyze`,
-      { text: text.trim(), use_ai: useAI },
+      { text: text.trim(), use_ai: useAI, filter_mode: filterMode },
       {
         timeout: REQUEST_TIMEOUT,
         headers: { 'Content-Type': 'application/json' },

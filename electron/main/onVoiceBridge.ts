@@ -583,7 +583,7 @@ function getServerUrl(): string {
   return process.env.SERVER_URL || "http://127.0.0.1:8000";
 }
 
-async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean; confidence: number }> {
+async function analyzeTextWithServer(text: string, filterMode: "ocr" | "voice" = "voice"): Promise<{ isHarmful: boolean; confidence: number }> {
   if (!text || !text.trim()) return { isHarmful: false, confidence: 0.0 };
 
   const serverUrl = getServerUrl();
@@ -600,7 +600,7 @@ async function analyzeTextWithServer(text: string): Promise<{ isHarmful: boolean
       const response = await axios.post<{
         has_violation: boolean | number;
         ai_analysis: { is_harmful: boolean | number; confidence: number } | null;
-      }>(`${serverUrl}/analyze`, { text: text.trim(), use_ai: true }, { timeout: SERVER_REQUEST_TIMEOUT });
+      }>(`${serverUrl}/analyze`, { text: text.trim(), use_ai: true, filter_mode: filterMode }, { timeout: SERVER_REQUEST_TIMEOUT });
 
       // 유해 표현 감지 시에만 상세 로그 출력
       const isHarmfulFromResponse = response.data.ai_analysis
@@ -765,7 +765,7 @@ export const onVoiceBridge: OnVoiceBridge = {
 
         // 새로운 텍스트인 경우에만 서버 분석 수행
         lastAnalyzedText = normalizedText;
-        analysisResult = await analyzeTextWithServer(normalizedText);
+        analysisResult = await analyzeTextWithServer(normalizedText, "ocr");
         // 유해 표현 감지 시에만 로그 출력
         if (analysisResult.isHarmful) {
           console.warn(
