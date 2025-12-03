@@ -11,6 +11,7 @@ type OverlayState = {
   mode: OverlayMode;
   roi?: ROI;
   harmful?: boolean;
+  blurIntensity?: number; // 🔥 [Task 49] 블러 강도 설정 (15 | 25 | 40)
 };
 
 interface ServerAPI {
@@ -23,7 +24,7 @@ interface ServerAPI {
       }
     | { error: true; message: string; code?: string; status?: number }
   >;
-  analyzeText: (text: string) => Promise<
+  analyzeText: (text: string, userId?: string, filterMode?: "ocr" | "voice") => Promise<
     | {
         has_violation: boolean;
         confidence: number;
@@ -79,6 +80,7 @@ declare global {
         hide: () => void;
         setClickThrough: (enabled: boolean) => Promise<void>;
         sendROI: (roi: ROI) => void;
+        sendModeChange: (mode: OverlayMode) => void;
         onModeChange: (callback: (mode: OverlayMode) => void) => () => void;
         onStatePush: (callback: (state: OverlayState) => void) => () => void;
         startMonitoring: () => void;
@@ -109,6 +111,17 @@ declare global {
         }>;
         onStatusChange: (callback: (status: any) => void) => void;
         onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
+      dashboard: {
+        selectMode: (mode: 'ocr' | 'voice') => void;
+        toggleOCR: (enabled: boolean) => void;
+        toggleVoice: (enabled: boolean) => void;
+        getWindowStatus: () => Promise<{
+          isOcrEnabled: boolean;
+          isVoiceEnabled: boolean;
+          isOverlayVisible: boolean;
+        }>;
+        onOCRStatusChange: (callback: (status: 'start' | 'stop') => void) => () => void;
       };
     };
   }

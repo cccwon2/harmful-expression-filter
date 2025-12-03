@@ -12,6 +12,7 @@ const IPC_CHANNELS = {
   EXIT_EDIT_MODE_AND_HIDE: 'exit-edit-mode-and-hide',
   SET_CLICK_THROUGH: 'overlay:setClickThrough',
   OVERLAY_SET_MODE: 'overlay:setMode',
+  OVERLAY_MODE_CHANGED: 'overlay:modeChanged', // 렌더러에서 메인 프로세스로 모드 변경 알림
   OVERLAY_STATE_PUSH: 'overlay:state',
   START_MONITORING: 'monitoring:start',
   STOP_MONITORING: 'monitoring:stop',
@@ -42,6 +43,14 @@ const ONVOICE_CHANNELS = {
   START_CAPTURE: 'onvoice:startCapture',
   STOP_CAPTURE: 'onvoice:stopCapture',
   GET_STATUS: 'onvoice:get-status',
+} as const;
+
+const DASHBOARD_CHANNELS = {
+  SELECT_MODE: 'dashboard:select-mode',         // 모드 선택 (ocr | voice)
+  TOGGLE_OCR: 'dashboard:toggle-ocr',
+  TOGGLE_VOICE: 'dashboard:toggle-voice',
+  GET_WINDOW_STATUS: 'dashboard:get-window-status',
+  OCR_STATUS_CHANGE: 'dashboard:ocr-status-change',
 } as const;
 
 // OverlayMode 타입 정의 (preload에서 직접 정의)
@@ -174,6 +183,15 @@ try {
           console.error('[Preload] Error sending ROI_SELECTED:', error);
         }
       },
+      sendModeChange: (mode: OverlayMode) => {
+        console.log('[Preload] overlay.sendModeChange() called with:', mode);
+        try {
+          ipcRenderer.send(IPC_CHANNELS.OVERLAY_MODE_CHANGED, mode);
+          console.log('[Preload] OVERLAY_MODE_CHANGED IPC sent');
+        } catch (error) {
+          console.error('[Preload] Error sending OVERLAY_MODE_CHANGED:', error);
+        }
+      },
       onModeChange: (callback: (mode: OverlayMode) => void) => {
         console.log('[Preload] overlay.onModeChange() listener registered');
         const listener = (_event: unknown, mode: OverlayMode) => {
@@ -189,12 +207,9 @@ try {
       onStatePush: (callback: (state: OverlayState) => void) => {
         console.log('[Preload] overlay.onStatePush() listener registered');
         const listener = (_event: unknown, state: OverlayState) => {
-          // 모든 상태 업데이트 처리 (harmful 여부와 무관하게)
-          // harmful 상태는 onServerAlert에서 별도로 관리
+          // 유해 표현 감지 시에만 로그 출력
           if (state.harmful) {
-            console.warn('[Preload] State push received (harmful):', state);
-          } else {
-            console.log('[Preload] State push received (non-harmful):', state);
+            console.warn('[Preload] 🚨 State push received (harmful):', state);
           }
           callback(state);
         };
@@ -233,27 +248,24 @@ try {
         };
       },
       onServerAlert: (callback: (harmful: boolean) => void) => {
-        console.log('[Preload] overlay.onServerAlert() listener registered');
         const listener = (_event: unknown, payload: { harmful: boolean }) => {
-          // harmful=true와 harmful=false 모두 처리해야 함
-          // harmful=false도 렌더러로 전달하여 블라인드 해제 타이머를 시작할 수 있도록 함
+          // 유해 표현 감지 시에만 로그 출력
           if (payload.harmful) {
-            console.warn('[Preload] Harmful server alert received (harmful=true)');
-          } else {
-            console.log('[Preload] Non-harmful server alert received (harmful=false)');
+            console.warn('[Preload] 🚨 Harmful server alert received');
           }
           callback(payload.harmful);
         };
         ipcRenderer.on(IPC_CHANNELS.ALERT_FROM_SERVER, listener);
         return () => {
-          console.log('[Preload] overlay.onServerAlert() listener removed');
           ipcRenderer.removeListener(IPC_CHANNELS.ALERT_FROM_SERVER, listener);
         };
       },
     },
     server: {
       healthCheck: () => ipcRenderer.invoke(SERVER_CHANNELS.HEALTH_CHECK),
-      analyzeText: (text: string) => ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text),
+      // ✅ device UUID(User ID) + 필터 모드(ocr/voice)를 함께 전달
+      analyzeText: (text: string, userId?: string, filterMode?: "ocr" | "voice") =>
+        ipcRenderer.invoke(SERVER_CHANNELS.ANALYZE_TEXT, text, userId, filterMode),
       getKeywords: () => ipcRenderer.invoke(SERVER_CHANNELS.GET_KEYWORDS),
       ocrImage: (imageBuffer: Buffer) => ipcRenderer.invoke(SERVER_CHANNELS.OCR_IMAGE, imageBuffer),
       ocrAndAnalyze: (imageBuffer: Buffer) => ipcRenderer.invoke(SERVER_CHANNELS.OCR_AND_ANALYZE, imageBuffer),
@@ -284,6 +296,28 @@ try {
       },
       onHarmfulDetected: (callback: (data: any) => void) => {
         ipcRenderer.on(IPC_CHANNELS.AUDIO_HARMFUL_DETECTED, (_, data) => callback(data));
+      },
+    },
+    // 대시보드 및 멀티 윈도우 관리 API
+    dashboard: {
+      selectMode: (mode: 'ocr' | 'voice') => {
+        ipcRenderer.send(DASHBOARD_CHANNELS.SELECT_MODE, mode);
+      },
+      toggleOCR: (enabled: boolean) => {
+        ipcRenderer.send(DASHBOARD_CHANNELS.TOGGLE_OCR, enabled);
+      },
+      toggleVoice: (enabled: boolean) => {
+        ipcRenderer.send(DASHBOARD_CHANNELS.TOGGLE_VOICE, enabled);
+      },
+      getWindowStatus: () => ipcRenderer.invoke(DASHBOARD_CHANNELS.GET_WINDOW_STATUS),
+      onOCRStatusChange: (callback: (status: 'start' | 'stop') => void) => {
+        const listener = (_event: unknown, status: 'start' | 'stop') => {
+          callback(status);
+        };
+        ipcRenderer.on(DASHBOARD_CHANNELS.OCR_STATUS_CHANGE, listener);
+        return () => {
+          ipcRenderer.removeListener(DASHBOARD_CHANNELS.OCR_STATUS_CHANGE, listener);
+        };
       },
     },
   });
@@ -342,6 +376,17 @@ declare global {
         }>;
         onStatusChange: (callback: (status: any) => void) => void;
         onHarmfulDetected: (callback: (data: any) => void) => void;
+      };
+      dashboard: {
+        selectMode: (mode: 'ocr' | 'voice') => void;
+        toggleOCR: (enabled: boolean) => void;
+        toggleVoice: (enabled: boolean) => void;
+        getWindowStatus: () => Promise<{
+          isOcrEnabled: boolean;
+          isVoiceEnabled: boolean;
+          isOverlayVisible: boolean;
+        }>;
+        onOCRStatusChange: (callback: (status: 'start' | 'stop') => void) => () => void;
       };
     };
   }

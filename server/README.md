@@ -55,6 +55,10 @@ SERVER_URL=http://127.0.0.1:8000
 # Deepgram API Key (STT용)
 DEEPGRAM_API_KEY=your_deepgram_api_key_here
 
+# PaddleOCR 설정
+PADDLEOCR_USE_GPU=false  # GPU 사용 여부 (기본값: false, CPU 사용)
+PADDLEOCR_LANG=korean    # OCR 언어 설정 (기본값: korean)
+
 # 로컬 모델 경로 (선택사항)
 # 설정하지 않으면 Hugging Face Hub에서 기본 모델을 다운로드합니다
 # 상대 경로: models/your-custom-model
@@ -97,10 +101,34 @@ MODEL_PATH=models/your-custom-model
 
 ## OCR 처리
 
-**OCR은 Electron에서 Windows SDK OCR을 직접 사용합니다.**
+**서버 측 PaddleOCR을 사용합니다.**
 
-- C# COM Bridge (`dotnet/OnVoiceComBridge/Startup.cs`)를 통해 Windows.Media.Ocr API 사용
-- 서버의 `/api/ocr` 엔드포인트는 현재 사용되지 않음 (하위 호환성을 위해 유지)
+- FastAPI 서버의 `/api/ocr` 및 `/api/ocr-and-analyze` 엔드포인트 제공
+- Electron 앱에서 이미지를 서버로 전송하여 OCR 처리
+- CPU 버전 또는 GPU 버전 지원 (환경 변수로 제어)
+
+**PaddleOCR 설정**:
+
+환경 변수 설정 (`.env` 파일):
+```env
+# GPU 사용 여부 (기본값: false, CPU 사용)
+PADDLEOCR_USE_GPU=false
+
+# OCR 언어 설정 (기본값: korean)
+PADDLEOCR_LANG=korean
+```
+
+**GPU 버전 설치 (Ubuntu 24.04 Server + CUDA 13 권장)**:
+
+```bash
+# CUDA 13용 PaddlePaddle GPU 설치
+python -m pip install paddlepaddle-gpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cu130/
+
+# PaddleOCR 설치
+python -m pip install paddleocr==2.7.0.3 Pillow
+```
+
+자세한 내용은 [docs/28-paddle-ocr-integration.md](../docs/28-paddle-ocr-integration.md) 참조
 
 ## API 문서
 

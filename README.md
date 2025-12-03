@@ -15,16 +15,16 @@
 
 ### 작업 문서
 
-각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~45**까지 진행 중입니다 (Task 43, 44 포함):
+각 작업의 상세 내용은 [docs/](./docs/) 폴더를 참조하세요. 현재까지 **Task 1~50**까지 진행 중입니다:
 
 - **Task 1~18**: 기본 Electron 앱 설정, 시스템 트레이, 오버레이 창, ROI 선택, OCR 모니터링, 서버 연동
 - **Task 20~23**: FastAPI 서버 구축 및 Electron 통합 (텍스트 분석 API)
 - **Task 24~27**: 음성 STT API, Electron 오디오 연동, Deepgram STT 통합
-- **Task 28**: PaddleOCR 서버 연동 및 Tesseract.js 대체 (현재는 Windows SDK OCR로 대체됨)
+- **Task 28**: PaddleOCR 서버 연동 및 Tesseract.js 대체 ✅ 완료 (서버 측 PaddleOCR 사용)
 - **Task 29**: OnVoice COM Bridge 통합 (프로세스별 오디오 캡처)
 - **Task 30~32**: electron-edge-js 마이그레이션 (⚠️ Deprecated - Task 45로 대체됨)
 - **Task 33**: AudioManager 트레이 통합 (보안 강화, 시스템 트레이 직접 제어)
-- **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선)
+- **Task 34**: Windows OCR 성능 최적화 (2-3초 → 14-17ms, 약 120-200배 개선) ⚠️ 레거시 (현재는 서버 측 PaddleOCR 사용)
 - **Task 35**: Deepgram 실시간 스트리밍 방식 (버퍼링 제거, 레이턴시 ~2.0초 → ~0.5초)
 - **Task 36**: 로컬 Whisper 폴백 시스템 (⚠️ 제거됨 - 서버 STT만 사용, 자동 재연결)
 - **Task 37**: Ubuntu 서버 FastAPI 배포 가이드 (systemd, Nginx, SSL, 프로덕션 환경 구성)
@@ -36,12 +36,26 @@
 - **Task 43**: Threshold(임계값) 설정 및 최적화 (모델별 기본값 설정, 환경 변수 지원, API를 통한 동적 조정, Electron 트레이 연동)
 - **Task 44**: Vercel 관리자 대시보드 구축 가이드 (Next.js 기반 대시보드, FastAPI 서버 연동, 실시간 모니터링)
 - **Task 45**: Spawn 방식 Bridge 마이그레이션 (electron-edge-js → child_process.spawn, 프로세스 분리 및 안정성 향상)
+- **Task 46**: Supabase 기반 관리자 DB 및 로깅 시스템 구축 (PostgreSQL 로그 저장, 설정 원격 관리, 관리자 API) 📝 계획 단계
+- **Task 47**: 메인 대시보드 구축 및 멀티 윈도우 관리 (모드 선택 화면, OCR/음성 모드 분리, 성능 최적화)
+- **Task 48**: 애플리케이션 성능 최적화 (마우스 버벅거림 해결, React 렌더링 최적화, IPC 통신 최적화)
+- **Task 49**: 유해 표현 블라인드 처리 및 OCR 연속 감지 (블러 강도 설정, 트레이 메뉴 통합, setContentProtection)
+- **Task 50**: 테스트 자동화 구현 (Jest 유닛 테스트 32개, Playwright E2E 테스트, 성능 테스트 포함) ✅ 완료
+- **Task 51**: PaddleOCR 전환, 사용자 대시보드 통합 및 UUID 기반 사용자 식별 ✅ 완료
+  - 서버 측 PaddleOCR 완전 전환 (Windows SDK OCR 제거)
+  - 사용자 대시보드 통합 (트레이 메뉴 바로가기)
+  - UUID 기반 사용자 식별 시스템 구축
+  - 빈 텍스트 필터링 (voice/OCR 모드 모두)
+  - filter_mode 및 user_id 정확한 저장
 
 ### 주요 기술 스택
 
-- **OCR**: Windows SDK OCR (Windows.Media.Ocr) - C# COM Bridge를 통해 사용
-  - **성능**: 14-17ms 처리 시간 (서버 분석 제거, 로컬 분석으로 전환)
-  - **최적화**: OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
+- **OCR**: 서버 측 PaddleOCR (FastAPI 서버에서 처리) ✅
+  - **CPU 버전**: 기본 설치 (`paddleocr==2.7.0.3`, `paddlepaddle==2.6.2`)
+  - **GPU 버전**: Ubuntu 24.04 Server + CUDA 13 환경에서 GPU 가속 지원
+  - **처리 흐름**: Electron → 화면 캡처 → 서버 전송 → PaddleOCR 처리 → 결과 반환
+  - **블라인드 최적화**: `setContentProtection(true)`로 오버레이 제외, 연속 감지 지원 (Task 49)
+  - **레거시**: Windows SDK OCR (Task 34) - 현재는 사용하지 않음
 - **STT**: Deepgram (WebSocket 기반 실시간 음성 인식) - 서버 STT만 사용
   - **정상 모드**: Deepgram 실시간 스트리밍 (~0.5초 레이턴시)
     - 중간 결과(Interim Results) 지원, 문장 완성 전에도 감지 가능
@@ -109,6 +123,12 @@ USE_QUANTIZATION=false
 # CLASSIFIER_THRESHOLD=0.5  # 0.0 ~ 1.0 (기본값: KoElectra=0.5, Kanana=0.22)
 # 환경 변수를 설정하지 않으면 모델별 기본값이 사용됩니다.
 # 자세한 내용은 docs/43-threshold-configuration.md 참조
+
+# ==========================================
+# PaddleOCR 설정 (선택사항)
+# ==========================================
+# PADDLEOCR_USE_GPU=false  # GPU 사용 여부 (기본값: false, CPU 사용)
+# PADDLEOCR_LANG=korean     # OCR 언어 설정 (기본값: korean)
 ```
 
 **참고**:
@@ -130,6 +150,11 @@ USE_QUANTIZATION=false
   - 설정하지 않으면 모델별 기본값 사용 (KoElectra: 0.5, Kanana: 0.22)
   - Electron 트레이 메뉴에서도 동적으로 조정 가능
   - 자세한 내용은 [docs/43-threshold-configuration.md](./docs/43-threshold-configuration.md) 참조
+- **PaddleOCR 설정** (선택사항):
+  - `PADDLEOCR_USE_GPU`: GPU 사용 여부 (기본값: `false`, CPU 사용)
+  - `PADDLEOCR_LANG`: OCR 언어 설정 (기본값: `korean`)
+  - GPU 사용 시 Ubuntu 24.04 Server + CUDA 13 환경 권장
+  - 자세한 내용은 [docs/28-paddle-ocr-integration.md](./docs/28-paddle-ocr-integration.md) 참조
 
 ## 🚀 빠른 시작
 
@@ -371,7 +396,31 @@ npm run build           # 전체 빌드 + 패키징
 
 # 프로덕션 실행
 npm start
+
+# 테스트
+npm test                    # 전체 테스트 실행 (유닛 + E2E)
+npm run test:unit           # 유닛 테스트만 실행
+npm run test:unit:watch     # 유닛 테스트 Watch 모드
+npm run test:unit:coverage  # 유닛 테스트 커버리지 포함
+npm run test:e2e            # E2E 테스트 실행
+npm run test:e2e:ui         # E2E 테스트 UI 모드
+npm run test:e2e:debug      # E2E 테스트 디버그 모드
+npm run test:report         # 테스트 리포트 확인
 ```
+
+**테스트 관련**:
+
+- **유닛 테스트**: 32개 테스트 케이스 (Task 49: 15개, Task 48 성능 최적화: 17개)
+  - 블러 강도 설정 및 유효성 검증
+  - OCR 시뮬레이션
+  - React 렌더링 최적화
+  - IPC 통신 최적화
+  - OCR 처리 최적화 (적응형 인터벌)
+  - 메모리 최적화
+  - GPU 가속 렌더링
+- **E2E 테스트**: 20개 테스트 케이스 (브라우저 시뮬레이션 10개, Electron 앱 10개)
+- 자세한 테스트 가이드는 [docs/TEST_AUTOMATION_GUIDE.md](./docs/TEST_AUTOMATION_GUIDE.md) 참조
+- 빠른 시작: `scripts\quick-start-test.bat` 실행 (Windows)
 
 **배포 관련**:
 
@@ -407,7 +456,7 @@ harmful-expression-filter/
 ├── electron/                # Electron 메인 프로세스 (IPC, 창, 상태)
 │   ├── main/                # 메인 프로세스 핵심 모듈
 │   │   ├── AudioManager.ts  # 오디오 스트리밍 관리자 (Singleton)
-│   │   └── onVoiceBridge.ts # OnVoice Bridge 모듈 (Windows SDK OCR 포함)
+│   │   └── onVoiceBridge.ts # OnVoice Bridge 모듈 (레거시: Windows SDK OCR 포함, 현재는 사용하지 않음)
 │   ├── audio/               # 오디오 관련 서비스
 │   │   ├── onVoiceService.ts        # OnVoice 서비스 (IPC용)
 │   │   └── onVoiceBridgeAdapter.ts  # OnVoice 브리지 어댑터
@@ -415,7 +464,7 @@ harmful-expression-filter/
 │       └── onVoiceHandlers.ts       # OnVoice IPC 핸들러
 ├── dotnet/                  # C# COM Bridge
 │   └── OnVoiceComBridge/    # .NET 6 프로젝트
-│       └── Startup.cs       # Windows SDK OCR + OnVoice COM 래퍼
+│       └── Startup.cs       # OnVoice COM 래퍼 (레거시: Windows SDK OCR 포함, 현재는 사용하지 않음)
 ├── native/                  # C++ COM DLL (빌드 산출물)
 │   ├── .gitkeep            # 폴더 구조 유지
 │   └── OnVoiceAudioBridge.dll  # 빌드된 C++ COM DLL (배포용)
@@ -443,6 +492,20 @@ harmful-expression-filter/
 │   │   └── bad_words.json   # 유해어 목록
 │   ├── tests/               # 테스트 파일
 │   └── venv312/             # Python 3.12 가상환경
+├── tests/                   # 테스트 자동화 (Task 50)
+│   ├── e2e/                 # E2E 테스트 (Playwright)
+│   │   ├── task49-blur.spec.ts
+│   │   └── task49-blur-electron.spec.ts
+│   ├── unit/                # 유닛 테스트 (Jest)
+│   │   ├── blurIntensity.test.ts    # Task 49 (15개 테스트)
+│   │   └── performance.test.ts      # Task 48 (17개 성능 테스트) 🆕
+│   ├── helpers/             # 테스트 헬퍼
+│   │   ├── ocr-simulator.ts
+│   │   ├── performance-helpers.ts   # 성능 테스트 헬퍼 🆕
+│   │   └── electron-launcher.ts
+│   └── setup.ts             # Jest 전역 setup
+├── playwright.config.ts     # Playwright 설정
+├── jest.config.js           # Jest 설정
 └── renderer/                # React 렌더러 프로세스 (오버레이/UI)
 ```
 
@@ -461,10 +524,10 @@ harmful-expression-filter/
 - `electron/audio/audioService.ts` – 오디오 모니터링 서비스 (naudiodon2 기반)
 - `electron/audio/onVoiceService.ts` – OnVoice COM 브리지 서비스 (프로세스별 캡처)
 - `electron/audio/onVoiceBridgeAdapter.ts` – OnVoice COM 브리지 어댑터
-- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (spawn 방식, Windows SDK OCR 포함, Task 45)
+- `electron/main/onVoiceBridge.ts` – OnVoice Bridge 모듈 (spawn 방식, 레거시: Windows SDK OCR 포함, 현재는 사용하지 않음, Task 45)
 - `electron/main/registerComDll.ts` – COM DLL 자동 등록 유틸리티 (포터블 방식 지원)
 - `electron/main/AudioManager.ts` – 오디오 스트리밍 관리자 (Singleton, 트레이 메뉴 통합, 폴백 로직 포함)
-- `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (Windows SDK OCR + OnVoice COM 래퍼)
+- `dotnet/OnVoiceComBridge/Startup.cs` – C# COM Bridge (레거시: Windows SDK OCR 포함, 현재는 OnVoice COM 래퍼만 사용)
 - `electron/utils/harmfulAnalysisClient.ts` – FastAPI 유해 표현 분석 클라이언트
 - `electron/audio/volumeController.ts` – 볼륨 레벨(1~9) 및 타깃 앱 관리 (AppVolumeController 파사드)
 - `electron/audio/appVolumeController.ts` – 앱별 볼륨 제어 (C# Bridge 기반, PID 지원)
@@ -477,7 +540,19 @@ harmful-expression-filter/
 - `docs/43-threshold-configuration.md` – Threshold 설정 및 최적화 문서 (Task 43)
 - `docs/44-vercel-admin-dashboard.md` – Vercel 관리자 대시보드 구축 가이드 (Task 44)
 - `docs/45-spawn-bridge-migration.md` – Spawn 방식 마이그레이션 문서 (Task 45)
+- `docs/48-performance-optimization.md` – 애플리케이션 성능 최적화 문서 (Task 48)
+- `docs/49-harmful-content-blind-ocr-continuous.md` – 유해 표현 블라인드 처리 및 OCR 연속 감지 (Task 49)
+- `docs/50-test-automation.md` – 테스트 자동화 구현 문서 (Task 50)
+- `docs/TEST_AUTOMATION_GUIDE.md` – 테스트 자동화 사용 가이드
 - `docs/PORTABLE_BUILD_VERIFICATION.md` – 포터블 빌드 검증 문서
+- `tests/unit/blurIntensity.test.ts` – 블러 강도 설정 유닛 테스트 (Task 49, 15개)
+- `tests/unit/performance.test.ts` – 성능 최적화 유닛 테스트 (Task 48, 17개) 🆕
+- `tests/e2e/task49-blur.spec.ts` – 블러 강도 및 OCR 연속 감지 E2E 테스트 (브라우저 시뮬레이션, 10개)
+- `tests/e2e/task49-blur-electron.spec.ts` – 실제 Electron 앱 E2E 테스트 (10개)
+- `tests/helpers/ocr-simulator.ts` – 테스트 헬퍼 유틸리티 (OCR 시뮬레이터, IPC 모킹)
+- `tests/helpers/performance-helpers.ts` – 성능 테스트 헬퍼 (IPC, React, OCR, GPU, 메모리) 🆕
+- `playwright.config.ts` – Playwright E2E 테스트 설정
+- `jest.config.js` – Jest 유닛 테스트 설정
 
 자세한 내용은 [docs/INTERFACES.md](./docs/INTERFACES.md)와 각 Task 문서를 참조하세요.
 

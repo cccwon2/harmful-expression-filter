@@ -71,12 +71,14 @@ async def get_detection_logs(
         # range(start, end)를 사용하여 페이징 처리
         response = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         
+        log_count = len(response.data) if response.data else 0
+        
         return {
-            "count": len(response.data),
-            "logs": response.data
+            "count": log_count,
+            "logs": response.data if response.data else []
         }
         
     except Exception as e:
-        LOGGER.error(f"❌ Failed to fetch logs: {e}")
+        LOGGER.error(f"[Admin/Logs] ❌ Failed to fetch logs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 

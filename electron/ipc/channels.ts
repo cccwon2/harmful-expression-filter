@@ -8,6 +8,7 @@ export const IPC_CHANNELS = {
   // 새로운 채널들
   SET_CLICK_THROUGH: 'overlay:setClickThrough',
   OVERLAY_SET_MODE: 'overlay:setMode',
+  OVERLAY_MODE_CHANGED: 'overlay:modeChanged', // 렌더러에서 메인 프로세스로 모드 변경 알림
   OVERLAY_STATE_PUSH: 'overlay:state',
   START_MONITORING: 'monitoring:start',
   STOP_MONITORING: 'monitoring:stop',
@@ -54,4 +55,15 @@ export const ONVOICE_CHANNELS = {
 } as const;
 
 export type OnVoiceChannel = typeof ONVOICE_CHANNELS[keyof typeof ONVOICE_CHANNELS];
+
+// 대시보드 및 멀티 윈도우 관리 IPC 채널
+export const DASHBOARD_CHANNELS = {
+  SELECT_MODE: 'dashboard:select-mode',         // 모드 선택 (ocr | voice)
+  TOGGLE_OCR: 'dashboard:toggle-ocr',           // OCR 필터링 ON/OFF
+  TOGGLE_VOICE: 'dashboard:toggle-voice',       // 음성 필터링 ON/OFF
+  GET_WINDOW_STATUS: 'dashboard:get-window-status', // 현재 윈도우 상태 조회
+  OCR_STATUS_CHANGE: 'dashboard:ocr-status-change', // OCR 상태 변경 알림 (main -> renderer)
+} as const;
+
+export type DashboardChannel = typeof DASHBOARD_CHANNELS[keyof typeof DASHBOARD_CHANNELS];
 

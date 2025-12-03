@@ -22,17 +22,19 @@ else:
         supabase = None
 
 
-async def save_detection_log(
-    text: str, 
-    confidence: float, 
-    threshold: float, 
-    model: str, 
+def save_detection_log(
+    text: str,
+    confidence: float,
+    threshold: float,
+    model: str,
     is_harmful: bool,
-    user_id: str = None
+    user_id: str = None,
+    filter_mode: str | None = None,
 ):
     """
-    유해 표현 감지 로그를 비동기로 저장합니다.
+    유해 표현 감지 로그를 저장합니다.
     Main Thread를 차단하지 않기 위해 BackgroundTasks에서 호출되어야 합니다.
+    (동기 함수로 변경: BackgroundTasks는 동기 함수를 기대함)
     """
     if not supabase:
         return
@@ -44,13 +46,23 @@ async def save_detection_log(
             "threshold_used": threshold,
             "model_version": model,
             "is_harmful": is_harmful,
-            "user_id": user_id
+            "user_id": user_id,  # None이어도 저장 (DB에서 NULL 허용)
+            "filter_mode": filter_mode,  # NULL 가능, 미지정 시 기본값(ocr)이 적용되도록 서버 쿼리에서 처리
         }
+        
+        LOGGER.info(f"📝 [Supabase] 로그 저장 시도 시작: user_id={user_id}, text={text[:30]}..., is_harmful={is_harmful}")
+        LOGGER.debug(f"📝 [Supabase] 저장할 데이터: {data}")
+        
         # execute()는 동기 함수지만, 별도 스레드 풀이나 BackgroundTasks 내부에서 실행 시 안전
-        supabase.table("detection_logs").insert(data).execute()
-        # LOGGER.debug(f"📝 Log saved to Supabase: {text[:10]}...")
+        result = supabase.table("detection_logs").insert(data).execute()
+        
+        inserted_id = "N/A"
+        if result.data and len(result.data) > 0:
+            inserted_id = result.data[0].get('id', 'N/A')
+        
+        LOGGER.info(f"✅ [Supabase] 로그 저장 완료: user_id={user_id}, id={inserted_id}")
     except Exception as e:
-        LOGGER.error(f"❌ Failed to save log to Supabase: {e}")
+        LOGGER.error(f"❌ Failed to save log to Supabase: {e}", exc_info=True)
 
 
 def get_app_setting(key: str, default: str = None) -> str:

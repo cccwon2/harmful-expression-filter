@@ -136,8 +136,24 @@ if (!fs.existsSync(targetDir)) {
 
 // DLL 복사
 try {
+  // Release 빌드인지 확인 (경로에 "Release"가 포함되어 있는지 확인)
+  const isReleaseBuild = sourceFile.toLowerCase().includes('release');
+  const isDebugBuild = sourceFile.toLowerCase().includes('debug');
+  
+  if (isDebugBuild && !isReleaseBuild) {
+    console.warn(`[Copy Native DLL] ⚠️  경고: Debug 빌드를 복사하고 있습니다!`);
+    console.warn(`[Copy Native DLL] ⚠️  Debug 빌드는 일반 사용자 PC에서 실행되지 않을 수 있습니다.`);
+    console.warn(`[Copy Native DLL] ⚠️  Release 빌드를 사용하려면: npm run build:native`);
+    console.warn(`[Copy Native DLL] ⚠️  계속하시겠습니까? (Ctrl+C로 취소)`);
+    // 경고만 표시하고 계속 진행 (자동화를 위해)
+  }
+  
   fs.copyFileSync(sourceFile, targetFile);
   console.log(`[Copy Native DLL] ✅ 복사 완료: ${sourceFile} → ${targetFile}`);
+  
+  if (isReleaseBuild) {
+    console.log(`[Copy Native DLL] ✅ Release 빌드 확인됨 (배포 준비 완료)`);
+  }
   
   // 파일 크기 확인
   const stats = fs.statSync(targetFile);

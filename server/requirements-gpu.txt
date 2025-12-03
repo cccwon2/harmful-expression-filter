@@ -1,20 +1,31 @@
-# === FastAPI / 서버 ===
+# === FastAPI / Server ===
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.10.4
 python-multipart>=0.0.6
 
 # === WebSocket ===
-websockets>=12.0,<13.0
+websockets>=13.0
 
 # === Env ===
 python-dotenv>=1.0.0
 
-# === Hugging Face / 훈련 스택 ===
+# === Hugging Face / LLM ===
 transformers>=4.38.0
 peft>=0.7.0
 accelerate>=0.28.0
-bitsandbytes>=0.46.1   # CUDA 13 드라이버 호환 릴리스 기준
+bitsandbytes>=0.46.1
+
+# === OCR / PaddleOCR ===
+# opencv-python-headless는 서버용 (GUI 라이브러리 에러 방지)
+opencv-python-headless>=4.8.0
+paddleocr>=2.7.0.3
+Pillow>=10.0.0
+shapely
+
+# === Database ===
+supabase>=2.0.0
+gotrue>=1.0.0
 
 # === Test ===
 pytest

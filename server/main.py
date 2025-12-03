@@ -9,10 +9,13 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks, File, UploadFile, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
+from PIL import Image
+import io
 
 # ✅ websockets: legacy asyncio API 사용
 from websockets.legacy.client import connect as ws_connect
@@ -58,11 +61,13 @@ class DeepgramWebSocketManager:
     FastAPI WebSocket(Electron)과 Deepgram STT WebSocket(v1 / nova-2, ko)을 중계하는 클래스
     Task 35: 실시간 스트리밍 및 중간 결과 처리 지원
     """
-    def __init__(self, websocket: WebSocket, api_key: str, classifier_instance: Optional[HarmfulTextClassifier]):
+    def __init__(self, websocket: WebSocket, api_key: str, classifier_instance: Optional[HarmfulTextClassifier], user_id: Optional[str] = None, filter_mode: str = "voice"):
         self.websocket = websocket
         self.api_key = api_key
         # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
         self.classifier = classifier_instance
+        self.user_id = user_id  # ✅ WebSocket 연결 시 user_id 저장
+        self.filter_mode = filter_mode  # ✅ 필터 모드 저장 (기본값: voice)
         self.dg_ws = None
         self.receive_task: Optional[asyncio.Task] = None
         self.result_queue: asyncio.Queue = asyncio.Queue()
@@ -321,6 +326,29 @@ class DeepgramWebSocketManager:
                 "ai_checked": True,
             }
             self.result_queue.put_nowait(ai_response)
+            
+            # ✅ 모든 분석 결과를 DB에 저장 (최종 결과만 저장)
+            # 일관성을 위해 /analyze 엔드포인트와 동일하게 모든 요청 저장
+            # ⚠️ 빈 텍스트는 DB에 저장하지 않음
+            if is_final and self.classifier and transcript and transcript.strip():
+                global app
+                model_display = getattr(app.state, "model_type_display", "Unknown")
+                threshold_used = self.classifier.threshold if self.classifier else 0.0
+                
+                # BackgroundTasks를 사용하여 비동기로 저장
+                # WebSocket에서는 BackgroundTasks를 직접 사용할 수 없으므로, 
+                # 별도 태스크로 실행
+                asyncio.create_task(self._save_detection_log_async(
+                    text=transcript,
+                    confidence=ai_confidence,
+                    threshold=threshold_used,
+                    model=model_display,
+                    is_harmful=is_harmful_ai,  # ✅ 실제 판단 결과 저장 (True/False 모두)
+                    user_id=self.user_id,
+                    filter_mode=self.filter_mode
+                ))
+            elif is_final and transcript and not transcript.strip():
+                LOGGER.info(f"[Deepgram] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다. filter_mode={self.filter_mode}")
         except Exception as e:
             LOGGER.error("[AI] 분류 에러: %s", e, exc_info=True)
             self._send_no_ai_complete(transcript, stt_confidence)
@@ -334,6 +362,38 @@ class DeepgramWebSocketManager:
         if not getattr(self.classifier, "use_lora", True):
             return "Kanana-Base"
         return "Kanana-LoRA"
+    
+    async def _save_detection_log_async(self, text: str, confidence: float, threshold: float, model: str, is_harmful: bool, user_id: Optional[str] = None, filter_mode: str = "voice"):
+        """비동기로 DB에 감지 로그 저장"""
+        try:
+            # ⚠️ 빈 텍스트는 DB에 저장하지 않음
+            if not text or not text.strip():
+                LOGGER.info(f"[Deepgram] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다. filter_mode={filter_mode}")
+                return
+            
+            # user_id가 None인 경우 경고 로그
+            if not user_id:
+                LOGGER.warning(f"[Deepgram] ⚠️ user_id가 None입니다. DB에 NULL로 저장됩니다. filter_mode={filter_mode}, text={text[:30]}...")
+            
+            # 별도 스레드에서 동기 함수 실행
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,  # 기본 스레드 풀 사용
+                save_detection_log,
+                text,
+                confidence,
+                threshold,
+                model,
+                is_harmful,
+                user_id,
+                filter_mode
+            )
+            if user_id:
+                LOGGER.info(f"[Deepgram] ✅ DB 저장 완료: filter_mode={filter_mode}, user_id={user_id}, text={text[:30]}...")
+            else:
+                LOGGER.warning(f"[Deepgram] ⚠️ DB 저장 완료 (user_id=NULL): filter_mode={filter_mode}, text={text[:30]}...")
+        except Exception as e:
+            LOGGER.error(f"[Deepgram] ❌ DB 저장 실패: {e}", exc_info=True)
 
     async def _send_results_to_client(self):
         while self.is_running:
@@ -485,6 +545,14 @@ async def lifespan(app: FastAPI):
         app.state.threshold = target_threshold  # Threshold 값을 app.state에 저장
         LOGGER.info(f"[Init] ✅ {app.state.model_type_display} 모델 로드 완료!")
 
+        # PaddleOCR 서비스 프리로드 (첫 요청 지연 방지)
+        try:
+            from services.paddle_ocr_service import get_ocr_service
+            ocr_service = get_ocr_service()
+            LOGGER.info("[Init] ✅ PaddleOCR 서비스 준비 완료")
+        except Exception as ocr_error:
+            LOGGER.warning(f"[Init] ⚠️ OCR 서비스 초기화 실패: {ocr_error} (OCR 기능은 사용할 수 없습니다)")
+
     except Exception as e:
         LOGGER.error("[Init] ❌ AI 모델 로드 실패: %s", e, exc_info=True)
         classifier = None
@@ -527,8 +595,56 @@ async def audio_stream(websocket: WebSocket):
         await websocket.close(code=1008, reason="API Key missing")
         return
 
+    # ✅ WebSocket 헤더에서 UUID 읽기 (여러 변형 지원)
+    user_id = None
+    headers = websocket.headers
+    
+    # 디버깅: 모든 헤더 출력 (대소문자 변환 확인)
+    LOGGER.info(f"[WS] 📋 WebSocket 헤더 확인: {dict(headers)}")
+    LOGGER.info(f"[WS] 📋 헤더 키 목록: {list(headers.keys())}")
+    
+    # Starlette/FastAPI는 헤더 이름을 소문자로 변환하므로, 소문자로 확인
+    # 클라이언트에서 "UUID"로 보내면 서버에서는 "uuid"로 읽어야 함
+    header_keys_lower = [k.lower() for k in headers.keys()]
+    LOGGER.info(f"[WS] 📋 소문자 변환된 헤더 키: {header_keys_lower}")
+    
+    # 여러 변형으로 시도 (소문자 기준)
+    if "uuid" in header_keys_lower:
+        # 원본 키 찾기
+        for key in headers.keys():
+            if key.lower() == "uuid":
+                user_id = headers[key]
+                LOGGER.info(f"[WS] ✅ UUID 발견 (헤더 키: {key}): {user_id}")
+                break
+    elif "user-id" in header_keys_lower:
+        for key in headers.keys():
+            if key.lower() == "user-id":
+                user_id = headers[key]
+                LOGGER.info(f"[WS] ✅ UUID 발견 (헤더 키: {key}): {user_id}")
+                break
+    elif "user_id" in header_keys_lower:
+        for key in headers.keys():
+            if key.lower() == "user_id":
+                user_id = headers[key]
+                LOGGER.info(f"[WS] ✅ UUID 발견 (헤더 키: {key}): {user_id}")
+                break
+    
+    # get() 메서드로도 시도
+    if not user_id:
+        user_id = headers.get("uuid") or headers.get("UUID") or headers.get("user-id") or headers.get("user_id")
+        if user_id:
+            LOGGER.info(f"[WS] ✅ UUID 발견 (get() 메서드): {user_id}")
+    
+    if user_id:
+        LOGGER.info(f"[WS] ✅ WebSocket 연결: user_id={user_id}")
+    else:
+        LOGGER.warning("[WS] ⚠️ WebSocket 헤더에서 UUID를 찾을 수 없습니다. DB에는 NULL로 저장됩니다.")
+        LOGGER.warning(f"[WS] 📋 사용 가능한 헤더 키: {list(headers.keys())}")
+        LOGGER.warning(f"[WS] 📋 헤더 전체 내용: {dict(headers)}")
+
     # 🔇 키워드 기반 감지 제거됨 - AI 모델만 사용
-    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, classifier)
+    # ✅ filter_mode는 voice로 고정 (WebSocket은 음성 전용)
+    dg_manager = DeepgramWebSocketManager(websocket, DEEPGRAM_API_KEY, classifier, user_id=user_id, filter_mode="voice")
     success = await dg_manager.start()
 
     if not success:
@@ -624,6 +740,10 @@ async def get_keywords():
 
 class AnalyzeRequest(BaseModel):
     text: str
+    # ✅ 일렉트론 앱의 디바이스 UUID 또는 Supabase User ID
+    user_id: Optional[str] = None
+    # ✅ 필터 모드: 'ocr' | 'voice' 등 (기본값: ocr)
+    filter_mode: Optional[str] = "ocr"
 
 
 class ThresholdUpdateRequest(BaseModel):
@@ -662,12 +782,13 @@ async def update_threshold(request: ThresholdUpdateRequest):
 async def analyze_text(
     request: AnalyzeRequest,
     background_tasks: BackgroundTasks,  # [Task 46] BackgroundTasks 주입
+    uuid: Optional[str] = Header(default=None, alias="UUID"),  # 🔥 Header에서 UUID 읽기 (헤더 키: UUID)
     threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0). If not provided, uses server's default threshold.")
 ):
     # 요청 로그
     text_preview = request.text[:50] + "..." if len(request.text) > 50 else request.text
     threshold_log = f", threshold={threshold}" if threshold is not None else ""
-    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s", len(request.text), text_preview, threshold_log)
+    LOGGER.info("[Analyze] 📥 분석 요청 수신: 텍스트 길이=%d, 미리보기=\"%s\"%s, UUID(Header)=%s", len(request.text), text_preview, threshold_log, uuid)
     
     is_harmful_ai = False
     ai_confidence = 0.0
@@ -737,7 +858,17 @@ async def analyze_text(
     # [Task 46] 유해 표현 감지 시 또는 모든 요청에 대해 로그 저장
     # 정책: 유해한 경우만 저장하여 DB 용량 절약 (필요시 변경 가능)
     # 주의: classifier가 있을 때만 로그 저장 (정상/유해 모두 저장하려면 조건 제거)
-    if classifier:
+    # ⚠️ 빈 텍스트는 DB에 저장하지 않음
+    LOGGER.info(f"[Analyze] 🔍 로그 저장 조건 확인: classifier={classifier is not None}, is_harmful_ai={is_harmful_ai}")
+    if classifier and request.text and request.text.strip():
+        # ✅ Header에서 UUID 가져오기 (헤더 키: UUID)
+        uuid_from_header = uuid
+        
+        # 디버깅 로그
+        LOGGER.info(f"[Analyze] 🔍 UUID 추출: UUID(Header)={uuid_from_header}")
+        if not uuid_from_header:
+            LOGGER.warning(f"[Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. DB에는 NULL로 저장됩니다.")
+        
         model_display = getattr(app.state, "model_type_display", "Unknown")
         # 실제 판단 결과를 저장 (is_harmful_ai 값 사용)
         background_tasks.add_task(
@@ -747,10 +878,203 @@ async def analyze_text(
             threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
             model=model_display,
             is_harmful=is_harmful_ai,  # 🔥 실제 판단 결과 사용 (하드코딩 제거)
-            user_id=None  # 추후 Auth 연동 시 추가
+            # ✅ 저장 시에만 UUID를 user_id로 저장
+            user_id=uuid_from_header,
+            # ✅ 필터 모드(ocr / voice 등) 저장
+            filter_mode=request.filter_mode or "ocr",
         )
+    elif not request.text or not request.text.strip():
+        LOGGER.info(f"[Analyze] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다.")
     
     return response
+
+
+# ============== OCR 엔드포인트 ==============
+
+@app.post("/api/ocr")
+async def ocr_endpoint(file: UploadFile = File(...)):
+    """
+    이미지 OCR 엔드포인트
+    
+    Request:
+        - file: 이미지 파일 (multipart/form-data)
+        
+    Response:
+        {
+            "texts": ["추출된", "텍스트", "리스트"],
+            "processing_time": 0.123,
+            "text_count": 3
+        }
+    """
+    try:
+        from services.paddle_ocr_service import get_ocr_service
+        
+        # 파일 유효성 검사
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+        
+        # 이미지 로드
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        # OCR 실행
+        ocr_service = get_ocr_service()
+        texts, processing_time = ocr_service.extract_text(image)
+        
+        LOGGER.info(f"[OCR] OCR 완료: {len(texts)}개 텍스트, {processing_time:.3f}초")
+        
+        # 결과 반환
+        return JSONResponse(content={
+            "texts": texts,
+            "processing_time": round(processing_time, 3),
+            "text_count": len(texts)
+        })
+        
+    except ImportError:
+        LOGGER.error("[OCR] PaddleOCR 서비스가 사용할 수 없습니다. 의존성 설치를 확인하세요.")
+        raise HTTPException(status_code=503, detail="OCR 서비스가 사용할 수 없습니다. 서버 설정을 확인하세요.")
+    except Exception as e:
+        LOGGER.error(f"[OCR] OCR API 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ocr-and-analyze")
+async def ocr_and_analyze_endpoint(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    uuid: Optional[str] = Header(default=None, alias="UUID"),  # 🔥 Header에서 UUID 읽기 (헤더 키: UUID)
+    threshold: Optional[float] = Query(None, description="Optional threshold override (0.0-1.0)")
+):
+    """
+    이미지 OCR + 유해성 분석 통합 엔드포인트
+    
+    Request:
+        - file: 이미지 파일
+        
+    Response:
+        {
+            "texts": ["추출된", "텍스트"],
+            "is_harmful": true,
+            "harmful_words": [],
+            "confidence": 0.85,
+            "processing_time": {
+                "ocr": 0.123,
+                "analysis": 0.045,
+                "total": 0.168
+            }
+        }
+    """
+    try:
+        import time
+        from services.paddle_ocr_service import get_ocr_service
+        
+        # 🔥 헤더에서 UUID 추출 (헤더 키: UUID)
+        uuid_from_header = uuid
+        
+        LOGGER.info(f"[OCR+Analyze] 📥 요청 수신: UUID(Header)={uuid_from_header}")
+        
+        # UUID가 없을 때만 경고 출력
+        if not uuid_from_header:
+            LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. DB에는 NULL로 저장됩니다.")
+        
+        start_total = time.time()
+        
+        # 이미지 로드
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+        
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        # OCR 실행
+        ocr_service = get_ocr_service()
+        texts, ocr_time = ocr_service.extract_text(image)
+        
+        # 텍스트 결합 및 유해성 분석
+        combined_text = " ".join(texts)
+        is_harmful = False
+        ai_confidence = 0.0
+        used_threshold = threshold
+        start_analysis = time.time()
+        
+        if combined_text.strip() and classifier and inference_executor:
+            try:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    inference_executor,
+                    classifier.predict,
+                    combined_text
+                )
+                
+                ai_confidence = result.confidence
+                
+                # Threshold 적용
+                if threshold is not None:
+                    if threshold < 0.0 or threshold > 1.0:
+                        threshold = None
+                
+                if threshold is not None:
+                    is_harmful = ai_confidence >= threshold
+                    used_threshold = threshold
+                else:
+                    is_harmful = result.is_harmful
+                    used_threshold = classifier.threshold if classifier else None
+                    
+            except Exception as e:
+                LOGGER.error(f"[OCR+Analyze] 분석 중 오류: {e}", exc_info=True)
+        
+        analysis_time = time.time() - start_analysis
+        total_time = time.time() - start_total
+        
+        # ✅ 모든 분석 결과를 DB에 저장
+        # 일관성을 위해 /analyze 엔드포인트와 동일하게 모든 요청 저장
+        # ⚠️ 빈 텍스트는 DB에 저장하지 않음
+        LOGGER.info(f"[OCR+Analyze] 🔍 로그 저장 조건 확인: is_harmful={is_harmful}, classifier={classifier is not None}")
+        if classifier and combined_text and combined_text.strip():
+            # ✅ Header에서 user_id 가져오기 (이미 함수 인자로 받음)
+            
+            # 디버깅 로그
+            LOGGER.info(f"[OCR+Analyze] 🔍 UUID 추출: UUID={uuid_from_header}, is_harmful={is_harmful}")
+            if not uuid_from_header:
+                LOGGER.warning(f"[OCR+Analyze] ⚠️ Header에서 UUID를 받지 못했습니다. DB에는 NULL로 저장됩니다.")
+            
+            model_display = getattr(app.state, "model_type_display", "Unknown")
+            LOGGER.info(f"[OCR+Analyze] 📝 DB 저장 준비: UUID={uuid_from_header} → user_id로 저장, text={combined_text[:30]}..., is_harmful={is_harmful}")
+            background_tasks.add_task(
+                save_detection_log,
+                text=combined_text,
+                confidence=ai_confidence,
+                threshold=used_threshold if used_threshold is not None else (classifier.threshold if classifier else 0.0),
+                model=model_display,
+                is_harmful=is_harmful,  # ✅ 실제 판단 결과 저장 (True/False 모두)
+                filter_mode="ocr",
+                user_id=uuid_from_header,  # ✅ 저장 시에만 UUID를 user_id로 저장
+            )
+        elif not combined_text or not combined_text.strip():
+            LOGGER.info(f"[OCR+Analyze] ⏭️ 빈 텍스트는 DB에 저장하지 않습니다.")
+        
+        LOGGER.info(
+            f"[OCR+Analyze] 완료: {len(texts)}개 텍스트, 유해={is_harmful}, 신뢰도={ai_confidence:.3f}, 총 시간={total_time:.3f}초"
+        )
+        
+        return JSONResponse(content={
+            "texts": texts,
+            "is_harmful": is_harmful,
+            "harmful_words": [],  # AI 모델은 키워드 리스트를 반환하지 않음
+            "confidence": ai_confidence,
+            "processing_time": {
+                "ocr": round(ocr_time, 3),
+                "analysis": round(analysis_time, 3),
+                "total": round(total_time, 3)
+            }
+        })
+        
+    except ImportError:
+        LOGGER.error("[OCR+Analyze] PaddleOCR 서비스가 사용할 수 없습니다.")
+        raise HTTPException(status_code=503, detail="OCR 서비스가 사용할 수 없습니다.")
+    except Exception as e:
+        LOGGER.error(f"[OCR+Analyze] OCR+분석 API 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

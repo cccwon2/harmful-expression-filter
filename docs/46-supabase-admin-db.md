@@ -2,7 +2,7 @@
 
 ## 상태
 
-📝 계획 단계 (To Do)
+✅ 완료 (부분 구현 완료, 향후 개선 예정)
 
 ## 📋 작업 개요
 
@@ -18,6 +18,10 @@
 
 - Task 43 (Threshold 설정) ✅
 - Task 44 (Vercel 관리자 대시보드 계획) ✅
+- Task 51 (PaddleOCR 전환, 사용자 대시보드 통합 및 UUID 기반 사용자 식별) ✅
+  - 빈 텍스트 필터링 구현
+  - filter_mode 및 user_id 저장 개선
+  - WebSocket 헤더에서 UUID 읽기 개선
 
 ## 🏗️ 아키텍처
 
@@ -131,13 +135,14 @@ create policy "Authenticated Admins Update Settings" on public.app_settings
 ```text
 supabase>=2.0.0
 gotrue>=1.0.0
+websockets>=13.0
 ```
 
 **실행 명령**:
 
 ```bash
 cd server
-pip install supabase>=2.0.0 gotrue>=1.0.0
+pip install supabase>=2.0.0 gotrue>=1.0.0 websockets>=13.0
 ```
 
 #### 2.2 환경 변수 설정
@@ -734,6 +739,20 @@ curl -X 'GET' \
    - KoElectra Base 모델은 학습되지 않아 모든 텍스트를 유사한 확률(0.5~0.6)로 예측할 수 있습니다
    - 학습된 로컬 모델(`server/models/koelectra-classifier-v1/`)을 사용하거나 Threshold를 조정하세요
    - Threshold가 너무 낮으면(예: 0.5) 정상 텍스트도 유해로 판단될 수 있습니다
+
+3. **빈 텍스트 필터링**:
+   - ⚠️ **중요**: 빈 텍스트(`text_content = ''` 또는 공백만 있는 텍스트)는 DB에 저장하지 않습니다
+   - voice 모드: `_check_harmful_async` 메서드에서 `transcript.strip()` 체크
+   - OCR 모드: `/api/ocr-and-analyze` 엔드포인트에서 `combined_text.strip()` 체크
+   - `/analyze` 엔드포인트: `request.text.strip()` 체크
+   - `_save_detection_log_async` 메서드에서 이중 체크로 안전성 보장
+   - 빈 텍스트는 로그만 남기고 DB 저장을 건너뜁니다
+
+4. **filter_mode 및 user_id 저장**:
+   - ⚠️ **중요**: `filter_mode`는 voice 모드에서 `"voice"`, OCR 모드에서 `"ocr"`로 정확히 저장되어야 합니다
+   - WebSocket 헤더에서 UUID 읽기: 여러 변형 지원 (`uuid`, `user-id`, `user_id` 등, 대소문자 무시)
+   - HTTP Header에서 UUID 읽기: `/analyze` 및 `/api/ocr-and-analyze` 엔드포인트에서 `UUID` 또는 `user-id` Header 읽기
+   - 모든 분석 결과 저장: 유해/정상 구분 없이 모든 분석 결과를 DB에 저장 (일관성 유지)
 
 ## ⏭️ 다음 단계 (Next Steps)
 

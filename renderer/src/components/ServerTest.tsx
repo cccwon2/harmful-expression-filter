@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getDeviceId } from '../utils/deviceId';
 
 type EmptyObject = Record<string, never>;
 
@@ -40,7 +41,9 @@ export const ServerTest: React.FC<EmptyObject> = () => {
 
     setLoading(true);
     try {
-      const result = await window.api.server.analyzeText(testText);
+      const deviceId = getDeviceId();
+      // ✅ 테스트 컴포넌트에서는 기본적으로 OCR 모드로 전송
+      const result = await window.api.server.analyzeText(testText, deviceId, "ocr");
 
       if ('error' in result) {
         setAnalyzeResult(`ERROR: ${result.message}`);

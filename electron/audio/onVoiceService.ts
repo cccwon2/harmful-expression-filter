@@ -237,7 +237,15 @@ export class OnVoiceService {
    */
   private async connectServer(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.options.serverWebSocketUrl);
+      // ✅ UUID 헤더 추가
+      const { getDeviceId } = require("../utils/deviceId");
+      const deviceId = getDeviceId();
+      const headers = {
+        "UUID": deviceId,  // 헤더 키를 UUID로 전달
+      };
+      console.log(`[OnVoiceService] 📤 WebSocket 헤더에 UUID 추가: ${deviceId}`);
+      
+      const ws = new WebSocket(this.options.serverWebSocketUrl, { headers });
 
       ws.on("open", () => {
         console.log("[OnVoiceService] 서버 WebSocket 연결 성공");
@@ -355,7 +363,7 @@ export class OnVoiceService {
       if (message.status === "ok" && message.text) {
         const text = message.text;
         if (!text || !text.trim()) return;
-        
+
         const isHarmful = message.is_harmful === 1 || message.is_harmful === true;
         const aiChecked = message.ai_checked === true;
         const confidence = message.confidence || 0;
@@ -398,7 +406,8 @@ export class OnVoiceService {
    */
   private async analyzeText(text: string): Promise<void> {
     try {
-      const result = await sendTextForAnalysis(text);
+      // ✅ voice 모드로 명시적으로 전달
+      const result = await sendTextForAnalysis(text, false, "voice");
 
       if ("error" in result) {
         console.error("[OnVoiceService] 분석 오류:", result.message);
@@ -414,10 +423,33 @@ export class OnVoiceService {
     }
   }
 
+  // 🔥 [최적화] IPC 브로드캐스트 스로틀링
+  private lastBroadcastTime = 0;
+  private readonly BROADCAST_INTERVAL_MS = 100; // 100ms (초당 10회) 제한
+  private broadcastPending = false;
+
   /**
    * 상태 브로드캐스트
    */
   private broadcastStatus(): void {
+    const now = Date.now();
+    
+    // 🔥 [최적화] 스로틀링: 마지막 브로드캐스트로부터 충분한 시간이 지나지 않았으면 스킵
+    if (now - this.lastBroadcastTime < this.BROADCAST_INTERVAL_MS) {
+      // 다음 프레임에서 업데이트하도록 스케줄링 (마지막 상태 보장)
+      if (!this.broadcastPending) {
+        this.broadcastPending = true;
+        setTimeout(() => {
+          this.broadcastPending = false;
+          this.broadcastStatus(); // 재시도
+        }, this.BROADCAST_INTERVAL_MS - (now - this.lastBroadcastTime));
+      }
+      return;
+    }
+    
+    this.lastBroadcastTime = now;
+    this.broadcastPending = false;
+    
     const status = {
       isMonitoring: this.isMonitoring,
       targetPid: this.targetPid,
@@ -521,4 +553,3 @@ export function getOnVoiceService(): OnVoiceService | null {
 export function setOnVoiceService(service: OnVoiceService | null): void {
   globalOnVoiceService = service;
 }
-

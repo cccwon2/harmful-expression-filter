@@ -104,10 +104,10 @@
 - ROI 영역에 빨간색 테두리 및 "감시 중" 라벨 표시
 - 감지 모드에서 클릭-스루 유지
 
-### T15: OCR/STT 파이프라인 스텁 ✅ (Windows SDK OCR 사용)
+### T15: OCR/STT 파이프라인 스텁 ✅ (서버 측 PaddleOCR 사용)
 - ~~Tesseract.js 기반 OCR 워커 초기화~~ (제거됨)
-- ~~PaddleOCR 서버 기반 OCR~~ (제거됨, Windows SDK OCR로 대체)
-- ✅ Windows SDK OCR (Windows.Media.Ocr API) 사용
+- ✅ 서버 측 PaddleOCR (FastAPI 서버에서 처리)
+- Electron에서 화면 캡처 후 서버로 이미지 전송
 - ROI 캡처 및 OCR 결과 로그 출력
 - 감지 모드 전환 시 자동 처리 루프 시작
 
@@ -126,10 +126,10 @@
 - 부팅 시 마지막 ROI/모드를 자동 복원 (감지 모드 & 모니터링 자동 시작)
 - electron-store 마이그레이션 및 alert 상태 복원은 추후 진행
 
-### T19: 네이티브 Tesseract 통합 🔄 (Windows SDK OCR로 대체됨)
+### T19: 네이티브 Tesseract 통합 🔄 (서버 측 PaddleOCR로 대체됨)
 - ~~WASM 대신 네이티브 실행 파일 호출로 OCR 성능 개선~~ (계획)
-- ✅ Windows SDK OCR (Windows.Media.Ocr API)로 구현됨
-- C# COM Bridge를 통해 Windows OS의 네이티브 OCR 기능 사용
+- ~~Windows SDK OCR (Windows.Media.Ocr API)~~ (레거시, 현재는 사용하지 않음)
+- ✅ 서버 측 PaddleOCR (FastAPI 서버에서 처리)
 
 ### T20: FastAPI 기본 구조 ✅
 - FastAPI 앱/엔드포인트(`/health`, `/keywords`, `/`) 구축
@@ -159,11 +159,12 @@
 - 서버 응답 기반 유해성 감지
 - 앱별 볼륨 조절 (T26으로 마이그레이션됨)
 
-### T34: Windows OCR 성능 최적화 ✅
-- OCR 처리 시간 단축: 2-3초 → 14-17ms (약 120-200배 개선)
-- 서버 분석 제거: C#에서 서버 HTTP 요청 제거, Node.js 로컬 분석으로 전환
-- ROI 처리 제거: Node.js에서 이미 크롭된 이미지를 전달하므로 ROI 정보 불필요
-- OCR 엔진 캐싱: 초기화 비용 제거, 일관된 성능 유지
+### T34: Windows OCR 성능 최적화 ⚠️ 레거시
+- ⚠️ **레거시**: 현재는 서버 측 PaddleOCR을 사용하므로 이 최적화는 더 이상 적용되지 않음
+- OCR 처리 시간 단축: 2-3초 → 14-17ms (약 120-200배 개선) (레거시)
+- 서버 분석 제거: C#에서 서버 HTTP 요청 제거, Node.js 로컬 분석으로 전환 (레거시)
+- ROI 처리 제거: Node.js에서 이미 크롭된 이미지를 전달하므로 ROI 정보 불필요 (레거시)
+- OCR 엔진 캐싱: 초기화 비용 제거, 일관된 성능 유지 (레거시)
 - 이미지 변환 최적화: DataWriter 사용으로 메모리 복사 최소화
 
 ### T35: Deepgram 실시간 스트리밍 방식 ✅
@@ -333,13 +334,14 @@ interface Window {
 - 의존성 설치: `.\venv312\Scripts\python.exe -m pip install -r requirements.txt`
 
 ### OCR 처리
-- **Windows SDK OCR**: Windows.Media.Ocr API를 C# COM Bridge를 통해 사용
-- Electron에서 직접 처리 (서버 불필요)
-- C# COM Bridge (`dotnet/OnVoiceComBridge/Startup.cs`)를 통해 구현
-- **성능 최적화 (Task 34)**:
-  - 처리 시간: 2-3초 → 14-17ms (약 120-200배 개선)
-  - 서버 분석 제거, Node.js 로컬 분석으로 전환
-  - OCR 엔진 캐싱, 이미지 변환 최적화, ROI 처리 제거
+- **서버 측 PaddleOCR**: FastAPI 서버에서 PaddleOCR로 처리 ✅
+  - Electron에서 `desktopCapturer.getSources()`로 화면 캡처
+  - 서버의 `/api/ocr` 및 `/api/ocr-and-analyze` 엔드포인트 사용
+  - CPU 버전 및 GPU 버전 지원 (환경 변수 `PADDLEOCR_USE_GPU`로 제어)
+  - 블라인드 최적화(`setContentProtection`)와 완벽 호환 (Task 49)
+- **레거시**: Windows SDK OCR (Task 34) - 현재는 사용하지 않음
+  - ~~Windows.Media.Ocr API를 C# COM Bridge를 통해 사용~~
+  - ~~Electron에서 직접 처리 (서버 불필요)~~
 
 ## 빌드 및 실행
 

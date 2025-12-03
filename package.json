@@ -4,7 +4,9 @@
   "description": "OnVoice - Voice Overlay Application",
   "main": "./dist-electron/entry.js",
   "scripts": {
-    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o bin/Release/net6.0/win-x64/publish",
+    "build:dotnet": "cd dotnet/OnVoiceComBridge && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o bin/Release/net6.0/win-x64/publish",
+    "build:dotnet:single": "cd dotnet/OnVoiceComBridge && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o bin/Release/net6.0/win-x64/publish",
+    "build:dotnet:debug": "cd dotnet/OnVoiceComBridge && dotnet publish -c Debug -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o bin/Debug/net6.0/win-x64/publish",
     "copy:dll": "node scripts/copy-dll.js",
     "build:native": "node scripts/build-native.js",
     "copy:native": "node scripts/copy-native-dll.js",
@@ -14,6 +16,8 @@
     "dev:renderer": "vite",
     "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"electron .\"",
     "typecheck": "tsc --noEmit",
+    "check:dll": "node scripts/check-dll-build-mode.js",
+    "register:com": "powershell -ExecutionPolicy Bypass -File scripts/register-com-dll.ps1",
     "start": "cross-env NODE_ENV=production DOTNET_ROOT=\"C:\\Program Files\\dotnet\" electron .",
     "build:renderer": "vite build",
     "build:electron": "electron-builder",
@@ -21,7 +25,17 @@
     "prebuild": "taskkill /F /IM OnVoiceComBridge.exe 2>nul & taskkill /F /IM dllhost.exe 2>nul & taskkill /F /IM electron.exe 2>nul || exit 0",
     "build": "npm run prebuild && npm run build:all && npm run build:renderer && npm run build:electron",
     "build:win": "npm run build",
-    "postinstall": ""
+    "postinstall": "",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "jest",
+    "test:unit:watch": "jest --watch",
+    "test:unit:coverage": "jest --coverage",
+    "test:e2e": "cross-env SKIP_SINGLE_INSTANCE_LOCK=true NODE_ENV=test playwright test",
+    "test:e2e:electron": "cross-env SKIP_SINGLE_INSTANCE_LOCK=true NODE_ENV=test playwright test tests/e2e/task49-blur-electron.spec.ts",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:report": "playwright show-report"
   },
   "keywords": [
     "electron",
@@ -43,6 +57,8 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
+    "@playwright/test": "^1.40.0",
+    "@types/jest": "^29.5.8",
     "@types/node": "^22.0.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
@@ -53,7 +69,10 @@
     "cross-env": "^10.1.0",
     "electron": "^28.3.3",
     "electron-builder": "^26.0.12",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
     "rimraf": "^5.0.5",
+    "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
@@ -98,12 +117,11 @@
     ],
     "extraResources": [
       {
-        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe",
-        "to": "bin/OnVoiceComBridge.exe"
-      },
-      {
-        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish/OnVoiceComBridge.exe.manifest",
-        "to": "bin/OnVoiceComBridge.exe.manifest"
+        "from": "dotnet/OnVoiceComBridge/bin/Release/net6.0/win-x64/publish",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "native/OnVoiceAudioBridge.dll",

@@ -1,5 +1,6 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, app } from 'electron';
 import * as path from 'path';
+import axios from 'axios';
 import { getEditModeState, setEditModeState } from '../state/editMode';
 
 let overlayTrayUpdateCallback: (() => void) | null = null;
@@ -42,16 +43,13 @@ export function createOverlayWindow(): BrowserWindow {
   console.log('[Overlay] Overlay window created');
 
   // 로드 실패 감지 (개발 단계에서 서버 미기동 등 문제 추적)
+  // did-fail-load 이벤트는 waitForDevServer에서 처리하므로 여기서는 로깅만
   overlayWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
-    console.error('[Overlay] did-fail-load:', { errorCode, errorDescription, validatedURL });
-    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-      console.log('[Overlay] Retrying overlay load after failure...');
-      setTimeout(() => {
-        overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
-          console.error('[Overlay] Retry loadURL failed:', err);
-        });
-      }, 500);
+    // ERR_CONNECTION_REFUSED는 waitForDevServer에서 처리 중이므로 무시
+    if (errorCode === -102) {
+      return;
     }
+    console.error('[Overlay] did-fail-load:', { errorCode, errorDescription, validatedURL });
   });
 
   overlayWindow.webContents.on('did-fail-provisional-load', (_event, errorCode, errorDescription, validatedURL) => {
@@ -62,6 +60,18 @@ export function createOverlayWindow(): BrowserWindow {
   // Edit Mode에서만 클릭-스루가 해제되어 ROI 선택 가능
   overlayWindow.setIgnoreMouseEvents(true, { forward: true });
   console.log('[Overlay] Click-through enabled by default');
+
+  // 🔥 [Task 49] Windows에서만 오버레이를 화면 캡처에서 제외
+  // 이렇게 하면 OCR 캡처 시 오버레이가 무시되어 원본 화면만 캡처됨
+  // 사용자는 블러 처리된 화면을 보지만, OCR은 블러 뒤의 원본 텍스트를 계속 읽을 수 있음
+  if (process.platform === 'win32') {
+    try {
+      overlayWindow.setContentProtection(true);
+      console.log('[Overlay] ✅ Content protection enabled (OCR will ignore overlay)');
+    } catch (error) {
+      console.warn('[Overlay] ⚠️ Failed to enable content protection:', error);
+    }
+  }
 
   // 오버레이 창이 로드 완료되면 설정 (main.ts에서 did-finish-load 처리하므로 여기서는 alwaysOnTop만 설정)
   overlayWindow.webContents.once('did-finish-load', () => {
@@ -123,7 +133,9 @@ export function createOverlayWindow(): BrowserWindow {
   });
   
   // 키보드 이벤트 처리 - 메인 프로세스에서 Ctrl+E/Q 처리
+  console.log('[Overlay] before-input-event 리스너 등록 중...');
   overlayWindow.webContents.on('before-input-event', (event, input) => {
+    console.log(`[Overlay] before-input-event 감지: key=${input.key}, control=${input.control}, meta=${input.meta}`);
     // Ctrl+Shift+I 또는 F12: 개발자 도구 토글 (undocked 모드로 열어서 다른 창 클릭 가능)
     if (
       (input.control || input.meta) && 
@@ -290,7 +302,11 @@ export function createOverlayWindow(): BrowserWindow {
       console.log('[Overlay] Ctrl+E/Q detected in main process');
       event.preventDefault();
       if (exitEditModeAndHideHandler) {
+        console.log('[Overlay] ✅ Exit Edit Mode 핸들러 호출 중...');
         exitEditModeAndHideHandler();
+        console.log('[Overlay] ✅ Exit Edit Mode 핸들러 호출 완료');
+      } else {
+        console.warn('[Overlay] ⚠️ Exit Edit Mode 핸들러가 설정되지 않음');
       }
       return;
     }
@@ -333,10 +349,37 @@ export function createOverlayWindow(): BrowserWindow {
   });
 
   // 개발 모드와 프로덕션 모드 분기
-  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-    // 🟢 개발 모드: Vite 개발 서버 사용
-    overlayWindow.loadURL('http://localhost:5173/overlay.html');
-    console.log('[Overlay] Loading from development server: http://localhost:5173/overlay.html');
+  // 배포 모드(app.isPackaged)에서는 항상 프로덕션 모드로 처리
+  if (!app.isPackaged && (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV)) {
+    // 🟢 개발 모드: Vite 개발 서버가 준비될 때까지 대기 후 로드
+    const waitForDevServer = async (retries = 30, delay = 500) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          await axios.get('http://localhost:5173', { timeout: 1000 });
+          // 서버가 준비되었으면 로드 시도
+          console.log('[Overlay] ✅ Vite 개발 서버 준비 완료 - 오버레이 로드 중...');
+          overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
+            console.error('[Overlay] Failed to load overlay from development server:', err);
+          });
+          return;
+        } catch (error: any) {
+          if (i === 0) {
+            console.log('[Overlay] Vite 개발 서버 대기 중... (최대 15초)');
+          }
+          if (i < retries - 1) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            console.error('[Overlay] ⚠️ Vite 개발 서버가 시작되지 않았습니다 (15초 타임아웃).');
+            console.error('[Overlay] 해결 방법: "npm run dev"로 전체 개발 환경을 시작하세요.');
+            // 마지막 시도로 로드 시도 (서버가 방금 시작되었을 수 있음)
+            overlayWindow.loadURL('http://localhost:5173/overlay.html').catch((err) => {
+              console.error('[Overlay] 최종 로드 시도 실패:', err);
+            });
+          }
+        }
+      }
+    };
+    waitForDevServer();
   } else {
     // 🔴 배포 모드: file:// 프로토콜로 로컬 파일 로드
     // 패키지 환경에서 __dirname 은 dist-electron/windows 이므로

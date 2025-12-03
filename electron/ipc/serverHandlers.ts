@@ -108,7 +108,7 @@ export function registerServerHandlers(): void {
 
   ipcMain.handle(
     SERVER_CHANNELS.ANALYZE_TEXT,
-    async (_event, text: string): Promise<AnalyzeResponse | ErrorResponse> => {
+    async (_event, text: string, userId?: string, filterMode?: "ocr" | "voice"): Promise<AnalyzeResponse | ErrorResponse> => {
       try {
         if (!text || text.trim().length === 0) {
           return {
@@ -128,12 +128,28 @@ export function registerServerHandlers(): void {
           ? `${serverUrl}/analyze?threshold=${threshold}`
           : `${serverUrl}/analyze`;
         
+        // ✅ Header에 UUID 추가 (헤더 키: UUID)
+        const { getDeviceId } = require("../utils/deviceId");
+        const deviceId = getDeviceId();
+        const finalUserId = userId || deviceId;
+        const headers = {
+          "Content-Type": "application/json",
+          "UUID": finalUserId,  // 헤더 키를 UUID로 전달
+        };
+        
+        console.log("[IPC] 📤 Header에 UUID 추가:", finalUserId);
+
         const response = await axios.post<AnalyzeResponse>(
           url,
-          { text },
+          {
+            text,
+            user_id: userId || deviceId,  // Request Body에도 포함 (하위 호환성)
+            // ✅ 필터 모드(ocr / voice 등)를 함께 전달
+            filter_mode: filterMode,
+          },
           {
             timeout: REQUEST_TIMEOUT,
-            headers: { "Content-Type": "application/json" },
+            headers,
           }
         );
 
@@ -199,45 +215,43 @@ export function registerServerHandlers(): void {
     }
   });
 
-  // OCR 전용 핸들러 (Windows OCR 사용)
+  // OCR 전용 핸들러 (서버 PaddleOCR 사용)
   ipcMain.handle(
     SERVER_CHANNELS.OCR_IMAGE,
     async (_event, imageBuffer: Buffer): Promise<{ success: boolean; data?: any; error?: string }> => {
       try {
-        const { onVoiceBridge } = await import("../main/onVoiceBridge");
+        const FormData = require("form-data");
+        const serverUrl = getServerUrl();
 
-        console.log("[IPC] Windows OCR 요청:", imageBuffer.length, "bytes");
-        const result = await onVoiceBridge.performOCR(imageBuffer);
+        console.log("[IPC] 서버 OCR 요청:", imageBuffer.length, "bytes");
 
-        if (!result.ok) {
-          return {
-            success: false,
-            error: result.error || "OCR 처리 실패",
-          };
-        }
+        const formData = new FormData();
+        formData.append("file", imageBuffer, {
+          filename: "screenshot.png",
+          contentType: "image/png",
+        });
 
-        // 서버 응답 형식으로 변환
-        const texts = result.text ? result.text.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
+        const response = await axios.post(`${serverUrl}/api/ocr`, formData, {
+          headers: formData.getHeaders(),
+          timeout: REQUEST_TIMEOUT * 3, // OCR은 더 오래 걸릴 수 있으므로 타임아웃 연장
+        });
 
         return {
           success: true,
-          data: {
-            texts: texts,
-            processing_time: 0, // Windows OCR은 처리 시간을 별도로 제공하지 않음
-            text_count: texts.length,
-          },
+          data: response.data,
         };
       } catch (error: any) {
-        console.error("[IPC] Windows OCR 요청 실패:", error.message);
+        console.error("[IPC] 서버 OCR 요청 실패:", error.message);
+        const errorResponse = handleServerError(error, "OCR");
         return {
           success: false,
-          error: error.message,
+          error: errorResponse.message,
         };
       }
     }
   );
 
-  // OCR + 유해성 분석 통합 핸들러 (Windows OCR 사용)
+  // OCR + 유해성 분석 통합 핸들러 (서버 PaddleOCR 사용)
   ipcMain.handle(
     SERVER_CHANNELS.OCR_AND_ANALYZE,
     async (
@@ -246,41 +260,42 @@ export function registerServerHandlers(): void {
       roi?: { x: number; y: number; width: number; height: number }
     ): Promise<{ success: boolean; data?: any; error?: string }> => {
       try {
-        const { onVoiceBridge } = await import("../main/onVoiceBridge");
+        const FormData = require("form-data");
+        const serverUrl = getServerUrl();
 
-        console.log("[IPC] Windows OCR + 분석 요청:", imageBuffer.length, "bytes");
-        const result = roi
-          ? await onVoiceBridge.performOCRAndAnalyze(imageBuffer, roi)
-          : await onVoiceBridge.performOCR(imageBuffer);
+        console.log("[IPC] 서버 OCR + 분석 요청:", imageBuffer.length, "bytes");
 
-        if (!result.ok) {
-          return {
-            success: false,
-            error: result.error || "OCR + 분석 처리 실패",
-          };
-        }
+        const formData = new FormData();
+        formData.append("file", imageBuffer, {
+          filename: "screenshot.png",
+          contentType: "image/png",
+        });
 
-        // 서버 응답 형식으로 변환
-        const texts = result.text ? result.text.split(/\r?\n/).filter((line) => line.trim().length > 0) : [];
+        // ✅ UUID를 Header에만 추가 (헤더 키: UUID)
+        const { getDeviceId } = require("../utils/deviceId");
+        const deviceId = getDeviceId();
+        console.log("[IPC] 📤 OCR+Analyze 요청 - Header에 UUID 추가:", deviceId);
+        
+        const headers = {
+          ...formData.getHeaders(),
+          "UUID": deviceId,  // 헤더 키를 UUID로 전달
+        };
+
+        const response = await axios.post(`${serverUrl}/api/ocr-and-analyze`, formData, {
+          headers,
+          timeout: REQUEST_TIMEOUT * 3, // OCR + 분석은 더 오래 걸릴 수 있으므로 타임아웃 연장
+        });
 
         return {
           success: true,
-          data: {
-            texts: texts,
-            is_harmful: result.isHarmful || false,
-            harmful_words: result.matchedKeywords || [],
-            processing_time: {
-              ocr: 0, // Windows OCR은 처리 시간을 별도로 제공하지 않음
-              analysis: 0,
-              total: 0,
-            },
-          },
+          data: response.data,
         };
       } catch (error: any) {
-        console.error("[IPC] Windows OCR+분석 요청 실패:", error.message);
+        console.error("[IPC] 서버 OCR+분석 요청 실패:", error.message);
+        const errorResponse = handleServerError(error, "OCR+Analyze");
         return {
           success: false,
-          error: error.message,
+          error: errorResponse.message,
         };
       }
     }

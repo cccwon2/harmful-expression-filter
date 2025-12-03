@@ -14,12 +14,29 @@
 
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <ApplicationManifest>OnVoiceComBridge.exe.manifest</ApplicationManifest>
+    <!-- Self-contained 빌드 시 네이티브 라이브러리 포함 -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Visual C++ 런타임 포함 -->
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="OnVoiceComBridge.exe.manifest">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- OnVoiceAudioBridge.dll을 publish 폴더로 복사 (매니페스트 파일에서 참조) -->
+    <Content Include="..\..\native\OnVoiceAudioBridge.dll" Condition="Exists('..\..\native\OnVoiceAudioBridge.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>OnVoiceAudioBridge.dll</Link>
+    </Content>
+    <!-- OnVoiceAudioBridge.dll.manifest도 복사 (Registration-Free COM) -->
+    <Content Include="..\..\native\OnVoiceAudioBridge.dll.manifest" Condition="Exists('..\..\native\OnVoiceAudioBridge.dll.manifest')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>OnVoiceAudioBridge.dll.manifest</Link>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

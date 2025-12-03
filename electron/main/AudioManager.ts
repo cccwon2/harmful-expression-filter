@@ -63,8 +63,22 @@ class AudioManager {
         this.handleAudioData(pcm, timestamp);
       });
       this.isInitialized = true;
+      
+      // Bridge 초기화 완료 후 AppVolumeController 모니터링 시작
+      // 이렇게 하면 Bridge가 준비된 후에만 세션 조회가 시작됨
+      this.appVolumeController.ensureMonitoringStarted();
+      
       console.log("[AudioManager] ✅ 초기화 완료");
-    } catch (error) {
+    } catch (error: any) {
+      // 개발 모드에서는 에러를 무시하고 계속 진행
+      const isDev = !require('electron').app.isPackaged;
+      if (isDev) {
+        console.warn("[AudioManager] ⚠️ 개발 모드: Bridge 초기화 실패를 무시합니다. (오디오 필터링 비활성화)");
+        this.isInitialized = false; // 초기화되지 않음으로 표시
+        // 개발 모드에서도 모니터링은 시작 (Bridge 없이도 캐시만 유지)
+        this.appVolumeController.ensureMonitoringStarted();
+        return; // 에러를 throw하지 않고 계속 진행
+      }
       console.error("[AudioManager] 초기화 실패:", error);
       throw error;
     }
@@ -137,6 +151,14 @@ class AudioManager {
 
       console.log(`[AudioManager] WebSocket 연결 시도: ${this.wsUrl}`);
       
+      // ✅ UUID 헤더 추가
+      const { getDeviceId } = require("../utils/deviceId");
+      const deviceId = getDeviceId();
+      const headers = {
+        "UUID": deviceId,  // 헤더 키를 UUID로 전달
+      };
+      console.log(`[AudioManager] 📤 WebSocket 헤더에 UUID 추가: ${deviceId}`);
+      
       let timeoutCleared = false;
       let resolvedOrRejected = false;
       
@@ -162,7 +184,7 @@ class AudioManager {
         reject(new Error("WebSocket connection timeout"));
       }, 10000);
 
-      this.ws = new WebSocket(this.wsUrl);
+      this.ws = new WebSocket(this.wsUrl, { headers });
 
       this.ws.on("open", () => {
         if (resolvedOrRejected) return;
@@ -366,6 +388,22 @@ class AudioManager {
       this.currentTarget = target;
       this.currentPid = pid;
       console.log(`[AudioManager] ✅ 스트리밍 시작: ${target} (PID: ${pid})`);
+      
+      // 트레이 메뉴 업데이트 (순환 의존성 방지를 위해 동적 import)
+      // 약간의 지연을 두어 상태가 확실히 반영되도록 함
+      setImmediate(() => {
+        try {
+          const { getTrayAudioUpdateCallback } = require("../tray");
+          const trayUpdateCallback = getTrayAudioUpdateCallback();
+          if (trayUpdateCallback && typeof trayUpdateCallback === "function") {
+            trayUpdateCallback();
+            console.log("[AudioManager] ✅ 트레이 메뉴 업데이트 완료 (startStream)");
+          }
+        } catch (err) {
+          // 트레이 업데이트 실패는 치명적이지 않음
+          console.warn("[AudioManager] ⚠️ 트레이 메뉴 업데이트 실패 (무시됨):", err);
+        }
+      });
     } catch (e) {
       console.error(e);
       throw e;
@@ -400,6 +438,17 @@ class AudioManager {
     this.currentPid = null;
     // 재연결 시도 횟수 초기화 (다음 스트리밍 시도 시)
     this.reconnectAttempts = 0;
+    
+    // 트레이 메뉴 업데이트 (순환 의존성 방지를 위해 동적 import)
+    try {
+      const { getTrayAudioUpdateCallback } = require("../tray");
+      const trayUpdateCallback = getTrayAudioUpdateCallback();
+      if (trayUpdateCallback && typeof trayUpdateCallback === "function") {
+        trayUpdateCallback();
+      }
+    } catch (err) {
+      // 트레이 업데이트 실패는 치명적이지 않음
+    }
   }
 
   public setWebSocketUrl(url: string): void {

@@ -21,5 +21,6 @@ export type OverlayState = {
   mode: OverlayMode;
   roi?: ROI;
   harmful?: boolean;
+  blurIntensity?: number; // 🔥 [Task 49] 블러 강도 설정 (15 | 25 | 40)
 };
 
