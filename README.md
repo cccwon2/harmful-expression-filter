@@ -157,4 +157,4 @@ AI 서버(FastAPI)는 이미지와 오디오 데이터를 받아 OCR, STT, NLP �
 
 ## 라이선스
 
-MIT License. 누구나 자유롭게 사용하고 기여할 수 있습니다.
+[MIT License](LICENSE). 누구나 자유롭게 사용하고 기여할 수 있습니다.
