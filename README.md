@@ -28,7 +28,7 @@ OnVoice는 화면 속 텍스트와 음성 채팅을 실시간으로 분석하여
 
 1.  **화면 유해 텍스트 블라인드 (OCR)**: 화면의 특정 영역(ROI)을 감시하다가 유해 텍스트가 감지되면 0.1초 내에 자동으로 블러 처리합니다. (PaddleOCR + KoElectra 사용)
 
-2.  **음성 유해어 볼륨 제어 (STT)**: 실시간으로 오디오를 분석하여 욕설이 나올 때 해당 애플리케이션의 **볼륨을 순간적으로 낮춰** 불쾌감을 줄입니다. (Deepgram + C\# CoreAudio API)
+2.  **음성 유해어 볼륨 제어 (STT)**: 실시간으로 오디오를 분석하여 욕설이 나올 때 해당 애플리케이션의 **볼륨을 순간적으로 낮춰** 불쾌감을 줄입니다. 특정 프로세스(PID)의 오디오만 격리하여 캡처하는 C++ Application Loopback과 C\# Core Audio API를 통해 정확한 앱별 제어가 가능합니다. (Deepgram + C++ WASAPI + C\# NAudio.Wasapi)
 
    <img src="voice-sample.gif" alt="Voice Filtering Demo" width="70%" style="border: none; padding: 0; margin: 10px 0;">
 
@@ -60,9 +60,17 @@ OnVoice는 화면 속 텍스트와 음성 채팅을 실시간으로 분석하여
 
 ### Native Integration (Performance)
 
-- **C\# Bridge (Spawn 방식)**: PID 기반 앱별 볼륨 제어, 오디오 세션 관리 (안정성 강화)
+- **C\# Bridge (Spawn 방식)**:
 
-- **C++ Core Audio**: Loopback 방식의 고성능 오디오 캡처
+  - **NAudio.Wasapi**: Windows Core Audio API를 직접 사용한 PID 기반 앱별 볼륨 제어
+  - 오디오 세션 관리 및 실시간 볼륨 조절 (0.0 ~ 1.0 스케일)
+  - 독립 프로세스 구조로 안정성 강화
+
+- **C++ Core Audio (COM Bridge)**:
+
+  - **WASAPI Application Loopback**: 특정 프로세스(PID)의 오디오만 격리하여 캡처
+  - `PROCESS_LOOPBACK_MODE`를 활용한 고성능 오디오 캡처
+  - Windows 10 SDK 10.0.20348.0 이상 필요
 
 - **Supabase**: 로그 저장 및 설정 관리 데이터베이스
 
@@ -72,7 +80,17 @@ OnVoice는 화면 속 텍스트와 음성 채팅을 실시간으로 분석하여
 
 사용자(User)는 Electron 앱을 통해 서비스를 이용하며, 로컬 PC 내에서 화면 블라인드, 볼륨 제어, 오디오 캡처가 이루어집니다.
 
-AI 서버(FastAPI)는 이미지와 오디오 데이터를 받아 OCR, STT, NLP 분석을 수행하고 결과를 반환합니다.
+**오디오 처리 파이프라인**:
+
+- **C++ WASAPI Application Loopback**: 타겟 애플리케이션(Chrome/Edge/Discord 등)의 오디오 세션을 PID로 필터링하여 격리 캡처
+- **C\# COM Bridge**: 캡처된 PCM 데이터를 Electron으로 전달하고, 볼륨 제어 명령을 Windows Core Audio API로 실행
+- **Deepgram STT**: 실시간 오디오 스트림을 텍스트로 변환
+
+**AI 분석 서버**:
+
+- **FastAPI 서버**: 이미지와 오디오 데이터를 받아 OCR, STT, NLP 분석을 수행하고 결과를 반환
+- **PaddleOCR**: 화면 텍스트 인식 (85-95% 정확도)
+- **KoElectra/Kanana**: 문맥 기반 유해 표현 분류
 
 관리자는 웹 대시보드를 통해 로그를 확인하고 설정을 관리할 수 있습니다.
 
@@ -102,6 +120,10 @@ AI 서버(FastAPI)는 이미지와 오디오 데이터를 받아 OCR, STT, NLP �
 
   - **C\# Bridge 마이그레이션**: 기존 라이브러리의 불안정성을 해결하기 위해 Spawn 방식의 독립 프로세스 구조로 전환
 
+  - **C++ Application Loopback 구현**: WASAPI의 `PROCESS_LOOPBACK_MODE`를 활용하여 특정 PID의 오디오만 격리 캡처하는 기능 구현 (Task 40)
+
+  - **C\# 볼륨 제어 통합**: `native-sound-mixer` 의존성을 제거하고 NAudio.Wasapi를 사용한 Windows Core Audio API 기반 PID 볼륨 제어로 완전 전환 (Task 39)
+
   - **적응형 인터벌**: 화면 변화에 따라 OCR 주기를 자동 조절하여 CPU 점유율 최적화
 
   - **블라인드 처리 고도화**: 오버레이가 OCR 캡처를 방해하지 않도록 윈도우 속성 최적화
@@ -125,6 +147,10 @@ AI 서버(FastAPI)는 이미지와 오디오 데이터를 받아 OCR, STT, NLP �
 - Node.js 18+
 
 - Python 3.12+
+
+- Windows 10 Build 19041 이상 (Application Loopback API 지원)
+
+- Windows 10 SDK 10.0.20348.0 이상 (C++ 빌드 시)
 
 - CUDA 13+ (GPU 가속 사용 시 권장)
 
