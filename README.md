@@ -1,6 +1,6 @@
 # OnVoice - 유해 표현 실시간 필터링 솔루션
 
-![OnVoice Main](readme-main.png)
+<img src="readme-main.png" alt="OnVoice Main" width="50%">
 
 **라이브 스트리밍을 더 안전하고 깨끗하게.**
 
