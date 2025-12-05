@@ -30,8 +30,6 @@ OnVoice는 화면 속 텍스트와 음성 채팅을 실시간으로 분석하여
 
 2.  **음성 유해어 볼륨 제어 (STT)**: 실시간으로 오디오를 분석하여 욕설이 나올 때 해당 애플리케이션의 **볼륨을 순간적으로 낮춰** 불쾌감을 줄입니다. 특정 프로세스(PID)의 오디오만 격리하여 캡처하는 C++ Application Loopback과 C\# Core Audio API를 통해 정확한 앱별 제어가 가능합니다. (Deepgram + C++ WASAPI + C\# NAudio.Wasapi)
 
-   <img src="voice-sample.gif" alt="Voice Filtering Demo" width="70%" style="border: none; padding: 0; margin: 10px 0;">
-
 3.  **지능형 AI 분석**: 단순 금칙어가 아닌, 문맥을 파악하는 AI 모델(KoElectra/Kanana)을 사용하여 높은 정확도로 유해성을 판별합니다.
 
 4.  **시스템 리소스 최적화**: 방송 중 프레임 저하를 막기 위해 C++/C\# 네이티브 모듈과 GPU 가속을 적극 활용했습니다.
