@@ -208,9 +208,11 @@ const SuccessToast = React.memo(() => (
 
 export const OverlayApp: React.FC = () => {
   // --- State Definitions ---
-  const [mode, setMode] = useState<OverlayMode>("setup");
+  // 🔥 [시연용] 블라인드 항상 표시 - 시연 영상 촬영용 설정
+  // 나중에 되돌리려면 아래 두 줄을 주석 처리하고 원래 코드로 복원하세요
+  const [mode, setMode] = useState<OverlayMode>("alert"); // 시연용: "setup" -> "alert"
   const [roi, setRoi] = useState<ROI | undefined>(undefined);
-  const [harmful, setHarmful] = useState<boolean>(false);
+  const [harmful, setHarmful] = useState<boolean>(true); // 시연용: false -> true
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
   // 🔥 [Task 49] 블러 강도 설정 (기본값: 40px)
   const [blurIntensity, setBlurIntensity] = useState<number>(40);

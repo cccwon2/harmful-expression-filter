@@ -25,7 +25,7 @@ torchaudio      # 음성 데이터 처리 필요 시 유지, 아니면 제거 �
 
 # OCR / PaddleOCR (CPU 버전)
 paddleocr==2.7.0.3
-paddlepaddle==2.6.1      # CPU 버전
+paddlepaddle==2.6.2      # CPU 버전
 Pillow>=10.0.0           # 이미지 처리 (PaddleOCR이 사용)
 numpy>=1.21.0            # PaddleOCR 의존성
 opencv-python>=4.5.0     # 이미지 처리 (PaddleOCR이 사용)
